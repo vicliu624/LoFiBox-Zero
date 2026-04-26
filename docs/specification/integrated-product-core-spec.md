@@ -42,6 +42,7 @@ This document is normative for the current C++ implementation.
 - `LibraryRepository` owns current in-memory library facts and scan replacement state.
 - `RemoteSourceRegistry` owns source provider registration and lookup.
 - `RemoteProviderManifest` owns remote provider identity, provider family, and capability declaration.
+- `RemoteProfileStore` owns persisted remote server profiles under XDG paths and stores credential references rather than secret values.
 - `CredentialStore`, `CredentialRef`, `SecretRedactor`, and `TlsPolicy` own secret and network security boundaries.
 - `RuntimeServiceProvider` owns host service group construction; the app consumes only the completed `RuntimeServices` registry.
 - `AppProjectionBuilder` and page-specific projection builders own app-to-UI view-model assembly.
@@ -65,6 +66,7 @@ This document is normative for the current C++ implementation.
 - Runtime shells must not fork business logic for PocketFrame, Cardputer Zero, container, VNC, framebuffer, X11, or desktop widget targets.
 - Runtime service factories must not regain protocol, metadata, playback, cache, or remote implementation details.
 - Credentials, tokens, cookies, API keys, and auth headers must not be logged or stored as plain app state.
+- Remote profile persistence must not write passwords, tokens, cookies, or auth headers.
 
 ## Required Source Families
 

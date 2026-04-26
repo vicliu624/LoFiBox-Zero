@@ -57,6 +57,7 @@ add_library(lofibox_zero_core STATIC
     src/app/playback_runtime_coordinator.cpp
     src/app/playback_session_clock.cpp
     src/app/playback_visualization_source.cpp
+    src/app/remote_profile_store.cpp
     src/app/settings_projection_builder.cpp
     src/app/source_manager_projection.cpp
     src/ui/pages/about_page.cpp
@@ -129,6 +130,7 @@ add_library(lofibox_zero_host_runtime STATIC
     src/platform/host/single_instance_lock.cpp
     src/platform/host/tag_writer.cpp
     src/platform/host/track_identity_provider.cpp
+    src/platform/host/xdg_remote_profile_store.cpp
 )
 target_include_directories(lofibox_zero_host_runtime PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(lofibox_zero_host_runtime PUBLIC cxx_std_20)
@@ -369,6 +371,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_remote_source_security_smoke tests/remote_source_security_smoke.cpp)
     target_link_libraries(lofibox_remote_source_security_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_remote_source_security_smoke COMMAND lofibox_remote_source_security_smoke)
+
+    add_executable(lofibox_remote_profile_store_smoke tests/remote_profile_store_smoke.cpp)
+    target_link_libraries(lofibox_remote_profile_store_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_remote_profile_store_smoke COMMAND lofibox_remote_profile_store_smoke)
 
     add_executable(lofibox_runtime_service_provider_smoke tests/runtime_service_provider_smoke.cpp)
     target_link_libraries(lofibox_runtime_service_provider_smoke PRIVATE lofibox_zero_host_runtime)
