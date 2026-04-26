@@ -37,6 +37,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/ui` owns UI projection types only; it must not include `src/app` headers or reference `app::` internal state types.
 `src/app` may orchestrate which page is rendered, but it must not own page, chrome, modal, font, or color drawing implementations, and it must translate app/runtime/playback state into UI projections before calling page renderers.
 `src/app/app_input_router.*` owns page-level input routing; `LoFiBoxApp` delegates `InputEvent` handling to that router and exposes command execution through a narrow target interface.
+`src/app/app_renderer.*` owns page-level render routing and UI view assembly; `LoFiBoxApp` delegates drawing through a narrow render target interface instead of directly including concrete UI page renderers.
 
 ## Hard Boundary Rules
 
@@ -45,6 +46,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 - UI/page code must not reference `app::` internal types; page renderers consume UI projections and render-only view models.
 - App composition code must use `src/ui` primitives for top bars, frames, modals, text, image blits, and theme colors instead of reimplementing low-level drawing.
 - App composition code must not directly map raw input to page behavior; routing from input actions to app commands lives in the input router.
+- App composition code must not directly include concrete `src/ui/pages` renderers; page render dispatch lives in the app renderer boundary.
 - Core code must not include app, platform, UI, playback, audio, metadata, library, remote, desktop, or security layers.
 - Host adapters implement runtime services and helper/resource resolution, but do not depend on concrete app/page classes.
 - Targets compose app runners and platform adapters; they do not own page implementations or product behavior.

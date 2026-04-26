@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdint>
 #include <filesystem>
 #include <random>
 #include <string>
@@ -14,39 +13,20 @@
 
 #include "app/app_state.h"
 #include "app/app_input_router.h"
+#include "app/app_renderer.h"
 #include "app/library_controller.h"
 #include "app/navigation_state.h"
-#include "ui/pages/about_page.h"
-#include "ui/pages/equalizer_page.h"
-#include "ui/pages/list_page.h"
-#include "ui/pages/lyrics_page.h"
-#include "ui/pages/main_menu_page.h"
-#include "ui/pages/now_playing_page.h"
+#include "app/playback_controller.h"
 #include "ui/ui_primitives.h"
 #include "ui/ui_theme.h"
-#include "app/playback_controller.h"
-#include "core/display_profile.h"
 
 namespace fs = std::filesystem;
 
 namespace lofibox::app {
 namespace {
 
-namespace ui_pages = lofibox::ui::pages;
-
 using clock = std::chrono::steady_clock;
 constexpr int kMainMenuItemCount = 6;
-
-constexpr std::string_view kUnknown = "UNKNOWN";
-constexpr std::string_view kNoMusic = "NO MUSIC";
-constexpr std::string_view kNoAlbums = "NO ALBUMS";
-constexpr std::string_view kNoSongs = "NO SONGS";
-constexpr std::string_view kNoGenres = "NO GENRES";
-constexpr std::string_view kNoComposers = "NO COMPOSERS";
-constexpr std::string_view kNoCompilations = "NO COMPILATIONS";
-constexpr std::string_view kEmpty = "EMPTY";
-constexpr std::string_view kNoTrack = "NO TRACK";
-constexpr std::string_view kVersion = "0.1.0";
 
 std::string_view pageTitleDefault(AppPage page) noexcept
 {
@@ -71,39 +51,11 @@ std::string_view pageTitleDefault(AppPage page) noexcept
     return "";
 }
 
-std::string formatStorage(const StorageInfo& storage)
-{
-    if (!storage.available || storage.capacity_bytes == 0) {
-        return "N/A";
-    }
-
-    const auto used = storage.capacity_bytes - storage.free_bytes;
-    const auto used_mb = static_cast<int>(used / (1024 * 1024));
-    const auto total_mb = static_cast<int>(storage.capacity_bytes / (1024 * 1024));
-    return std::to_string(used_mb) + "/" + std::to_string(total_mb) + "MB";
-}
-
-ui::SpectrumFrame toUiSpectrumFrame(const AudioVisualizationFrame& frame)
-{
-    ui::SpectrumFrame view{};
-    view.available = frame.available;
-    view.bands = frame.bands;
-    return view;
-}
-
-ui::LyricsContent toUiLyricsContent(const TrackLyrics& lyrics)
-{
-    ui::LyricsContent view{};
-    view.plain = lyrics.plain;
-    view.synced = lyrics.synced;
-    return view;
-}
-
 } // namespace
 
-struct LoFiBoxApp::Impl final : AppInputTarget {
+struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget {
     std::vector<fs::path> media_roots{};
-    ui::UiAssets assets{};
+    ui::UiAssets ui_assets{};
     LibraryController library_controller{};
     bool boot_ready{false};
     clock::time_point boot_started{clock::now()};
@@ -129,7 +81,7 @@ struct LoFiBoxApp::Impl final : AppInputTarget {
 
     [[nodiscard]] bool bootAnimationComplete() const
     {
-        if (!assets.logo) {
+        if (!ui_assets.logo) {
             return true;
         }
         return (clock::now() - boot_started) >= std::chrono::milliseconds{1450};
@@ -164,7 +116,57 @@ struct LoFiBoxApp::Impl final : AppInputTarget {
         return navigation.currentPage();
     }
 
-    [[nodiscard]] const TrackRecord* findTrack(int id) const noexcept
+    [[nodiscard]] const ui::UiAssets& assets() const noexcept override
+    {
+        return ui_assets;
+    }
+
+    [[nodiscard]] clock::time_point bootStarted() const noexcept override
+    {
+        return boot_started;
+    }
+
+    [[nodiscard]] LibraryIndexState libraryState() const noexcept override
+    {
+        return library_controller.state();
+    }
+
+    [[nodiscard]] StorageInfo storage() const override
+    {
+        return library_controller.model().storage;
+    }
+
+    [[nodiscard]] bool networkConnected() const noexcept override
+    {
+        return network.connected;
+    }
+
+    [[nodiscard]] int mainMenuIndex() const noexcept override
+    {
+        return main_menu_index;
+    }
+
+    [[nodiscard]] const PlaybackSession& playbackSession() const noexcept override
+    {
+        return playback_controller.session();
+    }
+
+    [[nodiscard]] const EqState& eqState() const noexcept override
+    {
+        return eq;
+    }
+
+    [[nodiscard]] ListSelection listSelection() const noexcept override
+    {
+        return navigation.list_selection;
+    }
+
+    [[nodiscard]] AppPage helpPage() const noexcept override
+    {
+        return help_page;
+    }
+
+    [[nodiscard]] const TrackRecord* findTrack(int id) const noexcept override
     {
         return library_controller.findTrack(id);
     }
@@ -265,56 +267,7 @@ struct LoFiBoxApp::Impl final : AppInputTarget {
         playback_controller.setShuffleEnabled(true);
     }
 
-    [[nodiscard]] std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPage page) const
-    {
-        switch (page) {
-        case AppPage::MainMenu:
-            return {
-                {"F2", "PLAY SONG"},
-                {"F3", "PAUSE"},
-                {"F4", "PREVIOUS"},
-                {"F5", "NEXT"},
-                {"F6", "MODE: SHUFFLE/SEQ/ONE"},
-            };
-        case AppPage::Songs:
-        case AppPage::PlaylistDetail:
-            return {
-                {"DEL", "DELETE SONG"},
-                {"ENTER", "PLAY"},
-                {"BACKSPACE", "BACK"},
-                {"F2", "SEARCH"},
-                {"F3", "SORT"},
-            };
-        case AppPage::MusicIndex:
-        case AppPage::Artists:
-        case AppPage::Albums:
-        case AppPage::Genres:
-        case AppPage::Composers:
-        case AppPage::Compilations:
-        case AppPage::Playlists:
-        case AppPage::NowPlaying:
-        case AppPage::Lyrics:
-        case AppPage::Equalizer:
-        case AppPage::Settings:
-        case AppPage::About:
-            return {};
-        case AppPage::Boot:
-            return {};
-        default:
-            return {};
-        }
-    }
-
-    void renderHelpIfOpen(core::Canvas& canvas) const
-    {
-        if (!help_open || help_page == AppPage::Boot) {
-            return;
-        }
-        const auto title = help_page == AppPage::MainMenu ? std::string_view{"MENU SHORTCUTS"} : std::string_view{"SHORTCUTS"};
-        ui::drawPageHelpModal(canvas, title, helpRowsForPage(help_page));
-    }
-
-    [[nodiscard]] std::string pageTitle() const
+    [[nodiscard]] std::string pageTitle() const override
     {
         const auto page = currentPage();
         if (const auto override = library_controller.titleOverrideForPage(page)) {
@@ -323,7 +276,7 @@ struct LoFiBoxApp::Impl final : AppInputTarget {
         return std::string(pageTitleDefault(page));
     }
 
-    [[nodiscard]] std::vector<std::pair<std::string, std::string>> currentRows() const
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> currentRows() const override
     {
         std::vector<std::pair<std::string, std::string>> rows{};
         if (const auto library_rows = library_controller.rowsForPage(currentPage())) {
@@ -473,7 +426,7 @@ LoFiBoxApp::LoFiBoxApp(std::vector<std::filesystem::path> media_roots, ui::UiAss
     : impl_(std::make_unique<Impl>())
 {
     impl_->media_roots = std::move(media_roots);
-    impl_->assets = std::move(assets);
+    impl_->ui_assets = std::move(assets);
     impl_->services = withNullRuntimeServices(std::move(services));
     impl_->playback_controller.setServices(impl_->services);
     impl_->refreshRuntimeStatusIfDue(true);
@@ -514,147 +467,7 @@ void LoFiBoxApp::handleInput(const InputEvent& event)
 
 void LoFiBoxApp::render(core::Canvas& canvas) const
 {
-    canvas.clear(ui::kBgRoot);
-
-    const auto page = impl_->currentPage();
-    if (page == AppPage::Boot) {
-        canvas.fillRect(0, 0, core::kDisplayWidth, core::kDisplayHeight, ui::kBgRoot);
-        const std::string status = impl_->library_controller.state() == LibraryIndexState::Uninitialized
-            ? "STARTING"
-            : (impl_->library_controller.state() == LibraryIndexState::Loading ? "LOADING LIBRARY" : "LIBRARY READY");
-        if (impl_->assets.logo) {
-            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - impl_->boot_started);
-            const float t = std::clamp(static_cast<float>(elapsed.count()) / 1200.0f, 0.0f, 1.0f);
-            const auto opacity = static_cast<std::uint8_t>(std::clamp(72.0f + (t * 183.0f), 72.0f, 255.0f));
-            const int size = 122;
-            const int x = (core::kDisplayWidth - size) / 2;
-            const int y = 18;
-            ui::blitScaledCanvas(canvas, *impl_->assets.logo, x, y, size, size, opacity);
-        } else {
-            ui::drawText(canvas, "LOFIBOX ZERO", ui::centeredX("LOFIBOX ZERO", 2), 38, ui::kTextPrimary, 2);
-        }
-        ui::drawText(canvas, status, ui::centeredX(status, 1), 144, ui::kTextSecondary, 1);
-        return;
-    }
-
-    if (page == AppPage::MainMenu) {
-        const auto map_index_state = [](LibraryIndexState state) {
-            switch (state) {
-            case LibraryIndexState::Uninitialized: return ui_pages::MenuIndexState::Uninitialized;
-            case LibraryIndexState::Loading: return ui_pages::MenuIndexState::Loading;
-            case LibraryIndexState::Ready: return ui_pages::MenuIndexState::Ready;
-            case LibraryIndexState::Degraded: return ui_pages::MenuIndexState::Degraded;
-            }
-            return ui_pages::MenuIndexState::Uninitialized;
-        };
-
-        ui_pages::renderMainMenuPage(
-            canvas,
-            ui_pages::MainMenuView{
-                impl_->main_menu_index,
-                ui_pages::MenuStorageView{impl_->library_controller.model().storage.available, impl_->library_controller.model().storage.capacity_bytes, impl_->library_controller.model().storage.free_bytes},
-                map_index_state(impl_->library_controller.state()),
-                impl_->network.connected,
-                &impl_->assets,
-                [&]() {
-                    const auto& playback = impl_->playback_controller.session();
-                    if (!playback.current_track_id) {
-                        return std::string{"NO TRACK"};
-                    }
-                    const auto* track = impl_->findTrack(*playback.current_track_id);
-                    if (track == nullptr) {
-                        return std::string{"NO TRACK"};
-                    }
-                    std::string summary = playback.status == PlaybackStatus::Paused ? "PAUSED  " : "PLAYING  ";
-                    summary += track->title.empty() ? "UNKNOWN" : track->title;
-                    if (!track->artist.empty() && track->artist != "UNKNOWN") {
-                        summary += " - ";
-                        summary += track->artist;
-                    }
-                    return summary;
-                }(),
-                static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(clock::now().time_since_epoch()).count() / 45)});
-        impl_->renderHelpIfOpen(canvas);
-        return;
-    }
-
-    if (page == AppPage::NowPlaying) {
-        ui::drawListPageFrame(canvas);
-        ui::drawTopBar(canvas, impl_->pageTitle(), true);
-        const auto& playback = impl_->playback_controller.session();
-        const TrackRecord* track = playback.current_track_id ? impl_->findTrack(*playback.current_track_id) : nullptr;
-        const auto map_status = [](PlaybackStatus status) {
-            switch (status) {
-            case PlaybackStatus::Empty: return ui_pages::NowPlayingStatus::Empty;
-            case PlaybackStatus::Paused: return ui_pages::NowPlayingStatus::Paused;
-            case PlaybackStatus::Playing: return ui_pages::NowPlayingStatus::Playing;
-            }
-            return ui_pages::NowPlayingStatus::Empty;
-        };
-        ui_pages::renderNowPlayingPage(canvas, ui_pages::NowPlayingView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->album : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.shuffle_enabled, playback.repeat_all, playback.repeat_one, playback.current_artwork ? &*playback.current_artwork : nullptr, toUiSpectrumFrame(playback.visualization_frame)});
-        impl_->renderHelpIfOpen(canvas);
-        return;
-    }
-
-    if (page == AppPage::Lyrics) {
-        ui::drawListPageFrame(canvas);
-        ui::drawTopBar(canvas, impl_->pageTitle(), true);
-        const auto& playback = impl_->playback_controller.session();
-        const TrackRecord* track = playback.current_track_id ? impl_->findTrack(*playback.current_track_id) : nullptr;
-        const auto map_status = [](PlaybackStatus status) {
-            switch (status) {
-            case PlaybackStatus::Empty: return ui_pages::NowPlayingStatus::Empty;
-            case PlaybackStatus::Paused: return ui_pages::NowPlayingStatus::Paused;
-            case PlaybackStatus::Playing: return ui_pages::NowPlayingStatus::Playing;
-            }
-            return ui_pages::NowPlayingStatus::Empty;
-        };
-        ui_pages::renderLyricsPage(canvas, ui_pages::LyricsPageView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.lyrics_lookup_pending, toUiLyricsContent(playback.current_lyrics), toUiSpectrumFrame(playback.visualization_frame)});
-        impl_->renderHelpIfOpen(canvas);
-        return;
-    }
-
-    if (page == AppPage::Equalizer) {
-        ui_pages::renderEqualizerPage(canvas, ui_pages::EqualizerPageView{impl_->eq.bands, impl_->eq.selected_band, impl_->eq.preset_name});
-        impl_->renderHelpIfOpen(canvas);
-        return;
-    }
-
-    if (page == AppPage::About) {
-        ui_pages::renderAboutPage(canvas, ui_pages::AboutPageView{std::string(kVersion), formatStorage(impl_->library_controller.model().storage)});
-        impl_->renderHelpIfOpen(canvas);
-        return;
-    }
-
-    const auto rows = impl_->currentRows();
-    std::string empty_label{};
-    if (rows.empty()) {
-        switch (page) {
-        case AppPage::Artists: empty_label = std::string(kNoMusic); break;
-        case AppPage::Albums: empty_label = std::string(kNoAlbums); break;
-        case AppPage::Songs: empty_label = std::string(kNoSongs); break;
-        case AppPage::Genres: empty_label = std::string(kNoGenres); break;
-        case AppPage::Composers: empty_label = std::string(kNoComposers); break;
-        case AppPage::Compilations: empty_label = std::string(kNoCompilations); break;
-        case AppPage::PlaylistDetail: empty_label = std::string(kEmpty); break;
-        default: empty_label = std::string(kEmpty); break;
-        }
-    }
-
-    const bool browse_list = impl_->isBrowseListPage();
-    ui_pages::renderListPage(
-        canvas,
-        ui_pages::ListPageView{
-            impl_->pageTitle(),
-            !browse_list,
-            browse_list ? "F1:HELP" : "",
-            rows,
-            empty_label,
-            impl_->navigation.list_selection.selected,
-            impl_->navigation.list_selection.scroll,
-            false});
-    impl_->renderHelpIfOpen(canvas);
-
+    renderApp(canvas, *impl_);
 }
 
 AppDebugSnapshot LoFiBoxApp::snapshot() const

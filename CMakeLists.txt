@@ -35,6 +35,7 @@ option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX
 add_library(lofibox_zero_core STATIC
     src/app/input_actions.cpp
     src/app/app_input_router.cpp
+    src/app/app_renderer.cpp
     src/app/library_controller.cpp
     src/app/library_scanner.cpp
     src/app/lofibox_app.cpp

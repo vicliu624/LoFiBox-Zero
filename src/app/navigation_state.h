@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "app/lofibox_app.h"
+#include "app/app_page.h"
 
 namespace lofibox::app {
 
