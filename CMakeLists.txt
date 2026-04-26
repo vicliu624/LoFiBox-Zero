@@ -43,6 +43,7 @@ add_library(lofibox_zero_core STATIC
     src/app/app_runtime_context.cpp
     src/app/library_controller.cpp
     src/app/library_navigation_service.cpp
+    src/app/library_mutation_service.cpp
     src/app/library_open_action_resolver.cpp
     src/app/library_query_service.cpp
     src/app/library_scanner.cpp
@@ -64,6 +65,8 @@ add_library(lofibox_zero_core STATIC
     src/ui/widgets/lyrics_layout.cpp
     src/app/playback_controller.cpp
     src/app/runtime_services.cpp
+    src/metadata/match_confidence_guard.cpp
+    src/metadata/metadata_merge_policy.cpp
     src/ui/ui_primitives.cpp
     src/core/bitmap_font.cpp
     src/core/canvas.cpp
@@ -271,6 +274,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_playback_controller_smoke tests/playback_controller_smoke.cpp)
     target_link_libraries(lofibox_playback_controller_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_playback_controller_smoke COMMAND lofibox_playback_controller_smoke)
+
+    add_executable(lofibox_metadata_merge_policy_smoke tests/metadata_merge_policy_smoke.cpp)
+    target_link_libraries(lofibox_metadata_merge_policy_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_metadata_merge_policy_smoke COMMAND lofibox_metadata_merge_policy_smoke)
 
     add_executable(lofibox_equalizer_smoke tests/equalizer_smoke.cpp)
     target_link_libraries(lofibox_equalizer_smoke PRIVATE lofibox_zero_core)

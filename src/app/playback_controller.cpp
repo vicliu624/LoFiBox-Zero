@@ -3,11 +3,12 @@
 #include "app/playback_controller.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cstddef>
 #include <optional>
 #include <random>
 #include <utility>
+
+#include "app/library_mutation_service.h"
 
 namespace lofibox::app {
 
@@ -60,9 +61,7 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     refreshMetadata(library_controller, MetadataReadMode::LocalOnly);
     refreshArtwork(library_controller, ArtworkReadMode::LocalOnly);
     (void)runtime_.startBackend(track->path, session_);
-    ++track->play_count;
-    track->last_played = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    LibraryMutationService{}.recordPlaybackStarted(*track);
     enrichment_.request(*track);
     return true;
 }

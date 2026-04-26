@@ -6,16 +6,10 @@
 #include <optional>
 #include <utility>
 
+#include "metadata/metadata_merge_policy.h"
+
 namespace lofibox::app {
 namespace {
-
-std::string metadataOrCurrent(const std::optional<std::string>& metadata_value, const std::string& current)
-{
-    if (metadata_value && !metadata_value->empty()) {
-        return *metadata_value;
-    }
-    return current;
-}
 
 TrackMetadata mergeLyricsSeed(TrackMetadata seed_metadata, const TrackMetadata& metadata)
 {
@@ -113,12 +107,8 @@ TrackMetadata PlaybackEnrichmentCoordinator::metadataFromTrack(const TrackRecord
 
 void PlaybackEnrichmentCoordinator::applyMetadataToTrack(TrackRecord& track, const TrackMetadata& metadata)
 {
-    if (metadata.title) track.title = metadataOrCurrent(metadata.title, track.title);
-    if (metadata.artist) track.artist = metadataOrCurrent(metadata.artist, track.artist);
-    if (metadata.album) track.album = metadataOrCurrent(metadata.album, track.album);
-    if (metadata.genre) track.genre = metadataOrCurrent(metadata.genre, track.genre);
-    if (metadata.composer) track.composer = metadataOrCurrent(metadata.composer, track.composer);
-    if (metadata.duration_seconds) track.duration_seconds = *metadata.duration_seconds;
+    const ::lofibox::metadata::MetadataMergePolicy merge_policy{};
+    merge_policy.mergeIntoTrack(track, metadata);
 }
 
 } // namespace lofibox::app

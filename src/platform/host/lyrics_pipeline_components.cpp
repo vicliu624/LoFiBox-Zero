@@ -29,6 +29,11 @@ bool LyricsWritebackPolicy::shouldWrite(const app::TrackLyrics& lyrics) const no
     return lyrics.source == "LRCLIB";
 }
 
+bool LyricsWritebackPolicy::shouldWrite(const app::TrackLyrics& lyrics, const app::TrackIdentity& identity) const noexcept
+{
+    return match_guard_.acceptsAuthoritativeLyrics(lyrics, identity);
+}
+
 bool LyricsWritebackPolicy::shouldOnlyFillMissing(bool embedded_lyrics_rejected) const noexcept
 {
     return !embedded_lyrics_rejected;

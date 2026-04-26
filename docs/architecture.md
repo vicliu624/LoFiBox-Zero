@@ -54,6 +54,8 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/platform/host/lyrics_pipeline_components.*` owns lyrics cache and lyrics writeback policy; `src/platform/host/lyrics_provider.cpp` composes those components instead of hiding the whole lyrics chain.
 `src/platform/host/runtime_host_tools.*` names host helper sub-boundaries for text parsing, JSON helpers, cache-path derivation, and helper-script resolution.
 The integrated product core distinguishes media identity, media source, media stream, playback facts, audio pipeline, enrichment pipeline, library facts, UI projection, and runtime shell responsibilities. Those distinctions are normative in `docs/specification/integrated-product-core-spec.md`.
+`src/metadata/metadata_merge_policy.*` owns safe merge rules for enrichment results; `src/metadata/match_confidence_guard.*` owns confidence checks before authoritative writeback decisions.
+`src/app/library_mutation_service.*` owns library fact mutations such as play count and last-played timestamp updates.
 
 ## Hard Boundary Rules
 

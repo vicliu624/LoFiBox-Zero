@@ -501,7 +501,7 @@ public:
                     request.identity = identity;
                 }
                 request.only_fill_missing = writeback_policy_.shouldOnlyFillMissing(embedded_lyrics_rejected);
-                if (writeback_policy_.shouldWrite(entry.lyrics)) {
+                if (writeback_policy_.shouldWrite(entry.lyrics, identity)) {
                     if (tag_writer_->write(path, request)) {
                         logRuntime(RuntimeLogLevel::Info, "lyrics", "Wrote lyrics back to file: " + pathUtf8String(path));
                     } else {
