@@ -61,7 +61,7 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath -eq "src/app/playback_controller.cpp" -or $repoPath -eq "src/app/playback_controller.h") {
-            if ($line -match '\bstd::thread\b|\bstd::mutex\b|pending_enrichment|enrichment_threads|requestEnrichment|applyPendingEnrichments|PlaybackSessionClock|PlaybackBackendController|PlaybackTransitionCoordinator|PlaybackCompletionPolicy|AudioPipeline') {
+            if ($line -match '\bstd::thread\b|\bstd::mutex\b|pending_enrichment|enrichment_threads|requestEnrichment|applyPendingEnrichments|PlaybackSessionClock|PlaybackBackendController|PlaybackTransitionCoordinator|PlaybackCompletionPolicy|AudioPipeline|AudioPlaybackState|visualizationFrame\(') {
                 Add-Violation $violations $repoPath $lineNumber "playback core ownership" "PlaybackController must own playback commands and queue semantics only; enrichment, clock, backend, transition, completion policy, and audio pipeline responsibilities belong to dedicated integrated-core components"
             }
         }

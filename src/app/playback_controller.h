@@ -4,6 +4,7 @@
 
 #include "app/library_controller.h"
 #include "app/playback_enrichment_coordinator.h"
+#include "app/playback_runtime_coordinator.h"
 #include "app/playback_state.h"
 #include "app/runtime_services.h"
 
@@ -32,16 +33,14 @@ private:
     void rebuildQueueForCurrentSongs(const LibraryController& library_controller, int selected_track_id);
     void rebuildActiveQueueForMode(std::optional<int> selected_track_id);
     [[nodiscard]] bool playQueueIndex(LibraryController& library_controller, int queue_index);
-    [[nodiscard]] bool advanceAfterFinish(LibraryController& library_controller);
     void refreshArtwork(const LibraryController& library_controller, ArtworkReadMode mode = ArtworkReadMode::AllowOnline);
     void refreshMetadata(LibraryController& library_controller, MetadataReadMode mode = MetadataReadMode::AllowOnline);
-    void synchronizeBackendState(LibraryController& library_controller);
-    void updateVisualizationFrame();
 
     QueueState queue_{};
     PlaybackSession session_{};
     RuntimeServices services_{};
     PlaybackEnrichmentCoordinator enrichment_{};
+    PlaybackRuntimeCoordinator runtime_{};
 };
 
 } // namespace lofibox::app

@@ -33,6 +33,7 @@ struct PlaybackSession {
     bool repeat_all{false};
     bool repeat_one{false};
     double elapsed_seconds{0.0};
+    std::uint64_t transition_generation{0};
     bool audio_active{false};
     bool lyrics_lookup_pending{false};
     std::optional<core::Canvas> current_artwork{};

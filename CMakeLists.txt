@@ -49,6 +49,11 @@ add_library(lofibox_zero_core STATIC
     src/app/lofibox_app.cpp
     src/app/lofibox_app_runner.cpp
     src/app/playback_enrichment_coordinator.cpp
+    src/app/playback_backend_controller.cpp
+    src/app/playback_completion_policy.cpp
+    src/app/playback_runtime_coordinator.cpp
+    src/app/playback_session_clock.cpp
+    src/app/playback_visualization_source.cpp
     src/ui/pages/about_page.cpp
     src/ui/pages/equalizer_page.cpp
     src/ui/pages/list_page.cpp
