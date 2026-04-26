@@ -41,6 +41,7 @@ This document is normative for the current C++ implementation.
 - `LibraryStore` and `LibraryIndexer` own durable media-library facts.
 - `LibraryRepository` owns current in-memory library facts and scan replacement state.
 - `RemoteSourceRegistry` owns source provider registration and lookup.
+- `RemoteProviderManifest` owns remote provider identity, provider family, and capability declaration.
 - `CredentialStore`, `CredentialRef`, `SecretRedactor`, and `TlsPolicy` own secret and network security boundaries.
 - `RuntimeServiceProvider` owns host service group construction; the app consumes only the completed `RuntimeServices` registry.
 - `AppProjectionBuilder` and page-specific projection builders own app-to-UI view-model assembly.
@@ -52,6 +53,7 @@ This document is normative for the current C++ implementation.
 - UI pages must not call FFmpeg, curl, Jellyfin, SQLite, D-Bus, or source protocol clients.
 - Playback code must not know Jellyfin, SMB, Navidrome, OpenSubsonic, Emby, DLNA, WebDAV, FTP, SFTP, or concrete remote protocols.
 - Remote providers must not control playback state machines.
+- Remote providers must declare capabilities through manifests instead of leaking protocol-specific feature checks into UI or playback.
 - Metadata, artwork, and lyrics providers must not decide UI behavior.
 - Metadata providers must not inline online identity/MusicBrainz lookup ordering; they delegate enrichment orchestration.
 - `PlaybackController` must not own backend clocks, backend threads, async enrichment workers, or completion policy.

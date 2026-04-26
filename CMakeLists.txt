@@ -71,6 +71,7 @@ add_library(lofibox_zero_core STATIC
     src/app/runtime_services.cpp
     src/metadata/match_confidence_guard.cpp
     src/metadata/metadata_merge_policy.cpp
+    src/remote/common/remote_provider_contract.cpp
     src/remote/common/remote_source_registry.cpp
     src/desktop/desktop_integration_boundary.cpp
     src/security/credential_policy.cpp

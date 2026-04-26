@@ -23,13 +23,22 @@ bool RemoteSourceRegistry::openSubsonicCompatible(app::RemoteServerKind kind) co
 
 std::string_view RemoteSourceRegistry::providerFamily(app::RemoteServerKind kind) const noexcept
 {
-    switch (kind) {
-    case app::RemoteServerKind::Jellyfin: return "jellyfin";
-    case app::RemoteServerKind::OpenSubsonic: return "opensubsonic";
-    case app::RemoteServerKind::Navidrome: return "opensubsonic";
-    case app::RemoteServerKind::Emby: return "emby";
-    }
-    return "unsupported";
+    return remoteProviderFamily(kind);
+}
+
+RemoteProviderManifest RemoteSourceRegistry::manifest(app::RemoteServerKind kind) const
+{
+    return remoteProviderManifest(kind);
+}
+
+std::vector<RemoteProviderManifest> RemoteSourceRegistry::manifests() const
+{
+    return {
+        manifest(app::RemoteServerKind::Jellyfin),
+        manifest(app::RemoteServerKind::OpenSubsonic),
+        manifest(app::RemoteServerKind::Navidrome),
+        manifest(app::RemoteServerKind::Emby),
+    };
 }
 
 } // namespace lofibox::remote

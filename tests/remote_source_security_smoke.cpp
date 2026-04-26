@@ -20,6 +20,17 @@ int main()
         std::cerr << "Expected Navidrome to be governed as OpenSubsonic-compatible.\n";
         return 1;
     }
+    const auto navidrome_manifest = registry.manifest(lofibox::app::RemoteServerKind::Navidrome);
+    if (navidrome_manifest.type_id != "navidrome"
+        || navidrome_manifest.family != "opensubsonic"
+        || !lofibox::remote::remoteProviderHasCapability(navidrome_manifest, lofibox::remote::RemoteProviderCapability::ResolveStream)) {
+        std::cerr << "Expected Navidrome manifest to declare OpenSubsonic-compatible stream resolution.\n";
+        return 1;
+    }
+    if (registry.manifests().size() != 4U) {
+        std::cerr << "Expected first-batch remote provider manifests.\n";
+        return 1;
+    }
 
     lofibox::app::RemoteServerProfile profile{};
     profile.kind = lofibox::app::RemoteServerKind::Navidrome;
