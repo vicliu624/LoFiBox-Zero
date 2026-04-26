@@ -82,6 +82,9 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             if (Test-AnyPrefix $include @("app/input_actions.h", "core/bitmap_font.h", "core/color.h", "ui/pages/", "ui/ui_primitives.h", "ui/ui_theme.h")) {
                 Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp composition must use dedicated page-model/routing/rendering helpers instead of owning input mapping, page rendering, or UI constants"
             }
+            if (Test-AnyPrefix $include @("app/app_command_executor.h", "app/app_input_router.h", "app/app_lifecycle.h", "app/app_page_model.h", "app/app_renderer.h", "app/app_state.h", "app/library_controller.h", "app/navigation_state.h", "app/playback_controller.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp must stay a thin public facade; runtime state, controllers, routing, rendering, lifecycle, and command execution belong to AppRuntimeContext"
+            }
         }
 
         if ($repoPath.StartsWith("src/platform/host/", [System.StringComparison]::Ordinal)) {

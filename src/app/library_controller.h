@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "app/app_page.h"
 #include "app/library_model.h"
-#include "app/lofibox_app.h"
 #include "app/runtime_services.h"
 
 namespace lofibox::app {

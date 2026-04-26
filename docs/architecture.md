@@ -41,6 +41,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/app/app_page_model.*` owns page titles, page rows, browse-list classification, Settings rows, and list viewport limits; `LoFiBoxApp` supplies state inputs but does not define page-model branches.
 `src/app/app_renderer.*` owns page-level render routing and UI view assembly; `LoFiBoxApp` delegates drawing through a narrow render target interface instead of directly including concrete UI page renderers.
 `src/app/app_lifecycle.*` owns application tick ordering; `LoFiBoxApp` delegates `update()` so runtime status refresh, library loading, boot transition, and playback tick remain one explicit lifecycle boundary.
+`src/app/app_runtime_context.*` owns app runtime state, controllers, runtime services, and the target-interface implementations consumed by input, render, lifecycle, and command helpers; `LoFiBoxApp` is only the public facade.
 
 ## Hard Boundary Rules
 
@@ -53,6 +54,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 - App composition code must not directly construct page titles, page rows, Settings rows, browse-list classification, or list viewport constants; page model generation lives in the app page-model boundary.
 - App composition code must not directly include concrete `src/ui/pages` renderers; page render dispatch lives in the app renderer boundary.
 - App composition code must not inline application tick ordering; runtime refresh, library loading, boot transition, and playback update order lives in the app lifecycle boundary.
+- `LoFiBoxApp` must not own runtime state, controllers, routing helpers, page render helpers, lifecycle helpers, command helpers, or debug-snapshot assembly; those belong to `AppRuntimeContext`.
 - Core code must not include app, platform, UI, playback, audio, metadata, library, remote, desktop, or security layers.
 - Host adapters implement runtime services and helper/resource resolution, but do not depend on concrete app/page classes.
 - Targets compose app runners and platform adapters; they do not own page implementations or product behavior.

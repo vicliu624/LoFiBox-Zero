@@ -39,6 +39,7 @@ add_library(lofibox_zero_core STATIC
     src/app/app_input_router.cpp
     src/app/app_page_model.cpp
     src/app/app_renderer.cpp
+    src/app/app_runtime_context.cpp
     src/app/library_controller.cpp
     src/app/library_scanner.cpp
     src/app/lofibox_app.cpp
