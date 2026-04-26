@@ -63,6 +63,8 @@ Assert-PathExists "src/playback/mixed_playback_queue.cpp" "Mixed playback queue 
 Assert-PathExists "src/audio/decoder/audio_decoder_contract.h" "Audio decoder boundary must live under src/audio/decoder."
 Assert-PathExists "src/audio/output/audio_output_contract.h" "Audio output boundary must live under src/audio/output."
 Assert-PathExists "src/audio/output/host_audio_playback_backend.cpp" "Host audio output implementation must live under src/audio/output."
+Assert-PathExists "src/cache/cache_manager.cpp" "Cache/offline implementation must live under src/cache."
+Assert-PathExists "src/cache/cache_manager.h" "Cache/offline boundary must live under src/cache."
 
 Assert-PathExists "src/playlist/playlist_parser.cpp" "Playlist parser implementation must live under src/playlist."
 Assert-PathExists "src/plugins/plugin_manifest.cpp" "Plugin manifest implementation must live under src/plugins."

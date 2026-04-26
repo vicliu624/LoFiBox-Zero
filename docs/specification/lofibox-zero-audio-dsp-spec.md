@@ -348,6 +348,16 @@ Its job is to:
 - user presets
 - device-specific presets
 
+The implemented DSP domain must expose these final-form controls through shared audio/DSP objects rather than through page-local state:
+
+- built-in presets including `Flat`, `Bass Boost`, `Treble Boost`, `Vocal`, `Rock`, `Pop`, `Jazz`, `Classical`, `Electronic`, and `Podcast / Speech`
+- user preset create, copy, rename, delete, overwrite, import, and export semantics
+- output-device and content-type bindings
+- 10-band graphic EQ plus parametric EQ bands
+- high-pass and low-pass filter settings
+- balance, loudness, limiter, ReplayGain mode, bypass, and preamp state
+- smoothing helpers for non-abrupt parameter transitions
+
 ## 9. Relationship To Other Specifications
 
 - `lofibox-zero-media-pipeline-spec.md` defines `TrackSource`, decode, metadata, `DspChain` placement, and output-sink boundaries.

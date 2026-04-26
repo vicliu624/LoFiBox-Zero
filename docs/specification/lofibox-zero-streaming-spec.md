@@ -293,6 +293,11 @@ Optional higher-level behavior may include:
 - metadata-only caching without audio download
 
 Offline save is source-dependent and should respect source permissions, authentication state, and storage policy.
+Implementation ownership is locked to a unified `CacheManager` boundary.
+The manager owns cache buckets for playback buffers, recent browse items, artwork, metadata, lyrics, remote directory catalogs, station lists, and offline audio.
+Each bucket exposes capacity policy, age policy, usage reporting, and garbage collection rather than scattering expiration logic inside protocol clients or UI pages.
+Remote directory caches, station-list caches, recent-browse caches, offline track saves, album offline sync plans, and playlist offline sync plans are part of this same cache/offline domain.
+Host implementations must place runtime cache material under the XDG cache root and must not write offline or cache data into the installation tree.
 
 ### 6.8 Accounts, Authentication, And Security
 

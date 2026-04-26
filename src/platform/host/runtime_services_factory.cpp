@@ -16,6 +16,7 @@ app::RuntimeServices createHostRuntimeServices()
     services.metadata = createHostMetadataServices(context);
     services.playback = createHostPlaybackServices(context);
     services.remote = createHostRemoteMediaServices(context);
+    services.cache = createHostCacheServices(context);
     return app::withNullRuntimeServices(std::move(services));
 }
 

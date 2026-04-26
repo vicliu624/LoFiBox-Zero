@@ -2,6 +2,8 @@
 
 #include "app/runtime_services.h"
 
+#include <filesystem>
+
 namespace lofibox::app {
 namespace {
 
@@ -126,6 +128,9 @@ RuntimeServices withNullRuntimeServices(RuntimeServices services)
     }
     if (!services.remote.remote_profile_store) {
         services.remote.remote_profile_store = makeNullShared<NullRemoteProfileStore>();
+    }
+    if (!services.cache.cache_manager) {
+        services.cache.cache_manager = std::make_shared<::lofibox::cache::CacheManager>(std::filesystem::temp_directory_path() / "lofibox-null-cache");
     }
     return services;
 }

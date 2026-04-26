@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "platform/host/runtime_provider_factories.h"
+#include "platform/host/runtime_paths.h"
 #include "platform/host/xdg_remote_profile_store.h"
 
 namespace lofibox::platform::host {
@@ -70,6 +71,14 @@ app::RemoteMediaServices createHostRemoteMediaServices(HostRuntimeServiceContext
     remote_group.remote_stream_resolver = createHostRemoteStreamResolver();
     remote_group.remote_profile_store = std::make_shared<XdgRemoteProfileStore>();
     return remote_group;
+}
+
+app::CacheServices createHostCacheServices(HostRuntimeServiceContext& context)
+{
+    if (!context.cache_services.cache_manager) {
+        context.cache_services.cache_manager = std::make_shared<::lofibox::cache::CacheManager>(runtime_paths::appCacheDir());
+    }
+    return context.cache_services;
 }
 
 } // namespace lofibox::platform::host

@@ -22,6 +22,8 @@ For current implementation progress, use `implementation-status.md`.
   Playback lifecycle, playback session, queue, seek, gapless, crossfade, and playback-mode semantics.
 - `audio`
   Decoder, output, DSP, EQ, `ReplayGain`, sample-rate conversion, and audio-device responsibilities.
+- `cache`
+  Cache buckets, cache policy, remote directory cache, station cache, recent browse cache, offline audio, and offline sync planning.
 - `metadata`
   Tags, artwork, lyrics identity linkage, metadata cache, and metadata normalization.
 - `library`
@@ -156,16 +158,16 @@ Any future visual or input validation must go through a real Linux product targe
 - `src/app/app_lifecycle.*` owns application tick ordering: runtime status refresh, media-library loading, boot-page transition, and playback update; `LoFiBoxApp` delegates `update()` through a narrow lifecycle target interface.
 - `src/app/app_runtime_context.*` owns runtime state, runtime services, controllers, and the target-interface implementations used by input routing, render routing, lifecycle, and command execution; `LoFiBoxApp` must remain a thin public facade and must not directly include app state, controllers, page model, render router, input router, lifecycle, or command executor headers.
 - `src/app/app_runtime_state.*` owns scalar/session runtime state; `src/app/app_controller_set.*` owns app controllers; `AppRuntimeContext` may adapt these objects to target interfaces but must not become a new raw-field aggregate.
-- `src/app/runtime_services.*` owns the runtime capability registry; runtime services must be grouped as connectivity, metadata, playback, and remote capabilities instead of exposing top-level provider fields.
-- `src/app/playback_controller.*` owns playback state-machine, queue, playback-mode, and current-track command semantics; it must not own enrichment worker threads, pending result maps, or network enrichment merging.
-- `src/app/playback_enrichment_coordinator.*` owns asynchronous enrichment request scheduling, generation guards, pending-result merge, and application of metadata/artwork/lyrics enrichment to library facts.
+- `src/app/runtime_services.*` owns the runtime capability registry; runtime services must be grouped as connectivity, metadata, playback, remote, and cache capabilities instead of exposing top-level provider fields.
+- `src/playback/playback_controller.*` owns playback state-machine, queue, playback-mode, and current-track command semantics; it must not own enrichment worker threads, pending result maps, or network enrichment merging.
+- `src/playback/playback_enrichment_coordinator.*` owns asynchronous enrichment request scheduling, generation guards, pending-result merge, and application of metadata/artwork/lyrics enrichment to library facts.
 - `src/platform/host/acoustid_client.cpp`, `musicbrainz_client.cpp`, `cover_art_archive_client.cpp`, `lyrics_source_clients.cpp`, and `ffprobe_metadata_reader.cpp` own concrete enrichment protocol clients. `runtime_enrichment_clients.cpp` may provide shared helpers/orchestration but must not regain concrete protocol method ownership.
 - `src/platform/host/lyrics_pipeline_components.*` owns lyrics cache and writeback policy. `LyricsProvider` may compose embedded lyrics reading, online resolving, cache use, match guarding, and writeback decisions but must not hide all of those responsibilities in one provider body.
 - `src/app/library_query_service.*` owns library fact queries. `src/app/library_navigation_service.*` owns library list title/row projection. `src/app/library_open_action_resolver.*` owns list-open action semantics. `src/app/library_list_context.h` owns browse/list context state.
 - `src/app/app_projection_builder.*` owns app-state to UI projection assembly. `AppRenderer` owns dispatch and page invocation, not projection translation.
 - `src/ui/widgets/lyrics_layout.*` owns lyric line parsing and active-line/window selection. `src/ui/effects/lyrics_spectrum_effect.*` owns lyrics-page visual spectrum algorithms.
 - `src/platform/host/runtime_host_tools.*` owns named host utility sub-boundaries for text parsing, JSON helpers, cache path derivation, and helper script resolution.
-- `src/playback`, `src/audio`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
+- `src/playback`, `src/audio`, `src/cache`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
 - A semantic source directory must not be an empty aspiration. If a directory exists under `src`, it must contain its implementation contract or implementation files, and `scripts/check-implementation-placement.ps1` must reject hidden implementation elsewhere.
 - `src/platform/host` and `src/platform/device` are adapter layers only.
 - `src/targets` must stay thin.
@@ -192,7 +194,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Media-pipeline work must follow `lofibox-zero-media-pipeline-spec.md` before format support is expanded in code.
 - `TrackSource`, `Decoder`, `MetadataProvider`, `DspChain`, and `AudioSink` are valid responsibility boundaries when implementing the real playback stack.
 - `TrackIdentityProvider`, `MetadataProvider`, `ArtworkProvider`, `LyricsProvider`, `AudioPlaybackBackend`, `ConnectivityProvider`, and `TagWriter` are valid responsibility boundaries for host runtime capability work.
-- `RuntimeServiceRegistry`, `ConnectivityServices`, `MetadataServices`, `PlaybackServices`, and `RemoteMediaServices` are valid runtime injection boundaries; new providers must join the correct capability group instead of adding flat global fields.
+- `RuntimeServiceRegistry`, `ConnectivityServices`, `MetadataServices`, `PlaybackServices`, `RemoteMediaServices`, and `CacheServices` are valid runtime injection boundaries; new providers must join the correct capability group instead of adding flat global fields.
 - Shared app logic must not instantiate host-specific metadata readers, artwork readers, playback backends, or connectivity probes directly; those implementations must be injected from platform adapter code.
 - Audio-DSP work must follow `lofibox-zero-audio-dsp-spec.md` before EQ surface area or runtime processing behavior is expanded.
 - `EqProfile`, `EqEngine`, `EqManager`, `PresetRepository`, and `OutputDeviceBinding` are valid responsibility boundaries for mature EQ and DSP work.

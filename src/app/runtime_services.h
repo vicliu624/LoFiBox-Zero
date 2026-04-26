@@ -12,6 +12,7 @@
 #include "app/audio_visualization.h"
 #include "app/remote_profile_store.h"
 #include "app/remote_media_services.h"
+#include "cache/cache_manager.h"
 #include "core/canvas.h"
 
 namespace lofibox::app {
@@ -171,11 +172,16 @@ struct RemoteMediaServices {
     std::shared_ptr<RemoteProfileStore> remote_profile_store{};
 };
 
+struct CacheServices {
+    std::shared_ptr<::lofibox::cache::CacheManager> cache_manager{};
+};
+
 struct RuntimeServiceRegistry {
     ConnectivityServices connectivity{};
     MetadataServices metadata{};
     PlaybackServices playback{};
     RemoteMediaServices remote{};
+    CacheServices cache{};
 };
 
 using RuntimeServices = RuntimeServiceRegistry;

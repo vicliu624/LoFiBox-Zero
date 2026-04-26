@@ -34,7 +34,8 @@ option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX
 
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp
-        src/audio/decoder/audio_decoder_contract.cpp
+    src/cache/cache_manager.cpp
+    src/audio/decoder/audio_decoder_contract.cpp
         src/audio/output/audio_output_contract.cpp
     src/audio/dsp/dsp_chain.cpp
     src/app/input_actions.cpp
@@ -336,6 +337,14 @@ if(BUILD_TESTING)
     add_executable(lofibox_dsp_chain_smoke tests/dsp_chain_smoke.cpp)
     target_link_libraries(lofibox_dsp_chain_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_dsp_chain_smoke COMMAND lofibox_dsp_chain_smoke)
+
+    add_executable(lofibox_dsp_profile_manager_smoke tests/dsp_profile_manager_smoke.cpp)
+    target_link_libraries(lofibox_dsp_profile_manager_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_dsp_profile_manager_smoke COMMAND lofibox_dsp_profile_manager_smoke)
+
+    add_executable(lofibox_cache_manager_smoke tests/cache_manager_smoke.cpp)
+    target_link_libraries(lofibox_cache_manager_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_cache_manager_smoke COMMAND lofibox_cache_manager_smoke)
 
     add_executable(lofibox_main_menu_visual_smoke tests/main_menu_visual_smoke.cpp)
     target_link_libraries(lofibox_main_menu_visual_smoke PRIVATE lofibox_zero_host_runtime)

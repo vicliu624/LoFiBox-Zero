@@ -14,6 +14,7 @@ struct HostRuntimeServiceContext {
     app::ConnectivityServices connectivity{};
     std::shared_ptr<app::TagWriter> tag_writer{};
     std::shared_ptr<app::TrackIdentityProvider> track_identity_provider{};
+    app::CacheServices cache_services{};
 };
 
 [[nodiscard]] HostRuntimeServiceContext createHostRuntimeServiceContext();
@@ -21,5 +22,6 @@ struct HostRuntimeServiceContext {
 [[nodiscard]] app::MetadataServices createHostMetadataServices(HostRuntimeServiceContext& context);
 [[nodiscard]] app::PlaybackServices createHostPlaybackServices(HostRuntimeServiceContext& context);
 [[nodiscard]] app::RemoteMediaServices createHostRemoteMediaServices(HostRuntimeServiceContext& context);
+[[nodiscard]] app::CacheServices createHostCacheServices(HostRuntimeServiceContext& context);
 
 } // namespace lofibox::platform::host

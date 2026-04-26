@@ -24,6 +24,7 @@ The long-term source layout is semantic rather than incidental:
 - `src/core`: domain model, state, commands, errors, configuration
 - `src/playback`: playback lifecycle, queue, seek, gapless, crossfade
 - `src/audio`: decoder, output, DSP, EQ, ReplayGain, resampling
+- `src/cache`: cache policy, remote-directory/station/recent caches, offline audio, sync planning
 - `src/metadata`: tags, artwork, lyrics linkage, metadata cache
 - `src/library`: scan, index, database, migrations, queries
 - `src/playlist`: playlist model and parsers
@@ -44,9 +45,9 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/app/app_lifecycle.*` owns application tick ordering; `LoFiBoxApp` delegates `update()` so runtime status refresh, library loading, boot transition, and playback tick remain one explicit lifecycle boundary.
 `src/app/app_runtime_context.*` owns app runtime state, controllers, runtime services, and the target-interface implementations consumed by input, render, lifecycle, and command helpers; `LoFiBoxApp` is only the public facade.
 `src/app/app_runtime_state.*` owns scalar/session UI-facing runtime state such as navigation, settings, network status, metadata service status, EQ state, help state, boot timestamps, and media roots; `src/app/app_controller_set.*` owns controller objects such as library and playback controllers.
-`src/app/runtime_services.*` exposes `RuntimeServiceRegistry`, grouped by capability: `ConnectivityServices`, `MetadataServices`, `PlaybackServices`, and `RemoteMediaServices`; concrete host/device code fills providers, while shared app code consumes grouped capabilities only.
-`src/app/playback_controller.*` owns playback state-machine and queue semantics; `src/app/playback_enrichment_coordinator.*` owns asynchronous metadata/artwork/lyrics enrichment worker lifecycle and pending-result merge semantics.
-`src/app/playback_session_clock.*`, `playback_backend_controller.*`, `playback_completion_policy.*`, `playback_visualization_source.*`, and `playback_runtime_coordinator.*` own playback time, backend commands, end-of-track policy, visualization-frame sourcing, and runtime transition orchestration.
+`src/app/runtime_services.*` exposes `RuntimeServiceRegistry`, grouped by capability: `ConnectivityServices`, `MetadataServices`, `PlaybackServices`, `RemoteMediaServices`, and `CacheServices`; concrete host/device code fills providers, while shared app code consumes grouped capabilities only.
+`src/playback/playback_controller.*` owns playback state-machine and queue semantics; `src/playback/playback_enrichment_coordinator.*` owns asynchronous metadata/artwork/lyrics enrichment worker lifecycle and pending-result merge semantics.
+`src/playback/playback_session_clock.*`, `playback_backend_controller.*`, `playback_completion_policy.*`, `playback_visualization_source.*`, and `playback_runtime_coordinator.*` own playback time, backend commands, end-of-track policy, visualization-frame sourcing, and runtime transition orchestration.
 `src/app/library_query_service.*` owns library fact queries; `src/app/library_navigation_service.*` owns list title/row projection; `src/app/library_open_action_resolver.*` owns list-open action semantics; `src/app/library_list_context.h` owns current browse/list context.
 `src/app/app_projection_builder.*` owns app-state to UI view-model projection; `src/app/app_renderer.*` dispatches pages and boot/help chrome only.
 `src/ui/widgets/lyrics_layout.*` owns lyric parsing, active-line selection, and scrolling-window layout; `src/ui/effects/lyrics_spectrum_effect.*` owns lyrics-page spectrum visual algorithms.
@@ -56,6 +57,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/app/library_repository.*` owns in-memory library fact state and scan replacement; `LibraryController` coordinates list context/navigation and no longer owns the raw `LibraryModel` storage directly.
 `src/playback/*` owns playback lifecycle, queue, state, clocks, completion policy, enrichment coordination, and runtime handoff; `src/app` may keep compatibility forwarding headers but must not contain playback implementation `.cpp` files.
 `src/audio/audio_pipeline_controller.*` owns the app-facing audio pipeline facade for backend command dispatch, playback state reads, and visualization tap reads. `src/audio/decoder/*` owns decoder contracts, `src/audio/output/*` owns output contracts and host output implementation, and `src/audio/dsp/*` owns DSP node state and sample-processing policy.
+`src/cache/cache_manager.*` owns cache/offline buckets, capacity and age policies, garbage collection, remote directory caches, station-list caches, recent-browse caches, offline audio saves, and album/playlist offline sync planning.
 `src/remote/common/remote_provider_contract.*` owns provider manifests/capabilities; `src/app/remote_profile_store.*` and `src/platform/host/xdg_remote_profile_store.*` own profile persistence with credential references only. `src/app/media_item.*`, `media_search_service.*`, and `src/playback/mixed_playback_queue.*` define the local/remote media-item bridge. `src/library/library_indexer.*` and `library_store.*` own indexing and durable-store boundaries. `src/metadata/enrichment_authority_policy.*` owns enrichment trust decisions.
 `src/remote/jellyfin`, `src/remote/emby`, `src/remote/opensubsonic`, and `src/remote/navidrome` own first-batch provider protocol behavior. `scripts/remote_media_tool.py` is only a private helper entrypoint that dispatches into those provider modules; it must not contain provider endpoint logic.
 `src/playlist/*` owns playlist format detection and parser contracts. `src/plugins/*` owns plugin/provider manifest registry contracts.

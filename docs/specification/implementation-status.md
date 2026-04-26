@@ -18,6 +18,8 @@ Use `project-architecture-spec.md` for enduring architecture rules.
 - track identity runtime service with MusicBrainz fallback and optional Chromaprint/AcoustID fingerprint path
 - remote media runtime provider path for Jellyfin, OpenSubsonic/Navidrome-compatible servers, and Emby, including probe, catalog/search/recent lookup, and stream resolution behind app-facing remote service interfaces
 - implementation placement gate for source ownership: first-batch remote provider behavior lives under `src/remote/*`, playback implementation lives under `src/playback`, audio output/decoder contracts live under `src/audio/*`, and helper entrypoints cannot hide protocol implementation details
+- unified `CacheManager` for playback, artwork, metadata, lyrics, remote-directory, station-list, recent-browse, and offline-audio cache buckets, including capacity/age policy, garbage collection, and album/playlist offline sync planning
+- final-form DSP domain objects for built-in/user/device/content-specific EQ profiles, preset CRUD/import/export, device/content bindings, loudness, balance, limiter, ReplayGain mode, parametric bands, high-pass/low-pass filters, and smoothing helpers
 - host single-instance startup guard for the Linux device executable
 
 ## 3. Current Device-Side Scope
@@ -30,11 +32,11 @@ Use `project-architecture-spec.md` for enduring architecture rules.
 ## 4. Still Not Implemented
 
 - final-form streaming UI surfaces
-- final-form DSP and EQ management surfaces
 - local persistent fingerprint index
 - host-machine provisioning outside the development container for optional fingerprint dependency `fpcalc`
 - direct on-host desktop simulator support
 - full remote hierarchy pages for server artists, albums, playlists, folders, genres, favorites, and server-side writeback actions
+- pointer-facing or large-screen final UI surfaces for advanced/professional DSP editing; the domain model and runtime chain state now exist, while current small-screen page still exposes the compact 10-band surface
 
 ## 5. Rule
 
