@@ -55,9 +55,9 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
-        if ($repoPath.StartsWith("src/app/pages/", [System.StringComparison]::Ordinal) -or $repoPath.StartsWith("src/app/ui/", [System.StringComparison]::Ordinal)) {
+        if ($repoPath.StartsWith("src/ui/", [System.StringComparison]::Ordinal)) {
             if (Test-AnyPrefix $include @("platform/", "audio/", "metadata/", "library/", "playback/", "remote/", "desktop/", "security/")) {
-                Add-Violation $violations $repoPath $lineNumber $include "UI/page code must not include platform or backend layers"
+                Add-Violation $violations $repoPath $lineNumber $include "UI code must not include platform or backend layers"
             }
         }
 
@@ -68,19 +68,19 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath.StartsWith("src/platform/host/", [System.StringComparison]::Ordinal)) {
-            if (Test-AnyPrefix $include @("app/pages/", "app/lofibox_app.h")) {
-                Add-Violation $violations $repoPath $lineNumber $include "host adapters must not depend on concrete app/pages"
+            if (Test-AnyPrefix $include @("ui/pages/", "app/lofibox_app.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "host adapters must not depend on concrete app or pages"
             }
         }
 
         if ($repoPath.StartsWith("src/platform/device/", [System.StringComparison]::Ordinal) -or $repoPath.StartsWith("src/platform/x11/", [System.StringComparison]::Ordinal)) {
-            if (Test-AnyPrefix $include @("app/pages/", "app/lofibox_app.h", "platform/host/")) {
+            if (Test-AnyPrefix $include @("ui/pages/", "app/lofibox_app.h", "platform/host/")) {
                 Add-Violation $violations $repoPath $lineNumber $include "presentation adapters must not depend on host runtime or concrete app/pages"
             }
         }
 
         if ($repoPath.StartsWith("src/targets/", [System.StringComparison]::Ordinal)) {
-            if (Test-AnyPrefix $include @("app/pages/")) {
+            if (Test-AnyPrefix $include @("ui/pages/")) {
                 Add-Violation $violations $repoPath $lineNumber $include "targets must stay thin and must not include page implementations"
             }
         }

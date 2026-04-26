@@ -5,11 +5,11 @@
 #include <string>
 
 #include "app/audio_visualization.h"
-#include "app/pages/now_playing_page.h"
+#include "ui/pages/now_playing_page.h"
 #include "app/runtime_services.h"
 #include "core/canvas.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 
 struct LyricsPageView {
     bool has_track{false};
@@ -19,10 +19,10 @@ struct LyricsPageView {
     double elapsed_seconds{0.0};
     NowPlayingStatus status{NowPlayingStatus::Empty};
     bool lookup_pending{false};
-    TrackLyrics lyrics{};
-    AudioVisualizationFrame visualization{};
+    app::TrackLyrics lyrics{};
+    app::AudioVisualizationFrame visualization{};
 };
 
 void renderLyricsPage(core::Canvas& canvas, const LyricsPageView& view);
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages

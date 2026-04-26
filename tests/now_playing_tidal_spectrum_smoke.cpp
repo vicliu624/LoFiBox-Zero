@@ -3,8 +3,8 @@
 #include <array>
 #include <iostream>
 
-#include "app/pages/now_playing_page.h"
-#include "app/ui/ui_primitives.h"
+#include "ui/pages/now_playing_page.h"
+#include "ui/ui_primitives.h"
 #include "core/canvas.h"
 #include "core/display_profile.h"
 
@@ -20,19 +20,19 @@ namespace {
 int main()
 {
     lofibox::core::Canvas canvas{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
-    lofibox::app::ui::drawListPageFrame(canvas);
-    lofibox::app::ui::drawTopBar(canvas, "NOW PLAYING", true);
+    lofibox::ui::drawListPageFrame(canvas);
+    lofibox::ui::drawTopBar(canvas, "NOW PLAYING", true);
 
-    lofibox::app::pages::renderNowPlayingPage(
+    lofibox::ui::pages::renderNowPlayingPage(
         canvas,
-        lofibox::app::pages::NowPlayingView{
+        lofibox::ui::pages::NowPlayingView{
             true,
             "Spectrum Song",
             "Artist",
             "Album",
             180,
             37.0,
-            lofibox::app::pages::NowPlayingStatus::Playing,
+            lofibox::ui::pages::NowPlayingStatus::Playing,
             false,
             false,
             false,

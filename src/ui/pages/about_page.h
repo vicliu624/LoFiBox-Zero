@@ -6,7 +6,7 @@
 
 #include "core/canvas.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 
 struct AboutPageView {
     std::string version{};
@@ -15,4 +15,4 @@ struct AboutPageView {
 
 void renderAboutPage(core::Canvas& canvas, const AboutPageView& view);
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages

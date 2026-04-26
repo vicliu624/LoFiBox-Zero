@@ -38,15 +38,15 @@ add_library(lofibox_zero_core STATIC
     src/app/library_scanner.cpp
     src/app/lofibox_app.cpp
     src/app/lofibox_app_runner.cpp
-    src/app/pages/about_page.cpp
-    src/app/pages/equalizer_page.cpp
-    src/app/pages/list_page.cpp
-    src/app/pages/lyrics_page.cpp
-    src/app/pages/main_menu_page.cpp
-    src/app/pages/now_playing_page.cpp
+    src/ui/pages/about_page.cpp
+    src/ui/pages/equalizer_page.cpp
+    src/ui/pages/list_page.cpp
+    src/ui/pages/lyrics_page.cpp
+    src/ui/pages/main_menu_page.cpp
+    src/ui/pages/now_playing_page.cpp
     src/app/playback_controller.cpp
     src/app/runtime_services.cpp
-    src/app/ui/ui_primitives.cpp
+    src/ui/ui_primitives.cpp
     src/core/bitmap_font.cpp
     src/core/canvas.cpp
 )

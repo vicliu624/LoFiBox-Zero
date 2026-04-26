@@ -8,7 +8,7 @@
 
 #include "core/canvas.h"
 
-namespace lofibox::app::ui {
+namespace lofibox::ui {
 
 [[nodiscard]] std::string upperText(std::string_view text);
 [[nodiscard]] std::string fitText(std::string_view text, std::size_t max_chars);
@@ -34,4 +34,4 @@ void blitScaledCanvas(
     std::uint8_t opacity = 255);
 [[nodiscard]] core::Color mixColor(core::Color a, core::Color b, float t) noexcept;
 
-} // namespace lofibox::app::ui
+} // namespace lofibox::ui

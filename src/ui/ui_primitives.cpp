@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "app/ui/ui_primitives.h"
+#include "ui/ui_primitives.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 
-#include "app/ui/ui_theme.h"
+#include "ui/ui_theme.h"
 #include "core/bitmap_font.h"
 #include "core/display_profile.h"
 
-namespace lofibox::app::ui {
+namespace lofibox::ui {
 namespace {
 
 using core::rgba;
@@ -351,4 +351,4 @@ core::Color mixColor(core::Color a, core::Color b, float t) noexcept
     return rgba(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a));
 }
 
-} // namespace lofibox::app::ui
+} // namespace lofibox::ui

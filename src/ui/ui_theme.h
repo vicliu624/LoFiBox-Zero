@@ -6,7 +6,7 @@
 
 #include "core/color.h"
 
-namespace lofibox::app::ui {
+namespace lofibox::ui {
 
 inline constexpr auto kBgRoot = core::rgba(5, 6, 8);
 inline constexpr auto kBgPanel0 = core::rgba(10, 12, 15);
@@ -34,4 +34,4 @@ inline constexpr int kListInset = 8;
 
 inline constexpr std::string_view kUnknown = "UNKNOWN";
 
-} // namespace lofibox::app::ui
+} // namespace lofibox::ui

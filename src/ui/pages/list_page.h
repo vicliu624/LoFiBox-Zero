@@ -8,7 +8,7 @@
 
 #include "core/canvas.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 
 struct ListPageView {
     std::string title{};
@@ -23,4 +23,4 @@ struct ListPageView {
 
 void renderListPage(core::Canvas& canvas, const ListPageView& view);
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages

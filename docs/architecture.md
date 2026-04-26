@@ -33,6 +33,9 @@ The long-term source layout is semantic rather than incidental:
 - `src/security`: credentials, TLS, auth, sensitive data
 - `src/ui`: pages, controls, view models, themes
 
+Current page renderers and shared UI primitives live under `src/ui`.
+`src/app` may orchestrate which page is rendered, but it must not own page drawing implementations.
+
 ## Hard Boundary Rules
 
 - UI must not directly call FFmpeg, SMB, Jellyfin, SQLite, D-Bus, or protocol clients.

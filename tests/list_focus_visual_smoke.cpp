@@ -3,7 +3,7 @@
 #include <cmath>
 #include <iostream>
 
-#include "app/pages/list_page.h"
+#include "ui/pages/list_page.h"
 #include "core/canvas.h"
 #include "core/display_profile.h"
 
@@ -19,7 +19,7 @@ int brightness(lofibox::core::Color color)
 int main()
 {
     lofibox::core::Canvas canvas{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
-    lofibox::app::pages::ListPageView view{};
+    lofibox::ui::pages::ListPageView view{};
     view.title = "Songs";
     view.rows = {
         {"Alpha", "1:00"},
@@ -35,7 +35,7 @@ int main()
     };
     view.selected = 1;
 
-    lofibox::app::pages::renderListPage(canvas, view);
+    lofibox::ui::pages::renderListPage(canvas, view);
 
     constexpr int row_y = 28 + 21;
     constexpr int sample_x = 160;

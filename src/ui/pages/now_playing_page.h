@@ -9,7 +9,7 @@
 #include "app/audio_visualization.h"
 #include "core/canvas.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 
 enum class NowPlayingStatus {
     Empty,
@@ -29,9 +29,9 @@ struct NowPlayingView {
     bool repeat_all{false};
     bool repeat_one{false};
     const core::Canvas* artwork{};
-    AudioVisualizationFrame visualization{};
+    app::AudioVisualizationFrame visualization{};
 };
 
 void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view);
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages

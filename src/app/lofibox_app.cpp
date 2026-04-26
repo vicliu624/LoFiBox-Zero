@@ -17,12 +17,12 @@
 #include "app/input_actions.h"
 #include "app/library_controller.h"
 #include "app/navigation_state.h"
-#include "app/pages/about_page.h"
-#include "app/pages/equalizer_page.h"
-#include "app/pages/list_page.h"
-#include "app/pages/lyrics_page.h"
-#include "app/pages/main_menu_page.h"
-#include "app/pages/now_playing_page.h"
+#include "ui/pages/about_page.h"
+#include "ui/pages/equalizer_page.h"
+#include "ui/pages/list_page.h"
+#include "ui/pages/lyrics_page.h"
+#include "ui/pages/main_menu_page.h"
+#include "ui/pages/now_playing_page.h"
 #include "app/playback_controller.h"
 #include "core/bitmap_font.h"
 #include "core/color.h"
@@ -32,6 +32,8 @@ namespace fs = std::filesystem;
 
 namespace lofibox::app {
 namespace {
+
+namespace ui_pages = lofibox::ui::pages;
 
 using clock = std::chrono::steady_clock;
 using core::rgba;
@@ -789,19 +791,19 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
     if (page == AppPage::MainMenu) {
         const auto map_index_state = [](LibraryIndexState state) {
             switch (state) {
-            case LibraryIndexState::Uninitialized: return pages::MenuIndexState::Uninitialized;
-            case LibraryIndexState::Loading: return pages::MenuIndexState::Loading;
-            case LibraryIndexState::Ready: return pages::MenuIndexState::Ready;
-            case LibraryIndexState::Degraded: return pages::MenuIndexState::Degraded;
+            case LibraryIndexState::Uninitialized: return ui_pages::MenuIndexState::Uninitialized;
+            case LibraryIndexState::Loading: return ui_pages::MenuIndexState::Loading;
+            case LibraryIndexState::Ready: return ui_pages::MenuIndexState::Ready;
+            case LibraryIndexState::Degraded: return ui_pages::MenuIndexState::Degraded;
             }
-            return pages::MenuIndexState::Uninitialized;
+            return ui_pages::MenuIndexState::Uninitialized;
         };
 
-        pages::renderMainMenuPage(
+        ui_pages::renderMainMenuPage(
             canvas,
-            pages::MainMenuView{
+            ui_pages::MainMenuView{
                 impl_->main_menu_index,
-                pages::MenuStorageView{impl_->library_controller.model().storage.available, impl_->library_controller.model().storage.capacity_bytes, impl_->library_controller.model().storage.free_bytes},
+                ui_pages::MenuStorageView{impl_->library_controller.model().storage.available, impl_->library_controller.model().storage.capacity_bytes, impl_->library_controller.model().storage.free_bytes},
                 map_index_state(impl_->library_controller.state()),
                 impl_->network.connected,
                 &impl_->assets,
@@ -834,13 +836,13 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
         const TrackRecord* track = playback.current_track_id ? impl_->findTrack(*playback.current_track_id) : nullptr;
         const auto map_status = [](PlaybackStatus status) {
             switch (status) {
-            case PlaybackStatus::Empty: return pages::NowPlayingStatus::Empty;
-            case PlaybackStatus::Paused: return pages::NowPlayingStatus::Paused;
-            case PlaybackStatus::Playing: return pages::NowPlayingStatus::Playing;
+            case PlaybackStatus::Empty: return ui_pages::NowPlayingStatus::Empty;
+            case PlaybackStatus::Paused: return ui_pages::NowPlayingStatus::Paused;
+            case PlaybackStatus::Playing: return ui_pages::NowPlayingStatus::Playing;
             }
-            return pages::NowPlayingStatus::Empty;
+            return ui_pages::NowPlayingStatus::Empty;
         };
-        pages::renderNowPlayingPage(canvas, pages::NowPlayingView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->album : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.shuffle_enabled, playback.repeat_all, playback.repeat_one, playback.current_artwork ? &*playback.current_artwork : nullptr, playback.visualization_frame});
+        ui_pages::renderNowPlayingPage(canvas, ui_pages::NowPlayingView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->album : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.shuffle_enabled, playback.repeat_all, playback.repeat_one, playback.current_artwork ? &*playback.current_artwork : nullptr, playback.visualization_frame});
         impl_->renderHelpIfOpen(canvas);
         return;
     }
@@ -852,25 +854,25 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
         const TrackRecord* track = playback.current_track_id ? impl_->findTrack(*playback.current_track_id) : nullptr;
         const auto map_status = [](PlaybackStatus status) {
             switch (status) {
-            case PlaybackStatus::Empty: return pages::NowPlayingStatus::Empty;
-            case PlaybackStatus::Paused: return pages::NowPlayingStatus::Paused;
-            case PlaybackStatus::Playing: return pages::NowPlayingStatus::Playing;
+            case PlaybackStatus::Empty: return ui_pages::NowPlayingStatus::Empty;
+            case PlaybackStatus::Paused: return ui_pages::NowPlayingStatus::Paused;
+            case PlaybackStatus::Playing: return ui_pages::NowPlayingStatus::Playing;
             }
-            return pages::NowPlayingStatus::Empty;
+            return ui_pages::NowPlayingStatus::Empty;
         };
-        pages::renderLyricsPage(canvas, pages::LyricsPageView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.lyrics_lookup_pending, playback.current_lyrics, playback.visualization_frame});
+        ui_pages::renderLyricsPage(canvas, ui_pages::LyricsPageView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.lyrics_lookup_pending, playback.current_lyrics, playback.visualization_frame});
         impl_->renderHelpIfOpen(canvas);
         return;
     }
 
     if (page == AppPage::Equalizer) {
-        pages::renderEqualizerPage(canvas, pages::EqualizerPageView{impl_->eq.bands, impl_->eq.selected_band, impl_->eq.preset_name});
+        ui_pages::renderEqualizerPage(canvas, ui_pages::EqualizerPageView{impl_->eq.bands, impl_->eq.selected_band, impl_->eq.preset_name});
         impl_->renderHelpIfOpen(canvas);
         return;
     }
 
     if (page == AppPage::About) {
-        pages::renderAboutPage(canvas, pages::AboutPageView{std::string(kVersion), formatStorage(impl_->library_controller.model().storage)});
+        ui_pages::renderAboutPage(canvas, ui_pages::AboutPageView{std::string(kVersion), formatStorage(impl_->library_controller.model().storage)});
         impl_->renderHelpIfOpen(canvas);
         return;
     }
@@ -891,9 +893,9 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
     }
 
     const bool browse_list = impl_->isBrowseListPage();
-    pages::renderListPage(
+    ui_pages::renderListPage(
         canvas,
-        pages::ListPageView{
+        ui_pages::ListPageView{
             impl_->pageTitle(),
             !browse_list,
             browse_list ? "F1:HELP" : "",

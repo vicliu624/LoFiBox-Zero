@@ -10,7 +10,7 @@
 #include "app/app_assets.h"
 #include "core/canvas.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 
 enum class MenuIndexState {
     Uninitialized,
@@ -30,11 +30,11 @@ struct MainMenuView {
     MenuStorageView storage{};
     MenuIndexState index_state{MenuIndexState::Uninitialized};
     bool network_connected{false};
-    const AppAssets* assets{};
+    const app::AppAssets* assets{};
     std::string playback_summary{"NO TRACK"};
     int playback_summary_scroll_px{0};
 };
 
 void renderMainMenuPage(core::Canvas& canvas, const MainMenuView& view);
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages

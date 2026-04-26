@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "app/pages/lyrics_page.h"
+#include "ui/pages/lyrics_page.h"
 
 #include <algorithm>
 #include <cctype>
@@ -11,12 +11,12 @@
 #include <sstream>
 #include <vector>
 
-#include "app/ui/ui_primitives.h"
-#include "app/ui/ui_theme.h"
+#include "ui/ui_primitives.h"
+#include "ui/ui_theme.h"
 #include "core/bitmap_font.h"
 #include "core/display_profile.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 namespace {
 
 struct LyricDisplayLine {
@@ -58,12 +58,12 @@ void blendPixel(core::Canvas& canvas, int x, int y, core::Color color, std::uint
     constexpr auto base = core::rgba(56, 202, 255);
 
     if (rise_position < 0.58f) {
-        return ui::mixColor(base, mid, rise_position / 0.58f);
+        return ::lofibox::ui::mixColor(base, mid, rise_position / 0.58f);
     }
-    return ui::mixColor(mid, crest, (rise_position - 0.58f) / 0.42f);
+    return ::lofibox::ui::mixColor(mid, crest, (rise_position - 0.58f) / 0.42f);
 }
 
-[[nodiscard]] float sideFoamEnergy(const AudioVisualizationFrame& frame, float rise_position) noexcept
+[[nodiscard]] float sideFoamEnergy(const app::AudioVisualizationFrame& frame, float rise_position) noexcept
 {
     const float band_position = std::clamp(rise_position, 0.0f, 1.0f);
     const float scaled = band_position * static_cast<float>(frame.bands.size() - 1);
@@ -86,7 +86,7 @@ void blendPixel(core::Canvas& canvas, int x, int y, core::Color color, std::uint
     return (wave_a * 0.48f) + (wave_b * 0.34f) + (wave_c * 0.18f);
 }
 
-[[nodiscard]] float adjacentEnergy(const AudioVisualizationFrame& frame, float rise_position) noexcept
+[[nodiscard]] float adjacentEnergy(const app::AudioVisualizationFrame& frame, float rise_position) noexcept
 {
     constexpr float spread = 0.085f;
     const float lower = sideFoamEnergy(frame, std::clamp(rise_position - spread, 0.0f, 1.0f));
@@ -97,7 +97,7 @@ void blendPixel(core::Canvas& canvas, int x, int y, core::Color color, std::uint
 
 void renderFoamSide(
     core::Canvas& canvas,
-    const AudioVisualizationFrame& frame,
+    const app::AudioVisualizationFrame& frame,
     double elapsed_seconds,
     bool left_side)
 {
@@ -150,7 +150,7 @@ void renderFoamSide(
     }
 }
 
-void renderSideFoamSpectrum(core::Canvas& canvas, const AudioVisualizationFrame& frame, double elapsed_seconds)
+void renderSideFoamSpectrum(core::Canvas& canvas, const app::AudioVisualizationFrame& frame, double elapsed_seconds)
 {
     renderFoamSide(canvas, frame, elapsed_seconds, true);
     renderFoamSide(canvas, frame, elapsed_seconds, false);
@@ -254,7 +254,7 @@ std::optional<double> parseLyricTimestamp(std::string_view line, std::size_t& ta
     return close != std::string_view::npos && colon != std::string_view::npos && colon < close;
 }
 
-std::vector<LyricDisplayLine> lyricDisplayLines(const TrackLyrics& lyrics)
+std::vector<LyricDisplayLine> lyricDisplayLines(const app::TrackLyrics& lyrics)
 {
     std::vector<LyricDisplayLine> lines{};
     const auto& source = lyrics.synced && !lyrics.synced->empty() ? lyrics.synced : lyrics.plain;
@@ -328,37 +328,37 @@ int activeLyricIndex(const std::vector<LyricDisplayLine>& lines, double elapsed_
 
 void renderLyricsPage(core::Canvas& canvas, const LyricsPageView& view)
 {
-    canvas.fillRect(0, ui::kTopBarHeight, core::kDisplayWidth, core::kDisplayHeight - ui::kTopBarHeight, ui::kBgRoot);
-    canvas.fillRect(6, 27, 308, 135, ui::kBgPanel0);
-    canvas.fillRect(6, 27, 308, 1, ui::kDivider);
+    canvas.fillRect(0, ::lofibox::ui::kTopBarHeight, core::kDisplayWidth, core::kDisplayHeight - ::lofibox::ui::kTopBarHeight, ::lofibox::ui::kBgRoot);
+    canvas.fillRect(6, 27, 308, 135, ::lofibox::ui::kBgPanel0);
+    canvas.fillRect(6, 27, 308, 1, ::lofibox::ui::kDivider);
     renderSideFoamSpectrum(canvas, view.visualization, view.elapsed_seconds);
 
     if (!view.has_track) {
-        ui::drawText(canvas, "NO TRACK", ui::centeredX("NO TRACK", 1), 70, ui::kTextPrimary, 1);
-        ui::drawText(canvas, "SELECT MUSIC TO PLAY", ui::centeredX("SELECT MUSIC TO PLAY", 1), 92, ui::kTextMuted, 1);
+        ::lofibox::ui::drawText(canvas, "NO TRACK", ::lofibox::ui::centeredX("NO TRACK", 1), 70, ::lofibox::ui::kTextPrimary, 1);
+        ::lofibox::ui::drawText(canvas, "SELECT MUSIC TO PLAY", ::lofibox::ui::centeredX("SELECT MUSIC TO PLAY", 1), 92, ::lofibox::ui::kTextMuted, 1);
         return;
     }
 
-    ui::drawText(canvas, ui::fitText(view.title, 30), ui::centeredX(ui::fitText(view.title, 30), 1), 32, ui::kTextPrimary, 1);
-    ui::drawText(canvas, ui::fitText(view.artist, 28), ui::centeredX(ui::fitText(view.artist, 28), 1), 46, ui::kTextMuted, 1);
+    ::lofibox::ui::drawText(canvas, ::lofibox::ui::fitText(view.title, 30), ::lofibox::ui::centeredX(::lofibox::ui::fitText(view.title, 30), 1), 32, ::lofibox::ui::kTextPrimary, 1);
+    ::lofibox::ui::drawText(canvas, ::lofibox::ui::fitText(view.artist, 28), ::lofibox::ui::centeredX(::lofibox::ui::fitText(view.artist, 28), 1), 46, ::lofibox::ui::kTextMuted, 1);
 
     const auto lines = lyricDisplayLines(view.lyrics);
     if (lines.empty()) {
         const std::string primary = view.lookup_pending ? "SEARCHING LYRICS" : "LYRICS NOT FOUND";
         const std::string secondary = view.lookup_pending ? "ONLINE MATCH IN PROGRESS" : "NO MATCH FROM TAGS OR ONLINE";
-        canvas.fillRect(54, 72, 212, 1, ui::kDivider);
-        canvas.fillRect(72, 92, 176, 1, ui::kDivider);
+        canvas.fillRect(54, 72, 212, 1, ::lofibox::ui::kDivider);
+        canvas.fillRect(72, 92, 176, 1, ::lofibox::ui::kDivider);
         for (int index = 0; index < 5; ++index) {
             const int x = 122 + (index * 18);
             const int h = 6 + ((index % 3) * 5);
             const auto color = view.lookup_pending && index == static_cast<int>(static_cast<long long>(view.elapsed_seconds) % 5)
-                ? ui::kProgressStrong
-                : ui::kBgPanel2;
+                ? ::lofibox::ui::kProgressStrong
+                : ::lofibox::ui::kBgPanel2;
             canvas.fillRect(x, 80 - h, 8, h, color);
         }
-        ui::drawText(canvas, primary, ui::centeredX(primary, 1), 96, view.lookup_pending ? ui::kTextPrimary : ui::kTextSecondary, 1);
-        ui::drawText(canvas, secondary, ui::centeredX(secondary, 1), 114, ui::kTextMuted, 1);
-        ui::drawText(canvas, "L: BACK TO PLAYER", ui::centeredX("L: BACK TO PLAYER", 1), 136, ui::kTextMuted, 1);
+        ::lofibox::ui::drawText(canvas, primary, ::lofibox::ui::centeredX(primary, 1), 96, view.lookup_pending ? ::lofibox::ui::kTextPrimary : ::lofibox::ui::kTextSecondary, 1);
+        ::lofibox::ui::drawText(canvas, secondary, ::lofibox::ui::centeredX(secondary, 1), 114, ::lofibox::ui::kTextMuted, 1);
+        ::lofibox::ui::drawText(canvas, "L: BACK TO PLAYER", ::lofibox::ui::centeredX("L: BACK TO PLAYER", 1), 136, ::lofibox::ui::kTextMuted, 1);
     } else {
         constexpr int visible_lines = 7;
         constexpr int row_h = 14;
@@ -373,22 +373,22 @@ void renderLyricsPage(core::Canvas& canvas, const LyricsPageView& view)
             }
             const int y = 62 + (row * row_h);
             const bool is_active = index == active;
-            const std::string text = ui::fitText(
+            const std::string text = ::lofibox::ui::fitText(
                 lines[static_cast<std::size_t>(index)].text,
                 is_active ? active_line_chars : inactive_line_chars);
-            const int x = ui::centeredX(text, 1);
-            const auto color = is_active ? ui::kTextPrimary : (std::abs(index - active) <= 1 ? ui::kTextSecondary : ui::kTextMuted);
+            const int x = ::lofibox::ui::centeredX(text, 1);
+            const auto color = is_active ? ::lofibox::ui::kTextPrimary : (std::abs(index - active) <= 1 ? ::lofibox::ui::kTextSecondary : ::lofibox::ui::kTextMuted);
             if (is_active) {
-                ui::drawSoftLyricFocus(canvas, 34, y + 6, 252, 30);
-                ui::drawText(canvas, text, x, y + 2, color, 1);
+                ::lofibox::ui::drawSoftLyricFocus(canvas, 34, y + 6, 252, 30);
+                ::lofibox::ui::drawText(canvas, text, x, y + 2, color, 1);
             } else {
-                ui::drawText(canvas, text, x, y + 2, color, 1);
+                ::lofibox::ui::drawText(canvas, text, x, y + 2, color, 1);
             }
         }
 
     }
 
-    ui::drawFloatingProgressBar(
+    ::lofibox::ui::drawFloatingProgressBar(
         canvas,
         55,
         154,
@@ -396,4 +396,4 @@ void renderLyricsPage(core::Canvas& canvas, const LyricsPageView& view)
         std::max(0, std::min(210, static_cast<int>((view.elapsed_seconds / std::max(1, view.duration_seconds)) * 210.0))));
 }
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages

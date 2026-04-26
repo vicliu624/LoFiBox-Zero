@@ -30,6 +30,11 @@ labwc-rc.xml
 uconsole-config.txt
 check-browsers.sh
 verify-browsers-removed.sh
+check-clash-verge.sh
+check-apt-clash.sh
+Clash.Verge*.tar.gz
+clash-core-releases.json
+clash-verge-extract/
 
 # Local compiler/linker byproducts from ad-hoc probes.
 *.obj

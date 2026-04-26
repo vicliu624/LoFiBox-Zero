@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "app/pages/now_playing_page.h"
+#include "ui/pages/now_playing_page.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
 
-#include "app/ui/ui_primitives.h"
-#include "app/ui/ui_theme.h"
+#include "ui/ui_primitives.h"
+#include "ui/ui_theme.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 namespace {
 
 [[nodiscard]] core::Color alphaBlend(core::Color dst, core::Color src, std::uint8_t opacity) noexcept
@@ -57,9 +57,9 @@ std::string formatDuration(int seconds)
     constexpr auto high = core::rgba(255, 177, 68);
 
     if (band_position < 0.55f) {
-        return ui::mixColor(low, mid, band_position / 0.55f);
+        return ::lofibox::ui::mixColor(low, mid, band_position / 0.55f);
     }
-    return ui::mixColor(mid, high, (band_position - 0.55f) / 0.45f);
+    return ::lofibox::ui::mixColor(mid, high, (band_position - 0.55f) / 0.45f);
 }
 
 [[nodiscard]] float spectrumEnergyForColumn(const std::array<float, 10>& bands, int column, int column_count) noexcept
@@ -100,7 +100,7 @@ void renderTidalSpectrum(core::Canvas& canvas, const NowPlayingView& view)
         for (int row = 0; row < height; ++row) {
             const float vertical = static_cast<float>(row) / static_cast<float>(std::max(1, height - 1));
             const int y = kBaseline - row;
-            const auto column_color = ui::mixColor(base_color, ui::kTextPrimary, 0.34f * vertical);
+            const auto column_color = ::lofibox::ui::mixColor(base_color, ::lofibox::ui::kTextPrimary, 0.34f * vertical);
             const std::uint8_t opacity = view.visualization.available
                 ? static_cast<std::uint8_t>(std::clamp(42.0f + (118.0f * vertical), 0.0f, 160.0f))
                 : static_cast<std::uint8_t>(36);
@@ -113,7 +113,7 @@ void renderTidalSpectrum(core::Canvas& canvas, const NowPlayingView& view)
 
         for (int glow = 1; glow <= 3; ++glow) {
             const int y = kBaseline + glow;
-            const auto glow_color = ui::mixColor(base_color, ui::kBgRoot, 0.35f);
+            const auto glow_color = ::lofibox::ui::mixColor(base_color, ::lofibox::ui::kBgRoot, 0.35f);
             blendPixel(canvas, x + 1, y, glow_color, static_cast<std::uint8_t>(38 / glow));
             blendPixel(canvas, x + 2, y, glow_color, static_cast<std::uint8_t>(38 / glow));
         }
@@ -125,8 +125,8 @@ void renderTidalSpectrum(core::Canvas& canvas, const NowPlayingView& view)
 void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view)
 {
     if (!view.has_track) {
-        ui::drawText(canvas, "NO TRACK", 122, 38, ui::kTextPrimary, 1);
-        ui::drawText(canvas, "SELECT MUSIC TO PLAY", 122, 58, ui::kTextMuted, 1);
+        ::lofibox::ui::drawText(canvas, "NO TRACK", 122, 38, ::lofibox::ui::kTextPrimary, 1);
+        ::lofibox::ui::drawText(canvas, "SELECT MUSIC TO PLAY", 122, 58, ::lofibox::ui::kTextMuted, 1);
         return;
     }
 
@@ -137,7 +137,7 @@ void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view)
     constexpr int kArtworkSize = kArtworkFrameSize - (kArtworkInset * 2);
 
     if (view.artwork != nullptr) {
-        ui::blitScaledCanvas(
+        ::lofibox::ui::blitScaledCanvas(
             canvas,
             *view.artwork,
             kArtworkFrameX + kArtworkInset,
@@ -145,40 +145,40 @@ void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view)
             kArtworkSize,
             kArtworkSize,
             255);
-        canvas.strokeRect(kArtworkFrameX, kArtworkFrameY, kArtworkFrameSize, kArtworkFrameSize, ui::kDivider, 1);
+        canvas.strokeRect(kArtworkFrameX, kArtworkFrameY, kArtworkFrameSize, kArtworkFrameSize, ::lofibox::ui::kDivider, 1);
     } else {
-        canvas.fillRect(kArtworkFrameX, kArtworkFrameY, kArtworkFrameSize, kArtworkFrameSize, ui::kBgPanel1);
-        canvas.strokeRect(kArtworkFrameX, kArtworkFrameY, kArtworkFrameSize, kArtworkFrameSize, ui::kDivider, 1);
-        canvas.fillRect(kArtworkFrameX + 18, kArtworkFrameY + 28, 16, 34, ui::kProgressStrong);
-        canvas.fillRect(kArtworkFrameX + 38, kArtworkFrameY + 18, 18, 44, ui::kProgress);
-        ui::drawLine(canvas, kArtworkFrameX - 2, kArtworkFrameY + 8, kArtworkFrameX + 20, kArtworkFrameY - 2, ui::kFocusEdge);
-        ui::drawLine(canvas, kArtworkFrameX - 2, kArtworkFrameY + 42, kArtworkFrameX + 20, kArtworkFrameY + 42, ui::kFocusEdge);
-        ui::drawText(canvas, "NO ART", kArtworkFrameX + 12, kArtworkFrameY + 58, ui::kTextMuted, 1);
+        canvas.fillRect(kArtworkFrameX, kArtworkFrameY, kArtworkFrameSize, kArtworkFrameSize, ::lofibox::ui::kBgPanel1);
+        canvas.strokeRect(kArtworkFrameX, kArtworkFrameY, kArtworkFrameSize, kArtworkFrameSize, ::lofibox::ui::kDivider, 1);
+        canvas.fillRect(kArtworkFrameX + 18, kArtworkFrameY + 28, 16, 34, ::lofibox::ui::kProgressStrong);
+        canvas.fillRect(kArtworkFrameX + 38, kArtworkFrameY + 18, 18, 44, ::lofibox::ui::kProgress);
+        ::lofibox::ui::drawLine(canvas, kArtworkFrameX - 2, kArtworkFrameY + 8, kArtworkFrameX + 20, kArtworkFrameY - 2, ::lofibox::ui::kFocusEdge);
+        ::lofibox::ui::drawLine(canvas, kArtworkFrameX - 2, kArtworkFrameY + 42, kArtworkFrameX + 20, kArtworkFrameY + 42, ::lofibox::ui::kFocusEdge);
+        ::lofibox::ui::drawText(canvas, "NO ART", kArtworkFrameX + 12, kArtworkFrameY + 58, ::lofibox::ui::kTextMuted, 1);
     }
 
-    ui::drawText(canvas, view.title, 116, 30, ui::kTextPrimary, 1);
-    ui::drawText(canvas, view.artist, 116, 52, ui::kTextSecondary, 1);
-    ui::drawText(canvas, view.album, 116, 68, ui::kTextMuted, 1);
+    ::lofibox::ui::drawText(canvas, view.title, 116, 30, ::lofibox::ui::kTextPrimary, 1);
+    ::lofibox::ui::drawText(canvas, view.artist, 116, 52, ::lofibox::ui::kTextSecondary, 1);
+    ::lofibox::ui::drawText(canvas, view.album, 116, 68, ::lofibox::ui::kTextMuted, 1);
 
-    ui::drawFloatingProgressBar(
+    ::lofibox::ui::drawFloatingProgressBar(
         canvas,
         116,
         92,
         184,
         std::max(0, std::min(184, static_cast<int>((view.elapsed_seconds / std::max(1, view.duration_seconds)) * 184.0))));
 
-    ui::drawText(canvas, formatDuration(static_cast<int>(view.elapsed_seconds)), 116, 102, ui::kTextSecondary, 1);
-    ui::drawText(canvas, formatDuration(view.duration_seconds), 262, 102, ui::kTextSecondary, 1);
+    ::lofibox::ui::drawText(canvas, formatDuration(static_cast<int>(view.elapsed_seconds)), 116, 102, ::lofibox::ui::kTextSecondary, 1);
+    ::lofibox::ui::drawText(canvas, formatDuration(view.duration_seconds), 262, 102, ::lofibox::ui::kTextSecondary, 1);
 
     const std::string play_label = view.status == NowPlayingStatus::Playing ? "PAUSE" : "PLAY";
-    ui::drawText(canvas, "PREV", 110, 124, ui::kTextMuted, 1);
-    ui::drawText(canvas, play_label, 146, 124, ui::kTextPrimary, 1);
-    ui::drawText(canvas, "NEXT", 192, 124, ui::kTextMuted, 1);
-    ui::drawText(canvas, view.shuffle_enabled ? "SHUF*" : "SHUF", 236, 124, view.shuffle_enabled ? ui::kProgress : ui::kTextMuted, 1);
+    ::lofibox::ui::drawText(canvas, "PREV", 110, 124, ::lofibox::ui::kTextMuted, 1);
+    ::lofibox::ui::drawText(canvas, play_label, 146, 124, ::lofibox::ui::kTextPrimary, 1);
+    ::lofibox::ui::drawText(canvas, "NEXT", 192, 124, ::lofibox::ui::kTextMuted, 1);
+    ::lofibox::ui::drawText(canvas, view.shuffle_enabled ? "SHUF*" : "SHUF", 236, 124, view.shuffle_enabled ? ::lofibox::ui::kProgress : ::lofibox::ui::kTextMuted, 1);
     const std::string repeat_label = view.repeat_one ? "ONE*" : (view.repeat_all ? "REP*" : "REP");
-    ui::drawText(canvas, repeat_label, 278, 124, view.repeat_one || view.repeat_all ? ui::kProgress : ui::kTextMuted, 1);
+    ::lofibox::ui::drawText(canvas, repeat_label, 278, 124, view.repeat_one || view.repeat_all ? ::lofibox::ui::kProgress : ::lofibox::ui::kTextMuted, 1);
 
     renderTidalSpectrum(canvas, view);
 }
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages

@@ -7,7 +7,7 @@
 
 #include "core/canvas.h"
 
-namespace lofibox::app::pages {
+namespace lofibox::ui::pages {
 
 struct EqualizerPageView {
     std::array<int, 10> bands{};
@@ -17,4 +17,4 @@ struct EqualizerPageView {
 
 void renderEqualizerPage(core::Canvas& canvas, const EqualizerPageView& view);
 
-} // namespace lofibox::app::pages
+} // namespace lofibox::ui::pages
