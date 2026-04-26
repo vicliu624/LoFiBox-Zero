@@ -46,6 +46,7 @@ add_library(lofibox_zero_core STATIC
     src/app/library_mutation_service.cpp
     src/app/library_open_action_resolver.cpp
     src/app/library_query_service.cpp
+    src/app/library_repository.cpp
     src/app/library_scanner.cpp
     src/app/lofibox_app.cpp
     src/app/lofibox_app_runner.cpp

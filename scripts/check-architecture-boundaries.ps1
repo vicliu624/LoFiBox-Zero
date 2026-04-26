@@ -102,6 +102,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/app/library_controller.h") {
+            if ($line -match '^\s*(LibraryIndexState|LibraryModel)\s+\w+_\{') {
+                Add-Violation $violations $repoPath $lineNumber "library repository ownership" "LibraryController must keep library fact storage behind LibraryRepository"
+            }
+        }
+
         if ($repoPath.StartsWith("src/remote/", [System.StringComparison]::Ordinal)) {
             if ($line -match '\bPlaybackController\b|\bPlaybackSession\b|ui::|pages::') {
                 Add-Violation $violations $repoPath $lineNumber "remote source boundary" "Remote providers must produce catalog/stream facts and must not control playback or UI"

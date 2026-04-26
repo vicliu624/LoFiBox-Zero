@@ -9,7 +9,6 @@
 #include "app/library_navigation_service.h"
 #include "app/library_open_action_resolver.h"
 #include "app/library_query_service.h"
-#include "app/library_scanner.h"
 
 namespace lofibox::app {
 namespace {
@@ -26,44 +25,43 @@ std::string sortKey(std::string value)
 
 LibraryIndexState LibraryController::state() const noexcept
 {
-    return state_;
+    return repository_.state();
 }
 
 const LibraryModel& LibraryController::model() const noexcept
 {
-    return library_;
+    return repository_.model();
 }
 
 LibraryModel& LibraryController::mutableModel() noexcept
 {
-    return library_;
+    return repository_.mutableModel();
 }
 
 void LibraryController::startLoading() noexcept
 {
-    state_ = LibraryIndexState::Loading;
+    repository_.markLoading();
 }
 
 void LibraryController::refreshLibrary(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider)
 {
-    library_ = scanLibrary(media_roots, metadata_provider);
-    state_ = library_.degraded ? LibraryIndexState::Degraded : LibraryIndexState::Ready;
+    repository_.rescan(media_roots, metadata_provider);
     setSongsContextAll();
 }
 
 const TrackRecord* LibraryController::findTrack(int id) const noexcept
 {
-    return LibraryQueryService::findTrack(library_, id);
+    return repository_.findTrack(id);
 }
 
 TrackRecord* LibraryController::findMutableTrack(int id) noexcept
 {
-    return LibraryQueryService::findMutableTrack(library_, id);
+    return repository_.findMutableTrack(id);
 }
 
 std::vector<int> LibraryController::allSongIdsSorted() const
 {
-    return LibraryQueryService::sortedTrackIds(library_, list_context_.song_sort_mode);
+    return LibraryQueryService::sortedTrackIds(repository_.model(), list_context_.song_sort_mode);
 }
 
 std::vector<int> LibraryController::trackIdsForCurrentSongs() const
@@ -195,7 +193,7 @@ std::optional<std::string> LibraryController::titleOverrideForPage(AppPage page)
 
 std::optional<std::vector<std::pair<std::string, std::string>>> LibraryController::rowsForPage(AppPage page) const
 {
-    return LibraryNavigationService::rowsForPage(page, library_, list_context_, visibleAlbums(), playlistTrackIds());
+    return LibraryNavigationService::rowsForPage(page, repository_.model(), list_context_, visibleAlbums(), playlistTrackIds());
 }
 
 LibraryOpenResult LibraryController::openSelectedListItem(AppPage page, int selected)
@@ -228,17 +226,17 @@ void LibraryController::setSongsContextFiltered(SongsMode mode, std::string labe
 
 std::vector<AlbumRecord> LibraryController::visibleAlbums() const
 {
-    return LibraryQueryService::visibleAlbums(library_, list_context_.albums);
+    return LibraryQueryService::visibleAlbums(repository_.model(), list_context_.albums);
 }
 
 std::vector<int> LibraryController::idsForGenre(const std::string& genre) const
 {
-    return LibraryQueryService::idsForGenre(library_, genre);
+    return LibraryQueryService::idsForGenre(repository_.model(), genre);
 }
 
 std::vector<int> LibraryController::idsForComposer(const std::string& composer) const
 {
-    return LibraryQueryService::idsForComposer(library_, composer);
+    return LibraryQueryService::idsForComposer(repository_.model(), composer);
 }
 
 } // namespace lofibox::app

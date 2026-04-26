@@ -11,6 +11,7 @@
 #include "app/app_page.h"
 #include "app/library_list_context.h"
 #include "app/library_model.h"
+#include "app/library_repository.h"
 #include "app/runtime_services.h"
 
 namespace lofibox::app {
@@ -61,8 +62,7 @@ private:
     [[nodiscard]] std::vector<int> idsForGenre(const std::string& genre) const;
     [[nodiscard]] std::vector<int> idsForComposer(const std::string& composer) const;
 
-    LibraryIndexState state_{LibraryIndexState::Uninitialized};
-    LibraryModel library_{};
+    LibraryRepository repository_{};
     LibraryListContext list_context_{};
 };
 

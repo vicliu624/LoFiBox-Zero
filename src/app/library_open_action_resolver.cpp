@@ -25,9 +25,9 @@ LibraryOpenResult LibraryOpenActionResolver::openSelectedListItem(LibraryControl
         default: return {};
         }
     case AppPage::Artists:
-        if (selected >= 0 && selected < static_cast<int>(controller.library_.artists.size())) {
+        if (selected >= 0 && selected < static_cast<int>(controller.model().artists.size())) {
             controller.list_context_.albums.mode = AlbumsMode::ByArtist;
-            controller.list_context_.albums.artist = controller.library_.artists[static_cast<std::size_t>(selected)];
+            controller.list_context_.albums.artist = controller.model().artists[static_cast<std::size_t>(selected)];
             return {LibraryOpenResult::Kind::PushPage, AppPage::Albums, 0};
         }
         return {};
@@ -47,22 +47,22 @@ LibraryOpenResult LibraryOpenActionResolver::openSelectedListItem(LibraryControl
         return {};
     }
     case AppPage::Genres:
-        if (selected >= 0 && selected < static_cast<int>(controller.library_.genres.size())) {
-            const auto& genre = controller.library_.genres[static_cast<std::size_t>(selected)];
+        if (selected >= 0 && selected < static_cast<int>(controller.model().genres.size())) {
+            const auto& genre = controller.model().genres[static_cast<std::size_t>(selected)];
             controller.setSongsContextFiltered(SongsMode::Genre, genre, controller.idsForGenre(genre));
             return {LibraryOpenResult::Kind::PushPage, AppPage::Songs, 0};
         }
         return {};
     case AppPage::Composers:
-        if (selected >= 0 && selected < static_cast<int>(controller.library_.composers.size())) {
-            const auto& composer = controller.library_.composers[static_cast<std::size_t>(selected)];
+        if (selected >= 0 && selected < static_cast<int>(controller.model().composers.size())) {
+            const auto& composer = controller.model().composers[static_cast<std::size_t>(selected)];
             controller.setSongsContextFiltered(SongsMode::Composer, composer, controller.idsForComposer(composer));
             return {LibraryOpenResult::Kind::PushPage, AppPage::Songs, 0};
         }
         return {};
     case AppPage::Compilations:
-        if (selected >= 0 && selected < static_cast<int>(controller.library_.compilations.size())) {
-            const auto& compilation = controller.library_.compilations[static_cast<std::size_t>(selected)];
+        if (selected >= 0 && selected < static_cast<int>(controller.model().compilations.size())) {
+            const auto& compilation = controller.model().compilations[static_cast<std::size_t>(selected)];
             controller.setSongsContextFiltered(SongsMode::Compilation, compilation.album, compilation.track_ids);
             return {LibraryOpenResult::Kind::PushPage, AppPage::Songs, 0};
         }

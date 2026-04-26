@@ -53,6 +53,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/platform/host/runtime_enrichment_clients.cpp` is shared enrichment helper/orchestration code; concrete host enrichment clients live in dedicated protocol files.
 `src/platform/host/host_runtime_service_providers.*` owns host runtime service group construction; `src/platform/host/runtime_services_factory.*` is only the final composition boundary that returns a null-completed `RuntimeServices` registry.
 `src/platform/host/runtime_metadata_enrichment_orchestrator.*` owns host metadata lookup ordering across identity and MusicBrainz clients; metadata providers consume its result and retain only local tag/cache/writeback application.
+`src/app/library_repository.*` owns in-memory library fact state and scan replacement; `LibraryController` coordinates list context/navigation and no longer owns the raw `LibraryModel` storage directly.
 `src/platform/host/lyrics_pipeline_components.*` owns lyrics cache and lyrics writeback policy; `src/platform/host/lyrics_provider.cpp` composes those components instead of hiding the whole lyrics chain.
 `src/platform/host/runtime_host_tools.*` names host helper sub-boundaries for text parsing, JSON helpers, cache-path derivation, and helper-script resolution.
 The integrated product core distinguishes media identity, media source, media stream, playback facts, audio pipeline, enrichment pipeline, library facts, UI projection, and runtime shell responsibilities. Those distinctions are normative in `docs/specification/integrated-product-core-spec.md`.
