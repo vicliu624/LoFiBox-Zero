@@ -44,6 +44,8 @@ For current implementation progress, use `implementation-status.md`.
   The chromeless, no-menu-bar product surface used by LoFiBox as a desktop-widget music terminal.
 - `platform/host`
   Runtime capability adapters that expose one unified metadata, artwork, playback, logging, caching, enrichment, tag-writing, and connectivity surface to the shared app.
+- `integrated product core`
+  The cross-cutting product boundary that keeps media identity, media source, media stream, playback facts, audio pipeline, enrichment pipeline, library facts, UI projections, and runtime shells aligned.
 - `platform/device`
   Linux integrations that exist for device-profile runtimes: framebuffer output, Linux input, and device-specific presentation.
 - `device profile`
@@ -121,6 +123,7 @@ Any future visual or input validation must go through a real Linux product targe
 - A physical key that the kernel reports as `KEY_C` is character/input key `C` unless the Linux input driver or device adapter receives an actual `KEY_RIGHT` event.
 - Legacy product meaning must be interpreted through `legacy-lofibox-product-guidance.md`, not by reviving old repository structure.
 - Media-format responsibilities must follow `lofibox-zero-media-pipeline-spec.md`.
+- Integrated product core responsibilities must follow `integrated-product-core-spec.md`.
 - Track identity and fingerprint-backed enrichment responsibilities must follow `lofibox-zero-track-identity-spec.md`.
 - Shared cross-page application-state responsibilities must follow `lofibox-zero-app-state-spec.md`.
 - Persistence domains, hydration, and repair behavior must follow `lofibox-zero-persistence-spec.md`.

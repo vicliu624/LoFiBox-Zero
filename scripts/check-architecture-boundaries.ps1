@@ -61,8 +61,8 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath -eq "src/app/playback_controller.cpp" -or $repoPath -eq "src/app/playback_controller.h") {
-            if ($line -match '\bstd::thread\b|\bstd::mutex\b|pending_enrichment|enrichment_threads|requestEnrichment|applyPendingEnrichments') {
-                Add-Violation $violations $repoPath $lineNumber "playback enrichment ownership" "PlaybackController must own playback state/queue semantics only; asynchronous enrichment belongs to PlaybackEnrichmentCoordinator"
+            if ($line -match '\bstd::thread\b|\bstd::mutex\b|pending_enrichment|enrichment_threads|requestEnrichment|applyPendingEnrichments|PlaybackSessionClock|PlaybackBackendController|PlaybackTransitionCoordinator|PlaybackCompletionPolicy|AudioPipeline') {
+                Add-Violation $violations $repoPath $lineNumber "playback core ownership" "PlaybackController must own playback commands and queue semantics only; enrichment, clock, backend, transition, completion policy, and audio pipeline responsibilities belong to dedicated integrated-core components"
             }
         }
 
@@ -85,8 +85,20 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath -eq "src/app/library_controller.cpp") {
-            if ($line -match 'case\s+AppPage::|case\s+\d+\s*:') {
-                Add-Violation $violations $repoPath $lineNumber "library open action ownership" "LibraryController must not own list-open branching; delegate open-action semantics to LibraryOpenActionResolver"
+            if ($line -match 'case\s+AppPage::|case\s+\d+\s*:|LibraryDatabase|LibraryStore|LibraryIndexer|LibraryMutationService|LibraryScanScheduler|RemoteSource|RemoteSourceRegistry') {
+                Add-Violation $violations $repoPath $lineNumber "library fact ownership" "LibraryController must not own list-open branching, durable library storage/indexing, or remote provider access"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/remote/", [System.StringComparison]::Ordinal)) {
+            if ($line -match '\bPlaybackController\b|\bPlaybackSession\b|ui::|pages::') {
+                Add-Violation $violations $repoPath $lineNumber "remote source boundary" "Remote providers must produce catalog/stream facts and must not control playback or UI"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/metadata/", [System.StringComparison]::Ordinal)) {
+            if ($line -match 'ui::|pages::|PlaybackController') {
+                Add-Violation $violations $repoPath $lineNumber "metadata boundary" "Metadata/enrichment code must not depend on UI pages or playback controllers"
             }
         }
 

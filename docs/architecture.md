@@ -13,6 +13,7 @@ Cardputer Zero, PocketFrame, framebuffer, VNC, and other device-shaped environme
 Primary specs:
 
 - `docs/specification/lofibox-zero-final-product-spec.md`
+- `docs/specification/integrated-product-core-spec.md`
 - `docs/specification/debian-official-archive-spec.md`
 - `docs/specification/project-architecture-spec.md`
 
@@ -51,6 +52,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/platform/host/runtime_enrichment_clients.cpp` is shared enrichment helper/orchestration code; concrete host enrichment clients live in dedicated protocol files.
 `src/platform/host/lyrics_pipeline_components.*` owns lyrics cache and lyrics writeback policy; `src/platform/host/lyrics_provider.cpp` composes those components instead of hiding the whole lyrics chain.
 `src/platform/host/runtime_host_tools.*` names host helper sub-boundaries for text parsing, JSON helpers, cache-path derivation, and helper-script resolution.
+The integrated product core distinguishes media identity, media source, media stream, playback facts, audio pipeline, enrichment pipeline, library facts, UI projection, and runtime shell responsibilities. Those distinctions are normative in `docs/specification/integrated-product-core-spec.md`.
 
 ## Hard Boundary Rules
 
@@ -73,6 +75,7 @@ Current page renderers and shared UI primitives live under `src/ui`.
 - `AppRenderer` must not translate app state into UI projection structs inline; projection building belongs to `AppProjectionBuilder`.
 - Lyrics pages must not own lyric parsing, active-line location, scrolling-window algorithms, or spectrum rendering algorithms; those belong to widgets/effects.
 - Host runtime helper utilities must be named by responsibility rather than hidden inside `runtime_host_internal`.
+- Runtime shells such as PocketFrame, Cardputer Zero, container, framebuffer, X11, VNC, or desktop widget surfaces must not fork media identity, playback, audio, library, remote, enrichment, or projection semantics.
 - Core code must not include app, platform, UI, playback, audio, metadata, library, remote, desktop, or security layers.
 - Host adapters implement runtime services and helper/resource resolution, but do not depend on concrete app/page classes.
 - Targets compose app runners and platform adapters; they do not own page implementations or product behavior.
