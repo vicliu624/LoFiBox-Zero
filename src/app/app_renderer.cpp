@@ -54,6 +54,7 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
     case AppPage::Lyrics:
     case AppPage::Equalizer:
     case AppPage::Settings:
+    case AppPage::SourceManager:
     case AppPage::About:
         return {};
     }
@@ -162,6 +163,7 @@ void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
     case AppPage::Playlists:
     case AppPage::PlaylistDetail:
     case AppPage::Settings:
+    case AppPage::SourceManager:
         renderList(canvas, target);
         return;
     }
