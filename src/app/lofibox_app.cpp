@@ -23,9 +23,9 @@
 #include "ui/pages/lyrics_page.h"
 #include "ui/pages/main_menu_page.h"
 #include "ui/pages/now_playing_page.h"
+#include "ui/ui_primitives.h"
+#include "ui/ui_theme.h"
 #include "app/playback_controller.h"
-#include "core/bitmap_font.h"
-#include "core/color.h"
 #include "core/display_profile.h"
 
 namespace fs = std::filesystem;
@@ -36,36 +36,7 @@ namespace {
 namespace ui_pages = lofibox::ui::pages;
 
 using clock = std::chrono::steady_clock;
-using core::rgba;
-
 constexpr int kMainMenuItemCount = 6;
-
-constexpr auto kBgRoot = rgba(5, 6, 8);
-constexpr auto kBgPanel0 = rgba(10, 12, 15);
-constexpr auto kBgPanel1 = rgba(16, 19, 24);
-constexpr auto kBgPanel2 = rgba(23, 27, 33);
-constexpr auto kChromeTopbar0 = rgba(43, 46, 51);
-constexpr auto kChromeTopbar1 = rgba(16, 19, 23);
-constexpr auto kDivider = rgba(42, 47, 54);
-constexpr auto kTextPrimary = rgba(245, 247, 250);
-constexpr auto kTextSecondary = rgba(199, 205, 211);
-constexpr auto kTextMuted = rgba(141, 148, 156);
-constexpr auto kFocusFill0 = rgba(95, 176, 255);
-constexpr auto kFocusFill1 = rgba(47, 134, 255);
-constexpr auto kFocusEdge = rgba(169, 219, 255);
-constexpr auto kProgress = rgba(88, 168, 255);
-constexpr auto kProgressStrong = rgba(47, 117, 255);
-constexpr auto kEqHot0 = rgba(255, 178, 87);
-constexpr auto kEqHot1 = rgba(255, 127, 42);
-constexpr auto kEqSelected0 = rgba(127, 209, 255);
-constexpr auto kEqSelected1 = rgba(47, 134, 255);
-constexpr auto kGood = rgba(135, 217, 108);
-constexpr auto kWarn = rgba(230, 179, 74);
-constexpr auto kBad = rgba(214, 106, 95);
-
-constexpr int kTopBarHeight = 20;
-constexpr int kMaxVisibleRows = 6;
-constexpr int kContentInset = 10;
 
 constexpr std::string_view kUnknown = "UNKNOWN";
 constexpr std::string_view kNoMusic = "NO MUSIC";
@@ -77,72 +48,6 @@ constexpr std::string_view kNoCompilations = "NO COMPILATIONS";
 constexpr std::string_view kEmpty = "EMPTY";
 constexpr std::string_view kNoTrack = "NO TRACK";
 constexpr std::string_view kVersion = "0.1.0";
-
-std::string upperText(std::string_view text)
-{
-    std::string result{};
-    result.reserve(text.size());
-    for (const unsigned char ch : text) {
-        if (ch < 0x80U) {
-            result.push_back(static_cast<char>(std::toupper(ch)));
-        } else {
-            result.push_back(static_cast<char>(ch));
-        }
-    }
-    return result;
-}
-
-std::string fitText(std::string_view text, std::size_t max_chars);
-
-std::string fitUpper(std::string_view text, std::size_t max_chars)
-{
-    return fitText(upperText(text), max_chars);
-}
-
-std::string fitText(std::string_view text, std::size_t max_chars)
-{
-    std::string result{text};
-    std::size_t char_count = 0;
-    for (const unsigned char ch : result) {
-        if ((ch & 0xC0U) != 0x80U) {
-            ++char_count;
-        }
-    }
-
-    if (char_count <= max_chars) {
-        return result;
-    }
-
-    if (max_chars <= 3) {
-        std::size_t bytes = 0;
-        std::size_t seen = 0;
-        while (bytes < result.size() && seen < max_chars) {
-            const unsigned char ch = static_cast<unsigned char>(result[bytes]);
-            if ((ch & 0xC0U) != 0x80U) {
-                ++seen;
-            }
-            ++bytes;
-        }
-        return result.substr(0, bytes);
-    }
-
-    std::size_t bytes = 0;
-    std::size_t seen = 0;
-    const std::size_t keep_chars = max_chars - 3;
-    while (bytes < result.size() && seen < keep_chars) {
-        const unsigned char ch = static_cast<unsigned char>(result[bytes]);
-        if ((ch & 0xC0U) != 0x80U) {
-            ++seen;
-        }
-        ++bytes;
-    }
-
-    while (bytes < result.size() && (static_cast<unsigned char>(result[bytes]) & 0xC0U) == 0x80U) {
-        ++bytes;
-    }
-
-    return result.substr(0, bytes) + "...";
-}
 
 std::string_view pageTitleDefault(AppPage page) noexcept
 {
@@ -167,74 +72,6 @@ std::string_view pageTitleDefault(AppPage page) noexcept
     return "";
 }
 
-int centeredX(std::string_view text, int scale) noexcept
-{
-    return (core::kDisplayWidth - core::bitmap_font::measureText(text, scale)) / 2;
-}
-
-void drawText(core::Canvas& canvas, std::string_view text, int x, int y, core::Color color, int scale = 1)
-{
-    core::bitmap_font::drawText(canvas, text, x, y, color, scale);
-}
-
-void drawTopBar(core::Canvas& canvas, std::string_view title, bool show_back) noexcept
-{
-    canvas.fillRect(0, 0, core::kDisplayWidth, kTopBarHeight, kChromeTopbar0);
-    canvas.fillRect(0, 12, core::kDisplayWidth, 8, kChromeTopbar1);
-    canvas.fillRect(0, kTopBarHeight - 1, core::kDisplayWidth, 1, kDivider);
-
-    if (show_back) {
-        drawText(canvas, "<", 6, 6, kTextPrimary, 1);
-    }
-
-    drawText(canvas, title, centeredX(upperText(title), 1), 6, kTextPrimary, 1);
-}
-
-void drawListPageFrame(core::Canvas& canvas)
-{
-    canvas.fillRect(0, 0, core::kDisplayWidth, core::kDisplayHeight, kBgRoot);
-    canvas.fillRect(0, kTopBarHeight, core::kDisplayWidth, core::kDisplayHeight - kTopBarHeight, kBgPanel0);
-}
-
-[[nodiscard]] core::Color alphaBlend(core::Color dst, core::Color src, std::uint8_t opacity) noexcept;
-
-void drawPageHelpModal(core::Canvas& canvas, std::string_view title, const std::vector<std::pair<std::string_view, std::string_view>>& rows)
-{
-    constexpr int x = 26;
-    constexpr int y = 28;
-    constexpr int width = 268;
-    constexpr int height = 112;
-
-    canvas.fillRect(x + 4, y + 5, width, height, rgba(0, 0, 0));
-    canvas.fillRect(x, y, width, height, rgba(12, 16, 22));
-    canvas.strokeRect(x, y, width, height, rgba(116, 196, 255), 1);
-
-    for (int col = 4; col < width - 4; ++col) {
-        const float edge = static_cast<float>(std::min(col, width - 1 - col)) / 34.0f;
-        const auto opacity = static_cast<std::uint8_t>(std::clamp(edge, 0.0f, 1.0f) * 96.0f);
-        const auto top = alphaBlend(canvas.pixel(x + col, y + 3), rgba(148, 221, 255), opacity);
-        const auto bottom = alphaBlend(canvas.pixel(x + col, y + height - 4), rgba(31, 91, 180), static_cast<std::uint8_t>(opacity * 0.45f));
-        canvas.setPixel(x + col, y + 3, top);
-        canvas.setPixel(x + col, y + height - 4, bottom);
-    }
-
-    drawText(canvas, title, centeredX(title, 1), y + 8, kTextPrimary, 1);
-    if (rows.empty()) {
-        drawText(canvas, "NO SHORTCUTS", centeredX("NO SHORTCUTS", 1), y + 54, kTextMuted, 1);
-        return;
-    }
-
-    int row_y = y + 30;
-    for (const auto& row : rows) {
-        drawText(canvas, row.first, x + 20, row_y, kProgressStrong, 1);
-        drawText(canvas, row.second, x + 70, row_y, kTextSecondary, 1);
-        row_y += 14;
-        if (row_y > y + height - 14) {
-            break;
-        }
-    }
-}
-
 std::string formatStorage(const StorageInfo& storage)
 {
     if (!storage.available || storage.capacity_bytes == 0) {
@@ -245,59 +82,6 @@ std::string formatStorage(const StorageInfo& storage)
     const auto used_mb = static_cast<int>(used / (1024 * 1024));
     const auto total_mb = static_cast<int>(storage.capacity_bytes / (1024 * 1024));
     return std::to_string(used_mb) + "/" + std::to_string(total_mb) + "MB";
-}
-
-core::Color alphaBlend(core::Color dst, core::Color src, std::uint8_t opacity) noexcept
-{
-    const float src_alpha = (static_cast<float>(src.a) / 255.0f) * (static_cast<float>(opacity) / 255.0f);
-    const float dst_alpha = static_cast<float>(dst.a) / 255.0f;
-    const float out_alpha = src_alpha + (dst_alpha * (1.0f - src_alpha));
-
-    if (out_alpha <= 0.0f) {
-        return rgba(0, 0, 0, 0);
-    }
-
-    const auto blend = [&](std::uint8_t dst_c, std::uint8_t src_c) -> std::uint8_t {
-        const float out =
-            ((static_cast<float>(src_c) * src_alpha) + (static_cast<float>(dst_c) * dst_alpha * (1.0f - src_alpha))) / out_alpha;
-        return static_cast<std::uint8_t>(std::clamp(out, 0.0f, 255.0f));
-    };
-
-    return rgba(
-        blend(dst.r, src.r),
-        blend(dst.g, src.g),
-        blend(dst.b, src.b),
-        static_cast<std::uint8_t>(std::clamp(out_alpha * 255.0f, 0.0f, 255.0f)));
-}
-
-void blitScaledCanvas(
-    core::Canvas& target,
-    const core::Canvas& source,
-    int dst_x,
-    int dst_y,
-    int dst_w,
-    int dst_h,
-    std::uint8_t opacity = 255)
-{
-    if (dst_w <= 0 || dst_h <= 0 || source.width() <= 0 || source.height() <= 0) {
-        return;
-    }
-
-    for (int y = 0; y < dst_h; ++y) {
-        const int src_y = (y * source.height()) / dst_h;
-        for (int x = 0; x < dst_w; ++x) {
-            const int src_x = (x * source.width()) / dst_w;
-            const auto src = source.pixel(src_x, src_y);
-            if (src.a == 0 || opacity == 0) {
-                continue;
-            }
-
-            const int tx = dst_x + x;
-            const int ty = dst_y + y;
-            const auto dst = target.pixel(tx, ty);
-            target.setPixel(tx, ty, alphaBlend(dst, src, opacity));
-        }
-    }
 }
 
 ui::SpectrumFrame toUiSpectrumFrame(const AudioVisualizationFrame& frame)
@@ -513,14 +297,14 @@ struct LoFiBoxApp::Impl {
             return;
         }
         const auto title = help_page == AppPage::MainMenu ? std::string_view{"MENU SHORTCUTS"} : std::string_view{"SHORTCUTS"};
-        drawPageHelpModal(canvas, title, helpRowsForPage(help_page));
+        ui::drawPageHelpModal(canvas, title, helpRowsForPage(help_page));
     }
 
     [[nodiscard]] std::string pageTitle() const
     {
         const auto page = currentPage();
         if (const auto override = library_controller.titleOverrideForPage(page)) {
-            return fitUpper(*override, 18);
+            return ui::fitUpper(*override, 18);
         }
         return std::string(pageTitleDefault(page));
     }
@@ -541,12 +325,12 @@ struct LoFiBoxApp::Impl {
 
     void clampListSelection()
     {
-        navigation.clampListSelection(static_cast<int>(currentRows().size()), kMaxVisibleRows);
+        navigation.clampListSelection(static_cast<int>(currentRows().size()), ui::kMaxVisibleRows);
     }
 
     void moveSelection(int delta)
     {
-        navigation.moveSelection(delta, static_cast<int>(currentRows().size()), kMaxVisibleRows);
+        navigation.moveSelection(delta, static_cast<int>(currentRows().size()), ui::kMaxVisibleRows);
     }
 
     [[nodiscard]] bool isBrowseListPage() const noexcept
@@ -781,11 +565,11 @@ void LoFiBoxApp::handleInput(const InputEvent& event)
 
 void LoFiBoxApp::render(core::Canvas& canvas) const
 {
-    canvas.clear(kBgRoot);
+    canvas.clear(ui::kBgRoot);
 
     const auto page = impl_->currentPage();
     if (page == AppPage::Boot) {
-        canvas.fillRect(0, 0, core::kDisplayWidth, core::kDisplayHeight, kBgRoot);
+        canvas.fillRect(0, 0, core::kDisplayWidth, core::kDisplayHeight, ui::kBgRoot);
         const std::string status = impl_->library_controller.state() == LibraryIndexState::Uninitialized
             ? "STARTING"
             : (impl_->library_controller.state() == LibraryIndexState::Loading ? "LOADING LIBRARY" : "LIBRARY READY");
@@ -796,11 +580,11 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
             const int size = 122;
             const int x = (core::kDisplayWidth - size) / 2;
             const int y = 18;
-            blitScaledCanvas(canvas, *impl_->assets.logo, x, y, size, size, opacity);
+            ui::blitScaledCanvas(canvas, *impl_->assets.logo, x, y, size, size, opacity);
         } else {
-            drawText(canvas, "LOFIBOX ZERO", centeredX("LOFIBOX ZERO", 2), 38, kTextPrimary, 2);
+            ui::drawText(canvas, "LOFIBOX ZERO", ui::centeredX("LOFIBOX ZERO", 2), 38, ui::kTextPrimary, 2);
         }
-        drawText(canvas, status, centeredX(status, 1), 144, kTextSecondary, 1);
+        ui::drawText(canvas, status, ui::centeredX(status, 1), 144, ui::kTextSecondary, 1);
         return;
     }
 
@@ -846,8 +630,8 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
     }
 
     if (page == AppPage::NowPlaying) {
-        drawListPageFrame(canvas);
-        drawTopBar(canvas, impl_->pageTitle(), true);
+        ui::drawListPageFrame(canvas);
+        ui::drawTopBar(canvas, impl_->pageTitle(), true);
         const auto& playback = impl_->playback_controller.session();
         const TrackRecord* track = playback.current_track_id ? impl_->findTrack(*playback.current_track_id) : nullptr;
         const auto map_status = [](PlaybackStatus status) {
@@ -864,8 +648,8 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
     }
 
     if (page == AppPage::Lyrics) {
-        drawListPageFrame(canvas);
-        drawTopBar(canvas, impl_->pageTitle(), true);
+        ui::drawListPageFrame(canvas);
+        ui::drawTopBar(canvas, impl_->pageTitle(), true);
         const auto& playback = impl_->playback_controller.session();
         const TrackRecord* track = playback.current_track_id ? impl_->findTrack(*playback.current_track_id) : nullptr;
         const auto map_status = [](PlaybackStatus status) {

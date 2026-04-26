@@ -151,6 +151,43 @@ void drawListPageFrame(core::Canvas& canvas)
     canvas.fillRect(0, kTopBarHeight, core::kDisplayWidth, core::kDisplayHeight - kTopBarHeight, kBgPanel0);
 }
 
+void drawPageHelpModal(core::Canvas& canvas, std::string_view title, const std::vector<std::pair<std::string_view, std::string_view>>& rows)
+{
+    constexpr int x = 26;
+    constexpr int y = 28;
+    constexpr int width = 268;
+    constexpr int height = 112;
+
+    canvas.fillRect(x + 4, y + 5, width, height, rgba(0, 0, 0));
+    canvas.fillRect(x, y, width, height, rgba(12, 16, 22));
+    canvas.strokeRect(x, y, width, height, rgba(116, 196, 255), 1);
+
+    for (int col = 4; col < width - 4; ++col) {
+        const float edge = static_cast<float>(std::min(col, width - 1 - col)) / 34.0f;
+        const auto opacity = static_cast<std::uint8_t>(std::clamp(edge, 0.0f, 1.0f) * 96.0f);
+        const auto top = alphaBlend(canvas.pixel(x + col, y + 3), rgba(148, 221, 255), opacity);
+        const auto bottom = alphaBlend(canvas.pixel(x + col, y + height - 4), rgba(31, 91, 180), static_cast<std::uint8_t>(opacity * 0.45f));
+        canvas.setPixel(x + col, y + 3, top);
+        canvas.setPixel(x + col, y + height - 4, bottom);
+    }
+
+    drawText(canvas, title, centeredX(title, 1), y + 8, kTextPrimary, 1);
+    if (rows.empty()) {
+        drawText(canvas, "NO SHORTCUTS", centeredX("NO SHORTCUTS", 1), y + 54, kTextMuted, 1);
+        return;
+    }
+
+    int row_y = y + 30;
+    for (const auto& row : rows) {
+        drawText(canvas, row.first, x + 20, row_y, kProgressStrong, 1);
+        drawText(canvas, row.second, x + 70, row_y, kTextSecondary, 1);
+        row_y += 14;
+        if (row_y > y + height - 14) {
+            break;
+        }
+    }
+}
+
 void drawGlassListFocus(core::Canvas& canvas, int x, int y, int width, int height)
 {
     if (width <= 0 || height <= 0) {

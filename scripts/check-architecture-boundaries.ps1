@@ -72,6 +72,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/app/lofibox_app.cpp") {
+            if (Test-AnyPrefix $include @("core/bitmap_font.h", "core/color.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp composition must use UI primitives instead of owning low-level text/color drawing"
+            }
+        }
+
         if ($repoPath.StartsWith("src/platform/host/", [System.StringComparison]::Ordinal)) {
             if (Test-AnyPrefix $include @("ui/pages/", "app/lofibox_app.h")) {
                 Add-Violation $violations $repoPath $lineNumber $include "host adapters must not depend on concrete app or pages"
