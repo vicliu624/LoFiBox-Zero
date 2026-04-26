@@ -7,14 +7,12 @@
 #include <vector>
 
 #include "app/app_command_executor.h"
+#include "app/app_controller_set.h"
 #include "app/app_debug_snapshot.h"
 #include "app/app_input_router.h"
 #include "app/app_lifecycle.h"
 #include "app/app_renderer.h"
-#include "app/app_state.h"
-#include "app/library_controller.h"
-#include "app/navigation_state.h"
-#include "app/playback_controller.h"
+#include "app/app_runtime_state.h"
 #include "app/runtime_services.h"
 #include "core/canvas.h"
 #include "ui/ui_models.h"
@@ -92,23 +90,9 @@ private:
     void refreshMetadataServiceState();
     void refreshRuntimeStatus(bool force);
 
-    std::vector<std::filesystem::path> media_roots_{};
-    ui::UiAssets ui_assets_{};
-    LibraryController library_controller_{};
-    clock::time_point boot_started_{clock::now()};
-    NavigationState navigation_{};
-    int main_menu_index_{1};
-    SettingsState settings_{};
-    NetworkState network_{};
-    MetadataServiceState metadata_service_{};
-    EqState eq_{};
-    PlaybackController playback_controller_{};
+    AppRuntimeState state_{};
+    AppControllerSet controllers_{};
     RuntimeServices services_{};
-    clock::time_point last_update_{clock::now()};
-    clock::time_point last_status_refresh_{};
-    clock::time_point now_playing_confirm_blocked_until_{};
-    bool help_open_{false};
-    AppPage help_page_{AppPage::MainMenu};
 };
 
 } // namespace lofibox::app

@@ -54,6 +54,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/app/app_runtime_context.h") {
+            if ($line -match '^\s*(std::vector<std::filesystem::path>|ui::UiAssets|LibraryController|PlaybackController|NavigationState|SettingsState|NetworkState|MetadataServiceState|EqState)\s+[A-Za-z0-9_]+\{') {
+                Add-Violation $violations $repoPath $lineNumber "runtime field ownership" "AppRuntimeContext must not re-accumulate raw runtime state or controllers; use AppRuntimeState and AppControllerSet"
+            }
+        }
+
         if ($line -notmatch $includeRegex) {
             continue
         }
@@ -84,6 +90,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
             if (Test-AnyPrefix $include @("app/app_command_executor.h", "app/app_input_router.h", "app/app_lifecycle.h", "app/app_page_model.h", "app/app_renderer.h", "app/app_state.h", "app/library_controller.h", "app/navigation_state.h", "app/playback_controller.h")) {
                 Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp must stay a thin public facade; runtime state, controllers, routing, rendering, lifecycle, and command execution belong to AppRuntimeContext"
+            }
+        }
+
+        if ($repoPath -eq "src/app/app_runtime_context.h") {
+            if (Test-AnyPrefix $include @("app/app_state.h", "app/library_controller.h", "app/navigation_state.h", "app/playback_controller.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "AppRuntimeContext must depend on AppRuntimeState and AppControllerSet instead of directly including raw state/controller owners"
             }
         }
 

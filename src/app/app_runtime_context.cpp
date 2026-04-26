@@ -13,11 +13,12 @@ using clock = std::chrono::steady_clock;
 AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_roots,
                                      ui::UiAssets assets,
                                      RuntimeServices services)
-    : media_roots_(std::move(media_roots)),
-      ui_assets_(std::move(assets)),
+    : state_{},
       services_(withNullRuntimeServices(std::move(services)))
 {
-    playback_controller_.setServices(services_);
+    state_.media_roots = std::move(media_roots);
+    state_.ui_assets = std::move(assets);
+    controllers_.bindServices(services_);
     refreshRuntimeStatus(true);
 }
 
@@ -38,53 +39,53 @@ void AppRuntimeContext::render(core::Canvas& canvas) const
 
 AppDebugSnapshot AppRuntimeContext::snapshot() const
 {
-    const auto& playback = playback_controller_.session();
+    const auto& playback = controllers_.playback.session();
     return AppDebugSnapshot{
         currentPage(),
-        library_controller_.state() == LibraryIndexState::Ready || library_controller_.state() == LibraryIndexState::Degraded,
-        library_controller_.model().tracks.size(),
+        controllers_.library.state() == LibraryIndexState::Ready || controllers_.library.state() == LibraryIndexState::Degraded,
+        controllers_.library.model().tracks.size(),
         pageModel().rows.size(),
-        navigation_.list_selection.selected,
-        navigation_.list_selection.scroll,
+        state_.navigation.list_selection.selected,
+        state_.navigation.list_selection.scroll,
         playback.current_track_id.has_value(),
         playback.status,
         playback.current_track_id,
         playback.shuffle_enabled,
         playback.repeat_all,
         playback.repeat_one,
-        network_.connected,
-        static_cast<int>(eq_.bands.size()),
-        eq_.selected_band};
+        state_.network.connected,
+        static_cast<int>(state_.eq.bands.size()),
+        state_.eq.selected_band};
 }
 
 bool AppRuntimeContext::bootAnimationComplete() const
 {
-    if (!ui_assets_.logo) {
+    if (!state_.ui_assets.logo) {
         return true;
     }
-    return (clock::now() - boot_started_) >= std::chrono::milliseconds{1450};
+    return (clock::now() - state_.boot_started) >= std::chrono::milliseconds{1450};
 }
 
 void AppRuntimeContext::refreshNetworkStatus()
 {
-    network_.connected = services_.connectivity_provider->connected();
-    network_.status_message = network_.connected ? "ONLINE" : "OFFLINE";
+    state_.network.connected = services_.connectivity_provider->connected();
+    state_.network.status_message = state_.network.connected ? "ONLINE" : "OFFLINE";
 }
 
 void AppRuntimeContext::refreshMetadataServiceState()
 {
-    metadata_service_.available = services_.metadata_provider->available();
-    metadata_service_.display_name = services_.metadata_provider->displayName();
-    metadata_service_.status = !metadata_service_.available ? "UNAVAILABLE" : (network_.connected ? "ONLINE" : "OFFLINE");
+    state_.metadata_service.available = services_.metadata_provider->available();
+    state_.metadata_service.display_name = services_.metadata_provider->displayName();
+    state_.metadata_service.status = !state_.metadata_service.available ? "UNAVAILABLE" : (state_.network.connected ? "ONLINE" : "OFFLINE");
 }
 
 void AppRuntimeContext::refreshRuntimeStatus(bool force)
 {
     const auto now = clock::now();
-    if (!force && last_status_refresh_ != clock::time_point{} && now - last_status_refresh_ < std::chrono::seconds{2}) {
+    if (!force && state_.last_status_refresh != clock::time_point{} && now - state_.last_status_refresh < std::chrono::seconds{2}) {
         return;
     }
-    last_status_refresh_ = now;
+    state_.last_status_refresh = now;
     refreshNetworkStatus();
     refreshMetadataServiceState();
 }
@@ -96,32 +97,32 @@ void AppRuntimeContext::refreshRuntimeStatusIfDue()
 
 AppPage AppRuntimeContext::currentPage() const noexcept
 {
-    return navigation_.currentPage();
+    return state_.navigation.currentPage();
 }
 
 NavigationState& AppRuntimeContext::navigationState() noexcept
 {
-    return navigation_;
+    return state_.navigation;
 }
 
 LibraryController& AppRuntimeContext::libraryController() noexcept
 {
-    return library_controller_;
+    return controllers_.library;
 }
 
 PlaybackController& AppRuntimeContext::playbackController() noexcept
 {
-    return playback_controller_;
+    return controllers_.playback;
 }
 
 EqState& AppRuntimeContext::eqState() noexcept
 {
-    return eq_;
+    return state_.eq;
 }
 
 int& AppRuntimeContext::mainMenuIndex() noexcept
 {
-    return main_menu_index_;
+    return state_.main_menu_index;
 }
 
 void AppRuntimeContext::closeHelpForCommand() noexcept
@@ -131,87 +132,87 @@ void AppRuntimeContext::closeHelpForCommand() noexcept
 
 std::chrono::steady_clock::time_point AppRuntimeContext::lastUpdate() const noexcept
 {
-    return last_update_;
+    return state_.last_update;
 }
 
 void AppRuntimeContext::setLastUpdate(std::chrono::steady_clock::time_point value) noexcept
 {
-    last_update_ = value;
+    state_.last_update = value;
 }
 
 const ui::UiAssets& AppRuntimeContext::assets() const noexcept
 {
-    return ui_assets_;
+    return state_.ui_assets;
 }
 
 std::chrono::steady_clock::time_point AppRuntimeContext::bootStarted() const noexcept
 {
-    return boot_started_;
+    return state_.boot_started;
 }
 
 LibraryIndexState AppRuntimeContext::libraryState() const noexcept
 {
-    return library_controller_.state();
+    return controllers_.library.state();
 }
 
 void AppRuntimeContext::startLibraryLoading()
 {
-    library_controller_.startLoading();
+    controllers_.library.startLoading();
 }
 
 void AppRuntimeContext::refreshLibrary()
 {
-    library_controller_.refreshLibrary(media_roots_, *services_.metadata_provider);
+    controllers_.library.refreshLibrary(state_.media_roots, *services_.metadata_provider);
 }
 
 void AppRuntimeContext::showMainMenu()
 {
-    navigation_.replaceStack({AppPage::MainMenu});
+    state_.navigation.replaceStack({AppPage::MainMenu});
 }
 
 void AppRuntimeContext::updatePlayback(double delta_seconds)
 {
-    playback_controller_.update(delta_seconds, library_controller_);
+    controllers_.playback.update(delta_seconds, controllers_.library);
 }
 
 StorageInfo AppRuntimeContext::storage() const
 {
-    return library_controller_.model().storage;
+    return controllers_.library.model().storage;
 }
 
 bool AppRuntimeContext::networkConnected() const noexcept
 {
-    return network_.connected;
+    return state_.network.connected;
 }
 
 int AppRuntimeContext::mainMenuIndex() const noexcept
 {
-    return main_menu_index_;
+    return state_.main_menu_index;
 }
 
 const PlaybackSession& AppRuntimeContext::playbackSession() const noexcept
 {
-    return playback_controller_.session();
+    return controllers_.playback.session();
 }
 
 const EqState& AppRuntimeContext::eqState() const noexcept
 {
-    return eq_;
+    return state_.eq;
 }
 
 ListSelection AppRuntimeContext::listSelection() const noexcept
 {
-    return navigation_.list_selection;
+    return state_.navigation.list_selection;
 }
 
 AppPage AppRuntimeContext::helpPage() const noexcept
 {
-    return help_page_;
+    return state_.help_page;
 }
 
 const TrackRecord* AppRuntimeContext::findTrack(int id) const noexcept
 {
-    return library_controller_.findTrack(id);
+    return controllers_.library.findTrack(id);
 }
 
 void AppRuntimeContext::pushPage(AppPage page)
@@ -226,7 +227,7 @@ void AppRuntimeContext::popPage()
 
 void AppRuntimeContext::closeHelp() noexcept
 {
-    help_open_ = false;
+    state_.help_open = false;
 }
 
 void AppRuntimeContext::toggleHelpForCurrentPage() noexcept
@@ -235,17 +236,17 @@ void AppRuntimeContext::toggleHelpForCurrentPage() noexcept
     if (page == AppPage::Boot) {
         return;
     }
-    if (help_open_ && help_page_ == page) {
-        help_open_ = false;
+    if (state_.help_open && state_.help_page == page) {
+        state_.help_open = false;
         return;
     }
-    help_page_ = page;
-    help_open_ = true;
+    state_.help_page = page;
+    state_.help_open = true;
 }
 
 bool AppRuntimeContext::helpOpen() const noexcept
 {
-    return help_open_;
+    return state_.help_open;
 }
 
 void AppRuntimeContext::playFromMenu()
@@ -273,11 +274,11 @@ AppPageModel AppRuntimeContext::pageModel() const
     const auto page = currentPage();
     return buildAppPageModel(AppPageModelInput{
         page,
-        library_controller_.titleOverrideForPage(page),
-        library_controller_.rowsForPage(page),
-        settings_,
-        network_.connected,
-        metadata_service_.display_name});
+        controllers_.library.titleOverrideForPage(page),
+        controllers_.library.rowsForPage(page),
+        state_.settings,
+        state_.network.connected,
+        state_.metadata_service.display_name});
 }
 
 void AppRuntimeContext::moveMainMenuSelection(int delta)
@@ -302,7 +303,7 @@ bool AppRuntimeContext::isBrowseListPage() const noexcept
 
 bool AppRuntimeContext::nowPlayingConfirmBlocked() const
 {
-    return clock::now() < now_playing_confirm_blocked_until_;
+    return clock::now() < state_.now_playing_confirm_blocked_until;
 }
 
 void AppRuntimeContext::confirmMainMenu()

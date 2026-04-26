@@ -152,6 +152,7 @@ Any future visual or input validation must go through a real Linux product targe
 - `src/app/app_renderer.*` owns page-level render routing and UI view-model assembly; `LoFiBoxApp` delegates `render()` through a narrow render target interface and must not directly include `ui/pages/*`.
 - `src/app/app_lifecycle.*` owns application tick ordering: runtime status refresh, media-library loading, boot-page transition, and playback update; `LoFiBoxApp` delegates `update()` through a narrow lifecycle target interface.
 - `src/app/app_runtime_context.*` owns runtime state, runtime services, controllers, and the target-interface implementations used by input routing, render routing, lifecycle, and command execution; `LoFiBoxApp` must remain a thin public facade and must not directly include app state, controllers, page model, render router, input router, lifecycle, or command executor headers.
+- `src/app/app_runtime_state.*` owns scalar/session runtime state; `src/app/app_controller_set.*` owns app controllers; `AppRuntimeContext` may adapt these objects to target interfaces but must not become a new raw-field aggregate.
 - `src/playback`, `src/audio`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
 - `src/platform/host` and `src/platform/device` are adapter layers only.
 - `src/targets` must stay thin.
