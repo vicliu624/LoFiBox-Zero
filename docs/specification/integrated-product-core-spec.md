@@ -37,6 +37,7 @@ This document is normative for the current C++ implementation.
 - `TrackIdentityResolver` owns identity evidence and confidence calculation.
 - `MetadataResolverChain`, `ArtworkResolverChain`, and `LyricsResolverChain` own ordered lookup chains.
 - `MetadataEnrichmentOrchestrator` owns online metadata lookup ordering and fallback strategy.
+- `EnrichmentAuthorityPolicy` owns whether enrichment evidence is authoritative, fill-missing-only, or rejected.
 - `MetadataWritebackPolicy` owns whether enrichment results may mutate audio files.
 - `MatchConfidenceGuard` owns whether an online result is trusted enough to accept.
 - `LibraryStore` and `LibraryIndexer` own durable media-library facts.
@@ -92,6 +93,7 @@ Every source must eventually define configuration, authentication, connection li
 - The audio pipeline is the source of real visualization data.
 - Metadata enrichment must distinguish lookup, acceptance, cache, and writeback.
 - Existing embedded metadata must not be overwritten by weaker online evidence.
+- Weak online evidence must not write back metadata, artwork, or lyrics unless accepted by authority and match-confidence policy.
 - Library facts must survive UI navigation changes.
 - Search and queue semantics must operate on `MediaItem` values so local and remote content can be mixed without teaching playback or UI about provider internals.
 - Runtime paths must follow XDG and must not write user state into install directories.

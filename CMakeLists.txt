@@ -73,6 +73,7 @@ add_library(lofibox_zero_core STATIC
     src/ui/widgets/lyrics_layout.cpp
     src/app/playback_controller.cpp
     src/app/runtime_services.cpp
+    src/metadata/enrichment_authority_policy.cpp
     src/metadata/match_confidence_guard.cpp
     src/metadata/metadata_merge_policy.cpp
     src/remote/common/remote_provider_contract.cpp
@@ -295,6 +296,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_metadata_merge_policy_smoke tests/metadata_merge_policy_smoke.cpp)
     target_link_libraries(lofibox_metadata_merge_policy_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_metadata_merge_policy_smoke COMMAND lofibox_metadata_merge_policy_smoke)
+
+    add_executable(lofibox_enrichment_authority_policy_smoke tests/enrichment_authority_policy_smoke.cpp)
+    target_link_libraries(lofibox_enrichment_authority_policy_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_enrichment_authority_policy_smoke COMMAND lofibox_enrichment_authority_policy_smoke)
 
     add_executable(lofibox_library_repository_smoke tests/library_repository_smoke.cpp)
     target_link_libraries(lofibox_library_repository_smoke PRIVATE lofibox_zero_core)
