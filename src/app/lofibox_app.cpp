@@ -6,52 +6,23 @@
 #include <chrono>
 #include <filesystem>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "app/app_state.h"
 #include "app/app_input_router.h"
 #include "app/app_lifecycle.h"
+#include "app/app_page_model.h"
 #include "app/app_renderer.h"
 #include "app/library_controller.h"
 #include "app/navigation_state.h"
 #include "app/playback_controller.h"
-#include "ui/ui_primitives.h"
-#include "ui/ui_theme.h"
 
 namespace fs = std::filesystem;
 
 namespace lofibox::app {
-namespace {
-
 using clock = std::chrono::steady_clock;
 constexpr int kMainMenuItemCount = 6;
-
-std::string_view pageTitleDefault(AppPage page) noexcept
-{
-    switch (page) {
-    case AppPage::Boot: return "LOADING";
-    case AppPage::MainMenu: return "LOFIBOX";
-    case AppPage::MusicIndex: return "LIBRARY";
-    case AppPage::Artists: return "ARTISTS";
-    case AppPage::Albums: return "ALBUMS";
-    case AppPage::Songs: return "SONGS";
-    case AppPage::Genres: return "GENRES";
-    case AppPage::Composers: return "COMPOSERS";
-    case AppPage::Compilations: return "COMPILATIONS";
-    case AppPage::Playlists: return "PLAYLISTS";
-    case AppPage::PlaylistDetail: return "PLAYLIST";
-    case AppPage::NowPlaying: return "NOW PLAYING";
-    case AppPage::Lyrics: return "LYRICS";
-    case AppPage::Equalizer: return "EQUALIZER";
-    case AppPage::Settings: return "SETTINGS";
-    case AppPage::About: return "ABOUT";
-    }
-    return "";
-}
-
-} // namespace
 
 struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTarget {
     std::vector<fs::path> media_roots{};
@@ -71,11 +42,6 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
     clock::time_point now_playing_confirm_blocked_until{};
     bool help_open{false};
     AppPage help_page{AppPage::MainMenu};
-
-    [[nodiscard]] std::string networkStatusLabel() const
-    {
-        return network.connected ? "ONLINE" : "OFFLINE";
-    }
 
     [[nodiscard]] bool bootAnimationComplete() const
     {
@@ -290,32 +256,22 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
         playback_controller.setShuffleEnabled(true);
     }
 
-    [[nodiscard]] std::string pageTitle() const override
+    [[nodiscard]] AppPageModel pageModel() const override
     {
         const auto page = currentPage();
-        if (const auto override = library_controller.titleOverrideForPage(page)) {
-            return ui::fitUpper(*override, 18);
-        }
-        return std::string(pageTitleDefault(page));
-    }
-
-    [[nodiscard]] std::vector<std::pair<std::string, std::string>> currentRows() const override
-    {
-        std::vector<std::pair<std::string, std::string>> rows{};
-        if (const auto library_rows = library_controller.rowsForPage(currentPage())) {
-            return *library_rows;
-        }
-        switch (currentPage()) {
-        case AppPage::Settings:
-            return {{"NETWORK", networkStatusLabel()}, {"METADATA", metadata_service.display_name}, {"SLEEP TIMER", settings.sleep_timer_index == 0 ? "OFF" : "ON"}, {"BACKLIGHT", std::to_string(settings.backlight_index + 1)}, {"LANGUAGE", "EN"}, {"REMOTE MEDIA", "SERVERS"}, {"ABOUT", "INFO"}};
-        default:
-            return rows;
-        }
+        return buildAppPageModel(AppPageModelInput{
+            page,
+            library_controller.titleOverrideForPage(page),
+            library_controller.rowsForPage(page),
+            settings,
+            network.connected,
+            metadata_service.display_name});
     }
 
     void clampListSelection()
     {
-        navigation.clampListSelection(static_cast<int>(currentRows().size()), ui::kMaxVisibleRows);
+        const auto model = pageModel();
+        navigation.clampListSelection(static_cast<int>(model.rows.size()), model.max_visible_rows);
     }
 
     void moveMainMenuSelection(int delta) override
@@ -330,25 +286,13 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
 
     void moveSelection(int delta) override
     {
-        navigation.moveSelection(delta, static_cast<int>(currentRows().size()), ui::kMaxVisibleRows);
+        const auto model = pageModel();
+        navigation.moveSelection(delta, static_cast<int>(model.rows.size()), model.max_visible_rows);
     }
 
     [[nodiscard]] bool isBrowseListPage() const noexcept override
     {
-        switch (currentPage()) {
-        case AppPage::MusicIndex:
-        case AppPage::Artists:
-        case AppPage::Albums:
-        case AppPage::Songs:
-        case AppPage::Genres:
-        case AppPage::Composers:
-        case AppPage::Compilations:
-        case AppPage::Playlists:
-        case AppPage::PlaylistDetail:
-            return true;
-        default:
-            return false;
-        }
+        return lofibox::app::isBrowseListPage(currentPage());
     }
 
     bool nowPlayingConfirmBlocked() const override
@@ -479,7 +423,7 @@ AppDebugSnapshot LoFiBoxApp::snapshot() const
         impl_->currentPage(),
         impl_->library_controller.state() == LibraryIndexState::Ready || impl_->library_controller.state() == LibraryIndexState::Degraded,
         impl_->library_controller.model().tracks.size(),
-        impl_->currentRows().size(),
+        impl_->pageModel().rows.size(),
         impl_->navigation.list_selection.selected,
         impl_->navigation.list_selection.scroll,
         playback.current_track_id.has_value(),

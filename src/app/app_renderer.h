@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "app/app_page.h"
+#include "app/app_page_model.h"
 #include "app/app_state.h"
 #include "app/library_model.h"
 #include "app/navigation_state.h"
@@ -33,9 +34,7 @@ public:
     [[nodiscard]] virtual const TrackRecord* findTrack(int id) const noexcept = 0;
     [[nodiscard]] virtual const EqState& eqState() const noexcept = 0;
     [[nodiscard]] virtual ListSelection listSelection() const noexcept = 0;
-    [[nodiscard]] virtual bool isBrowseListPage() const noexcept = 0;
-    [[nodiscard]] virtual std::string pageTitle() const = 0;
-    [[nodiscard]] virtual std::vector<std::pair<std::string, std::string>> currentRows() const = 0;
+    [[nodiscard]] virtual AppPageModel pageModel() const = 0;
     [[nodiscard]] virtual bool helpOpen() const noexcept = 0;
     [[nodiscard]] virtual AppPage helpPage() const noexcept = 0;
 };

@@ -73,8 +73,8 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath -eq "src/app/lofibox_app.cpp") {
-            if (Test-AnyPrefix $include @("app/input_actions.h", "core/bitmap_font.h", "core/color.h", "ui/pages/")) {
-                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp composition must use dedicated routing/rendering helpers instead of owning input mapping, page rendering, or low-level drawing"
+            if (Test-AnyPrefix $include @("app/input_actions.h", "core/bitmap_font.h", "core/color.h", "ui/pages/", "ui/ui_primitives.h", "ui/ui_theme.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp composition must use dedicated page-model/routing/rendering helpers instead of owning input mapping, page rendering, or UI constants"
             }
         }
 

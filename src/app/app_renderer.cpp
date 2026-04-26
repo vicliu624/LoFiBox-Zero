@@ -197,7 +197,7 @@ void renderMainMenu(core::Canvas& canvas, const AppRenderTarget& target)
 void renderNowPlaying(core::Canvas& canvas, const AppRenderTarget& target)
 {
     ui::drawListPageFrame(canvas);
-    ui::drawTopBar(canvas, target.pageTitle(), true);
+    ui::drawTopBar(canvas, target.pageModel().title, true);
     const auto& playback = target.playbackSession();
     const TrackRecord* track = playback.current_track_id ? target.findTrack(*playback.current_track_id) : nullptr;
     ui_pages::renderNowPlayingPage(
@@ -221,7 +221,7 @@ void renderNowPlaying(core::Canvas& canvas, const AppRenderTarget& target)
 void renderLyrics(core::Canvas& canvas, const AppRenderTarget& target)
 {
     ui::drawListPageFrame(canvas);
-    ui::drawTopBar(canvas, target.pageTitle(), true);
+    ui::drawTopBar(canvas, target.pageModel().title, true);
     const auto& playback = target.playbackSession();
     const TrackRecord* track = playback.current_track_id ? target.findTrack(*playback.current_track_id) : nullptr;
     ui_pages::renderLyricsPage(
@@ -241,15 +241,15 @@ void renderLyrics(core::Canvas& canvas, const AppRenderTarget& target)
 
 void renderList(core::Canvas& canvas, const AppRenderTarget& target)
 {
-    const auto rows = target.currentRows();
+    const auto model = target.pageModel();
+    const auto& rows = model.rows;
     const auto page = target.currentPage();
-    const bool browse_list = target.isBrowseListPage();
     ui_pages::renderListPage(
         canvas,
         ui_pages::ListPageView{
-            target.pageTitle(),
-            !browse_list,
-            browse_list ? "F1:HELP" : "",
+            model.title,
+            !model.browse_list,
+            model.browse_list ? "F1:HELP" : "",
             rows,
             rows.empty() ? emptyLabelForPage(page) : std::string{},
             target.listSelection().selected,

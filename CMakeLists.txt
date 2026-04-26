@@ -36,6 +36,7 @@ add_library(lofibox_zero_core STATIC
     src/app/input_actions.cpp
     src/app/app_lifecycle.cpp
     src/app/app_input_router.cpp
+    src/app/app_page_model.cpp
     src/app/app_renderer.cpp
     src/app/library_controller.cpp
     src/app/library_scanner.cpp
@@ -229,6 +230,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_app_lifecycle_smoke tests/app_lifecycle_smoke.cpp)
     target_link_libraries(lofibox_app_lifecycle_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_app_lifecycle_smoke COMMAND lofibox_app_lifecycle_smoke)
+
+    add_executable(lofibox_app_page_model_smoke tests/app_page_model_smoke.cpp)
+    target_link_libraries(lofibox_app_page_model_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_app_page_model_smoke COMMAND lofibox_app_page_model_smoke)
 
     add_executable(lofibox_library_scan_smoke tests/library_scan_smoke.cpp)
     target_link_libraries(lofibox_library_scan_smoke PRIVATE lofibox_zero_core)
