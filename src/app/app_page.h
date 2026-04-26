@@ -20,6 +20,7 @@ enum class AppPage {
     Lyrics,
     Equalizer,
     Settings,
+    SourceManager,
     About,
 };
 

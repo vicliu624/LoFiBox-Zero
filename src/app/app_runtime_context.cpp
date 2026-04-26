@@ -4,6 +4,9 @@
 
 #include <utility>
 
+#include "app/source_manager_projection.h"
+#include "remote/common/remote_source_registry.h"
+
 namespace lofibox::app {
 
 namespace {
@@ -18,6 +21,7 @@ AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_ro
 {
     state_.media_roots = std::move(media_roots);
     state_.ui_assets = std::move(assets);
+    state_.remote_profiles = services_.remote.remote_profile_store->loadProfiles();
     controllers_.bindServices(services_);
     refreshRuntimeStatus(true);
 }
@@ -278,7 +282,8 @@ AppPageModel AppRuntimeContext::pageModel() const
         controllers_.library.rowsForPage(page),
         state_.settings,
         state_.network.connected,
-        state_.metadata_service.display_name});
+        state_.metadata_service.display_name,
+        buildSourceManagerRows(state_.remote_profiles, remote::RemoteSourceRegistry{}.manifests())});
 }
 
 void AppRuntimeContext::moveMainMenuSelection(int delta)

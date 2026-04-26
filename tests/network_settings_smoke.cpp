@@ -60,7 +60,17 @@ int main()
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
-    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
+    snapshot = app.snapshot();
+    if (snapshot.current_page != lofibox::app::AppPage::SourceManager) {
+        std::cerr << "Expected Remote Media row to open Source Manager.\n";
+        return 1;
+    }
+
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Backspace, "BACK", '\0'});
+    for (int i = 0; i < 8; ++i) {
+        app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
+    }
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
     snapshot = app.snapshot();
     if (snapshot.current_page != lofibox::app::AppPage::About) {

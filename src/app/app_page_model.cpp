@@ -28,6 +28,7 @@ std::string_view pageTitleDefault(AppPage page) noexcept
     case AppPage::Lyrics: return "LYRICS";
     case AppPage::Equalizer: return "EQUALIZER";
     case AppPage::Settings: return "SETTINGS";
+    case AppPage::SourceManager: return "SOURCES";
     case AppPage::About: return "ABOUT";
     }
     return "";
@@ -57,6 +58,7 @@ bool isBrowseListPage(AppPage page) noexcept
     case AppPage::Compilations:
     case AppPage::Playlists:
     case AppPage::PlaylistDetail:
+    case AppPage::SourceManager:
         return true;
     default:
         return false;
@@ -76,6 +78,9 @@ AppPageModel buildAppPageModel(const AppPageModelInput& input)
 
     if (input.page == AppPage::Settings) {
         model.rows = settingsRows(input);
+    }
+    if (input.page == AppPage::SourceManager && input.source_manager_rows) {
+        model.rows = *input.source_manager_rows;
     }
 
     return model;

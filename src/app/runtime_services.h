@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "app/audio_visualization.h"
+#include "app/remote_profile_store.h"
 #include "app/remote_media_services.h"
 #include "core/canvas.h"
 
@@ -167,6 +168,7 @@ struct RemoteMediaServices {
     std::shared_ptr<RemoteSourceProvider> remote_source_provider{};
     std::shared_ptr<RemoteCatalogProvider> remote_catalog_provider{};
     std::shared_ptr<RemoteStreamResolver> remote_stream_resolver{};
+    std::shared_ptr<RemoteProfileStore> remote_profile_store{};
 };
 
 struct RuntimeServiceRegistry {

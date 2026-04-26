@@ -19,6 +19,7 @@ constexpr std::array<AppPage, 6> kMainMenuPages{
 };
 constexpr int kEqMinGainDb = -12;
 constexpr int kEqMaxGainDb = 12;
+constexpr int kSettingsRemoteMediaIndex = 5;
 constexpr int kSettingsAboutIndex = 6;
 
 void clampListSelection(AppCommandTarget& target)
@@ -175,6 +176,11 @@ void commandConfirmListPage(AppCommandTarget& target)
         return;
     case LibraryOpenResult::Kind::None:
         break;
+    }
+
+    if (page == AppPage::Settings && selected == kSettingsRemoteMediaIndex) {
+        commandPushPage(target, AppPage::SourceManager);
+        return;
     }
 
     if (page == AppPage::Settings && selected == kSettingsAboutIndex) {

@@ -328,6 +328,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_projection_desktop_boundary_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_projection_desktop_boundary_smoke COMMAND lofibox_projection_desktop_boundary_smoke)
 
+    add_executable(lofibox_source_manager_projection_smoke tests/source_manager_projection_smoke.cpp)
+    target_link_libraries(lofibox_source_manager_projection_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_source_manager_projection_smoke COMMAND lofibox_source_manager_projection_smoke)
+
     add_executable(lofibox_embedded_metadata_smoke tests/embedded_metadata_smoke.cpp)
     target_link_libraries(lofibox_embedded_metadata_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_embedded_metadata_smoke COMMAND lofibox_embedded_metadata_smoke)

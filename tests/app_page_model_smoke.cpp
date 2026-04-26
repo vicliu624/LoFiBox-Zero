@@ -36,5 +36,13 @@ int main()
         return 1;
     }
 
+    input.page = lofibox::app::AppPage::SourceManager;
+    input.source_manager_rows = std::vector<std::pair<std::string, std::string>>{{"ADD Navidrome", "opensubsonic"}};
+    const auto source_model = lofibox::app::buildAppPageModel(input);
+    if (source_model.title != "SOURCES" || !source_model.browse_list || source_model.rows.size() != 1) {
+        std::cerr << "Expected Source Manager to be a projected browse list.\n";
+        return 1;
+    }
+
     return 0;
 }

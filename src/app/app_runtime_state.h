@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "app/app_page.h"
+#include "app/remote_media_services.h"
 #include "app/app_state.h"
 #include "app/navigation_state.h"
 #include "ui/ui_models.h"
@@ -25,6 +26,7 @@ struct AppRuntimeState {
     NetworkState network{};
     MetadataServiceState metadata_service{};
     EqState eq{};
+    std::vector<RemoteServerProfile> remote_profiles{};
     clock::time_point last_update{clock::now()};
     clock::time_point last_status_refresh{};
     clock::time_point now_playing_confirm_blocked_until{};

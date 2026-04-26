@@ -78,6 +78,12 @@ public:
     [[nodiscard]] std::optional<ResolvedRemoteStream> resolveTrack(const RemoteServerProfile&, const RemoteSourceSession&, const RemoteTrack&) const override { return std::nullopt; }
 };
 
+class NullRemoteProfileStore final : public RemoteProfileStore {
+public:
+    [[nodiscard]] std::vector<RemoteServerProfile> loadProfiles() const override { return {}; }
+    bool saveProfiles(const std::vector<RemoteServerProfile>&) const override { return false; }
+};
+
 template <typename T>
 std::shared_ptr<T> makeNullShared()
 {
@@ -117,6 +123,9 @@ RuntimeServices withNullRuntimeServices(RuntimeServices services)
     }
     if (!services.remote.remote_stream_resolver) {
         services.remote.remote_stream_resolver = makeNullShared<NullRemoteStreamResolver>();
+    }
+    if (!services.remote.remote_profile_store) {
+        services.remote.remote_profile_store = makeNullShared<NullRemoteProfileStore>();
     }
     return services;
 }
