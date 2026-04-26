@@ -117,6 +117,7 @@ add_library(lofibox_zero_host_runtime STATIC
     src/platform/host/runtime_host_internal.cpp
     src/platform/host/runtime_host_tools.cpp
     src/platform/host/runtime_logger.cpp
+    src/platform/host/runtime_metadata_enrichment_orchestrator.cpp
     src/platform/host/runtime_paths.cpp
     src/platform/host/runtime_process.cpp
     src/platform/host/runtime_remote_media_tool.cpp

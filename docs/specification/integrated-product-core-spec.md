@@ -34,6 +34,7 @@ This document is normative for the current C++ implementation.
 - `VisualizationSource` owns the app-facing spectrum frame fact.
 - `TrackIdentityResolver` owns identity evidence and confidence calculation.
 - `MetadataResolverChain`, `ArtworkResolverChain`, and `LyricsResolverChain` own ordered lookup chains.
+- `MetadataEnrichmentOrchestrator` owns online metadata lookup ordering and fallback strategy.
 - `MetadataWritebackPolicy` owns whether enrichment results may mutate audio files.
 - `MatchConfidenceGuard` owns whether an online result is trusted enough to accept.
 - `LibraryStore` and `LibraryIndexer` own durable media-library facts.
@@ -50,6 +51,7 @@ This document is normative for the current C++ implementation.
 - Playback code must not know Jellyfin, SMB, Navidrome, OpenSubsonic, Emby, DLNA, WebDAV, FTP, SFTP, or concrete remote protocols.
 - Remote providers must not control playback state machines.
 - Metadata, artwork, and lyrics providers must not decide UI behavior.
+- Metadata providers must not inline online identity/MusicBrainz lookup ordering; they delegate enrichment orchestration.
 - `PlaybackController` must not own backend clocks, backend threads, async enrichment workers, or completion policy.
 - `AudioPipeline` must not own queue selection or source browsing.
 - `LyricsProvider` must not hide cache, writeback, and match-confidence policy in one body.

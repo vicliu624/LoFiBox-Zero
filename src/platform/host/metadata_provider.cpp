@@ -8,6 +8,7 @@
 
 #include "platform/host/runtime_enrichment_clients.h"
 #include "platform/host/runtime_logger.h"
+#include "platform/host/runtime_metadata_enrichment_orchestrator.h"
 
 namespace fs = std::filesystem;
 
@@ -25,6 +26,7 @@ public:
         , connectivity_(std::move(connectivity))
         , tag_writer_(std::move(tag_writer))
         , track_identity_provider_(std::move(track_identity_provider))
+        , enrichment_(cache_, connectivity_, track_identity_provider_)
     {
     }
 
@@ -80,27 +82,15 @@ public:
         const bool needs_core_metadata = !hasCoreMetadata(entry.metadata) || embedded_conflicts_with_filename;
         const bool needs_release_identifiers = entry.release_mbid.empty() && entry.release_group_mbid.empty();
         if ((needs_core_metadata || needs_release_identifiers)
-            && !entry.online_metadata_attempted
-            && ((track_identity_provider_ && track_identity_provider_->available()) || online_lookup_.available())
-            && connectivity_
-            && connectivity_->connected()) {
+            && !entry.online_metadata_attempted) {
             logRuntime(RuntimeLogLevel::Info, "metadata", "Online metadata lookup started for " + pathUtf8String(path));
-            MusicBrainzLookupResult online{};
-            app::TrackIdentity identity{};
-            if (track_identity_provider_ && track_identity_provider_->available()) {
-                identity = track_identity_provider_->resolve(path, entry.metadata);
-                if (identity.found) {
-                    online.found = true;
-                    online.metadata = identity.metadata;
-                    online.recording_mbid = identity.recording_mbid;
-                    online.release_mbid = identity.release_mbid;
-                    online.release_group_mbid = identity.release_group_mbid;
-                    online.confidence = identity.confidence;
-                }
+            const auto enrichment = enrichment_.resolve(path, entry.metadata, entry.online_metadata_attempted);
+            if (!enrichment.attempted) {
+                logRuntime(RuntimeLogLevel::Warn, "metadata", "Online metadata skipped for " + pathUtf8String(path) + ": " + enrichment.skipped_reason);
+                return entry.metadata;
             }
-            if (!online.found && online_lookup_.available()) {
-                online = online_lookup_.lookup(path, *cache_, entry.metadata);
-            }
+            const auto& online = enrichment.online;
+            const auto& identity = enrichment.identity;
             if (online.found) {
                 if (!entry.metadata.title || embedded_conflicts_with_filename) entry.metadata.title = online.metadata.title;
                 if (!entry.metadata.artist || embedded_conflicts_with_filename) entry.metadata.artist = online.metadata.artist;
@@ -123,8 +113,8 @@ public:
                 }
                 request.only_fill_missing = !embedded_conflicts_with_filename;
                 if (tag_writer_->write(path, request)) {
-                logRuntime(RuntimeLogLevel::Info, "metadata", "Wrote enriched metadata back to file: " + pathUtf8String(path));
-            } else {
+                    logRuntime(RuntimeLogLevel::Info, "metadata", "Wrote enriched metadata back to file: " + pathUtf8String(path));
+                } else {
                     logRuntime(RuntimeLogLevel::Warn, "metadata", "Failed to write enriched metadata back to file: " + pathUtf8String(path));
                 }
             } else if (!online.found && embedded_conflicts_with_filename && tag_writer_ && tag_writer_->available()) {
@@ -138,16 +128,6 @@ public:
                     logRuntime(RuntimeLogLevel::Warn, "metadata", "Failed to write filename-derived metadata back to conflicted file: " + pathUtf8String(path));
                 }
             }
-        } else if ((needs_core_metadata || needs_release_identifiers) && !entry.online_metadata_attempted) {
-            std::string reason = "unknown";
-            if (!online_lookup_.available()) {
-                reason = "curl unavailable";
-            } else if (!connectivity_) {
-                reason = "connectivity provider missing";
-            } else if (!connectivity_->connected()) {
-                reason = "network disconnected";
-            }
-            logRuntime(RuntimeLogLevel::Warn, "metadata", "Online metadata skipped for " + pathUtf8String(path) + ": " + reason);
         }
 
         return entry.metadata;
@@ -159,7 +139,7 @@ private:
     std::shared_ptr<app::TagWriter> tag_writer_{};
     std::shared_ptr<app::TrackIdentityProvider> track_identity_provider_{};
     FfprobeMetadataReader embedded_reader_{};
-    MusicBrainzMetadataClient online_lookup_{};
+    MetadataEnrichmentOrchestrator enrichment_;
 };
 
 } // namespace

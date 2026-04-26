@@ -72,6 +72,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/platform/host/metadata_provider.cpp") {
+            if ($line -match '\b(MusicBrainzMetadataClient|AcoustIdIdentityClient)::|\bMusicBrainzMetadataClient\s+\w+') {
+                Add-Violation $violations $repoPath $lineNumber "metadata enrichment orchestration" "metadata_provider.cpp must delegate online lookup ordering to runtime_metadata_enrichment_orchestrator"
+            }
+        }
+
         if ($repoPath -eq "src/platform/host/runtime_services_factory.cpp") {
             if ($line -match '\bcreateHost(MetadataProvider|TrackIdentityProvider|ArtworkProvider|LyricsProvider|TagWriter|AudioPlaybackBackend|ConnectivityProvider|RemoteSourceProvider|RemoteCatalogProvider|RemoteStreamResolver)\s*\(') {
                 Add-Violation $violations $repoPath $lineNumber "runtime service provider" "runtime_services_factory.cpp must compose host service providers and must not directly construct concrete runtime capabilities"
