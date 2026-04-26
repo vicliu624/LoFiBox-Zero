@@ -155,6 +155,11 @@ server.serve_forever()
         std::cerr << "Expected Jellyfin search to return a track.\n";
         return 1;
     }
+    const auto jf_library = services.remote.remote_catalog_provider->libraryTracks(jellyfin_profile, jf_session, 5);
+    if (jf_library.empty() || jf_library.front().id != "trk1") {
+        std::cerr << "Expected Jellyfin library catalog to return a track.\n";
+        return 1;
+    }
     const auto jf_stream = services.remote.remote_stream_resolver->resolveTrack(jellyfin_profile, jf_session, jf_tracks.front());
     if (!jf_stream || jf_stream->url.find("/Audio/trk1/stream") == std::string::npos) {
         std::cerr << "Expected Jellyfin resolver to build stream URL.\n";
@@ -171,6 +176,11 @@ server.serve_forever()
     const auto sub_tracks = services.remote.remote_catalog_provider->searchTracks(subsonic_profile, sub_session, "Song", 5);
     if (sub_tracks.empty() || sub_tracks.front().id != "trk2") {
         std::cerr << "Expected OpenSubsonic search to return a track.\n";
+        return 1;
+    }
+    const auto sub_library = services.remote.remote_catalog_provider->libraryTracks(subsonic_profile, sub_session, 5);
+    if (sub_library.empty() || sub_library.front().id != "trk2") {
+        std::cerr << "Expected OpenSubsonic library catalog to return a track.\n";
         return 1;
     }
     const auto sub_stream = services.remote.remote_stream_resolver->resolveTrack(subsonic_profile, sub_session, sub_tracks.front());
@@ -202,6 +212,11 @@ server.serve_forever()
     const auto emby_tracks = services.remote.remote_catalog_provider->searchTracks(emby_profile, emby_session, "Song", 5);
     if (emby_tracks.empty() || emby_tracks.front().id != "trk1") {
         std::cerr << "Expected Emby search to return a track.\n";
+        return 1;
+    }
+    const auto emby_library = services.remote.remote_catalog_provider->libraryTracks(emby_profile, emby_session, 5);
+    if (emby_library.empty() || emby_library.front().id != "trk1") {
+        std::cerr << "Expected Emby library catalog to return a track.\n";
         return 1;
     }
     const auto emby_stream = services.remote.remote_stream_resolver->resolveTrack(emby_profile, emby_session, emby_tracks.front());

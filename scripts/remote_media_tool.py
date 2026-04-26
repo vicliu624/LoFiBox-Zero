@@ -23,8 +23,15 @@ def _emby_auth_header() -> str:
     return 'MediaBrowser Client="LoFiBox Zero", Device="LoFiBox Zero", DeviceId="lofibox-zero", Version="0.1.0"'
 
 
+def _base_url(profile: Dict[str, Any]) -> str:
+    base = profile["base_url"].strip().rstrip("/")
+    if "://" not in base:
+        base = "http://" + base
+    return base
+
+
 def _probe_jellyfin(profile: Dict[str, Any]) -> Dict[str, Any]:
-    base = profile["base_url"].rstrip("/")
+    base = _base_url(profile)
     token = profile.get("api_token", "")
     user_id = ""
     server_name = "Jellyfin"
@@ -52,7 +59,7 @@ def _probe_jellyfin(profile: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _probe_emby(profile: Dict[str, Any]) -> Dict[str, Any]:
-    base = profile["base_url"].rstrip("/")
+    base = _base_url(profile)
     token = profile.get("api_token", "")
     user_id = ""
     server_name = "Emby"
@@ -95,7 +102,7 @@ def _subsonic_params(profile: Dict[str, Any]) -> Dict[str, str]:
 
 
 def _probe_subsonic(profile: Dict[str, Any]) -> Dict[str, Any]:
-    base = profile["base_url"].rstrip("/")
+    base = _base_url(profile)
     params = urllib.parse.urlencode(_subsonic_params(profile))
     data = _json_request(f"{base}/rest/ping.view?{params}")
     status = (((data or {}).get("subsonic-response") or {}).get("status"))
@@ -134,24 +141,47 @@ def _parse_jellyfin_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return tracks
 
 
-def _search_jellyfin(profile: Dict[str, Any], session: Dict[str, Any], query: str, limit: int) -> List[Dict[str, Any]]:
-    base = profile["base_url"].rstrip("/")
+def _jellyfin_items_path(user_id: str) -> str:
+    return f"/Users/{urllib.parse.quote(user_id)}/Items" if user_id else "/Items"
+
+
+def _jellyfin_latest_path(user_id: str) -> str:
+    return f"/Users/{urllib.parse.quote(user_id)}/Items/Latest" if user_id else "/Items/Latest"
+
+
+def _jellyfin_item_query(
+    profile: Dict[str, Any],
+    session: Dict[str, Any],
+    limit: int,
+    query: str = "",
+    sort_by: str = "SortName",
+    sort_order: str = "Ascending",
+) -> List[Dict[str, Any]]:
+    base = _base_url(profile)
     user_id = session.get("user_id", "")
     token = session.get("access_token", "")
-    params = urllib.parse.urlencode({
+    params_dict = {
         "IncludeItemTypes": "Audio",
         "Recursive": "true",
-        "SearchTerm": query,
-        "Fields": "RunTimeTicks,AlbumPrimaryImageTag,PrimaryImageAspectRatio",
+        "Fields": "RunTimeTicks,AlbumPrimaryImageTag,PrimaryImageAspectRatio,MediaSources,Path",
         "Limit": str(limit),
+        "SortBy": sort_by,
+        "SortOrder": sort_order,
         "api_key": token,
-    })
-    data = _json_request(f"{base}/Users/{user_id}/Items?{params}")
+    }
+    if query:
+        params_dict["SearchTerm"] = query
+    params = urllib.parse.urlencode(params_dict)
+    data = _json_request(f"{base}{_jellyfin_items_path(user_id)}?{params}")
     return _parse_jellyfin_items(data.get("Items", []))
+
+
+def _search_jellyfin(profile: Dict[str, Any], session: Dict[str, Any], query: str, limit: int) -> List[Dict[str, Any]]:
+    return _jellyfin_item_query(profile, session, limit, query=query)
 
 
 def _recent_jellyfin(profile: Dict[str, Any], session: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
-    base = profile["base_url"].rstrip("/")
+    base = _base_url(profile)
     user_id = session.get("user_id", "")
     token = session.get("access_token", "")
     params = urllib.parse.urlencode({
@@ -159,41 +189,65 @@ def _recent_jellyfin(profile: Dict[str, Any], session: Dict[str, Any], limit: in
         "Limit": str(limit),
         "api_key": token,
     })
-    data = _json_request(f"{base}/Users/{user_id}/Items/Latest?{params}")
+    data = _json_request(f"{base}{_jellyfin_latest_path(user_id)}?{params}")
     return _parse_jellyfin_items(data)
+
+
+def _library_jellyfin(profile: Dict[str, Any], session: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+    return _jellyfin_item_query(profile, session, limit)
 
 
 def _search_emby(profile: Dict[str, Any], session: Dict[str, Any], query: str, limit: int) -> List[Dict[str, Any]]:
-    base = profile["base_url"].rstrip("/")
-    user_id = session.get("user_id", "")
-    token = session.get("access_token", "")
-    params = urllib.parse.urlencode({
-        "IncludeItemTypes": "Audio",
-        "Recursive": "true",
-        "SearchTerm": query,
-        "Fields": "RunTimeTicks,AlbumPrimaryImageTag,PrimaryImageAspectRatio",
-        "Limit": str(limit),
-        "api_key": token,
-    })
-    data = _json_request(f"{base}/Users/{user_id}/Items?{params}")
-    return _parse_jellyfin_items(data.get("Items", []))
+    tracks = _jellyfin_item_query(profile, session, limit, query=query)
+    if tracks:
+        return tracks
+    return _emby_playable_item_query(profile, session, limit, query=query)
 
 
 def _recent_emby(profile: Dict[str, Any], session: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
-    base = profile["base_url"].rstrip("/")
+    tracks = _recent_jellyfin(profile, session, limit)
+    if tracks:
+        return tracks
+    return _emby_playable_item_query(profile, session, limit, sort_by="DateCreated", sort_order="Descending")
+
+
+def _library_emby(profile: Dict[str, Any], session: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+    tracks = _library_jellyfin(profile, session, limit)
+    if tracks:
+        return tracks
+    return _emby_playable_item_query(profile, session, limit)
+
+
+def _emby_playable_item_query(
+    profile: Dict[str, Any],
+    session: Dict[str, Any],
+    limit: int,
+    query: str = "",
+    sort_by: str = "SortName",
+    sort_order: str = "Ascending",
+) -> List[Dict[str, Any]]:
+    base = _base_url(profile)
     user_id = session.get("user_id", "")
     token = session.get("access_token", "")
-    params = urllib.parse.urlencode({
-        "IncludeItemTypes": "Audio",
+    params_dict = {
+        "Recursive": "true",
+        "Filters": "IsNotFolder",
+        "MediaTypes": "Video",
+        "Fields": "RunTimeTicks,MediaSources,Path,SeriesName",
         "Limit": str(limit),
+        "SortBy": sort_by,
+        "SortOrder": sort_order,
         "api_key": token,
-    })
-    data = _json_request(f"{base}/Users/{user_id}/Items/Latest?{params}")
-    return _parse_jellyfin_items(data)
+    }
+    if query:
+        params_dict["SearchTerm"] = query
+    params = urllib.parse.urlencode(params_dict)
+    data = _json_request(f"{base}{_jellyfin_items_path(user_id)}?{params}")
+    return _parse_jellyfin_items(data.get("Items", []))
 
 
 def _search_subsonic(profile: Dict[str, Any], query: str, limit: int) -> List[Dict[str, Any]]:
-    base = profile["base_url"].rstrip("/")
+    base = _base_url(profile)
     params = _subsonic_params(profile)
     params.update({
         "query": query,
@@ -214,7 +268,7 @@ def _search_subsonic(profile: Dict[str, Any], query: str, limit: int) -> List[Di
 
 
 def _recent_subsonic(profile: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
-    base = profile["base_url"].rstrip("/")
+    base = _base_url(profile)
     params = _subsonic_params(profile)
     params.update({
         "type": "newest",
@@ -241,6 +295,10 @@ def _recent_subsonic(profile: Dict[str, Any], limit: int) -> List[Dict[str, Any]
             if len(tracks) >= limit:
                 return tracks
     return tracks
+
+
+def _library_subsonic(profile: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+    return _recent_subsonic(profile, limit)
 
 
 def _search(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -272,11 +330,25 @@ def _recent(payload: Dict[str, Any]) -> Dict[str, Any]:
     raise ValueError(f"Unsupported kind: {kind}")
 
 
+def _library_tracks(payload: Dict[str, Any]) -> Dict[str, Any]:
+    profile = payload["profile"]
+    session = payload["session"]
+    limit = int(payload.get("limit", 50))
+    kind = profile["kind"]
+    if kind == "jellyfin":
+        return {"tracks": _library_jellyfin(profile, session, limit)}
+    if kind == "emby":
+        return {"tracks": _library_emby(profile, session, limit)}
+    if kind == "opensubsonic":
+        return {"tracks": _library_subsonic(profile, limit)}
+    raise ValueError(f"Unsupported kind: {kind}")
+
+
 def _resolve(payload: Dict[str, Any]) -> Dict[str, Any]:
     profile = payload["profile"]
     session = payload["session"]
     track = payload["track"]
-    base = profile["base_url"].rstrip("/")
+    base = _base_url(profile)
     kind = profile["kind"]
     if kind == "jellyfin":
         token = session.get("access_token", "")
@@ -304,6 +376,8 @@ def main(argv: List[str]) -> int:
         result = _search(payload)
     elif action == "recent":
         result = _recent(payload)
+    elif action == "library_tracks":
+        result = _library_tracks(payload)
     elif action == "resolve":
         result = _resolve(payload)
     else:

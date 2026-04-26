@@ -6,6 +6,7 @@
 #include <fstream>
 #include <functional>
 #include <optional>
+#include <random>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -116,9 +117,12 @@ bool writeTagPayload(
 
 std::optional<std::string> callRemoteMediaTool(const fs::path& python_path, const std::string& payload_json)
 {
-    const fs::path payload_path = runtime_paths::appTemporaryDir() / ("remote-media-" + std::to_string(std::hash<std::string>{}(payload_json)) + ".json");
     std::error_code directory_error{};
-    fs::create_directories(payload_path.parent_path(), directory_error);
+    const fs::path temporary_dir = runtime_paths::appTemporaryDir();
+    fs::create_directories(temporary_dir, directory_error);
+
+    std::random_device random_device{};
+    const fs::path payload_path = temporary_dir / ("remote-media-" + std::to_string(random_device()) + ".json");
     std::ofstream output(payload_path, std::ios::binary | std::ios::trunc);
     if (!output.is_open()) {
         logRuntime(RuntimeLogLevel::Warn, "remote", "Failed to create remote-media payload file");

@@ -184,6 +184,28 @@ std::vector<app::RemoteTrack> RemoteMediaToolClient::recentTracks(
     return {};
 }
 
+std::vector<app::RemoteTrack> RemoteMediaToolClient::libraryTracks(
+    const app::RemoteServerProfile& profile,
+    const app::RemoteSourceSession& session,
+    int limit) const
+{
+    if (!available()) {
+        logRuntime(RuntimeLogLevel::Warn, "remote", "Remote catalog provider unavailable");
+        return {};
+    }
+    std::ostringstream payload;
+    payload << "{\"action\":\"library_tracks\",\"profile\":" << remoteProfileJson(profile)
+            << ",\"session\":" << remoteSessionJson(session)
+            << ",\"limit\":" << limit << "}";
+    if (const auto json = callRemoteMediaTool(*python_path_, payload.str())) {
+        auto tracks = parseRemoteTracks(*json);
+        logRuntime(RuntimeLogLevel::Info, "remote", "Library " + profile.name + " returned " + std::to_string(tracks.size()) + " tracks");
+        return tracks;
+    }
+    logRuntime(RuntimeLogLevel::Warn, "remote", "Library query failed for " + profile.name);
+    return {};
+}
+
 std::optional<app::ResolvedRemoteStream> RemoteMediaToolClient::resolveTrack(
     const app::RemoteServerProfile& profile,
     const app::RemoteSourceSession& session,

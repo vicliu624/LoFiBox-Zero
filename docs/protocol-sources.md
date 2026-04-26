@@ -52,3 +52,17 @@ Each source family needs:
 - timeout model
 - cache strategy
 - tests
+
+## First-Batch Provider Runtime
+
+The first-batch runtime providers are:
+
+- `Jellyfin`
+- `Emby`
+- `OpenSubsonic`
+- `Navidrome` as an OpenSubsonic-compatible provider family
+
+These providers must not be capability placeholders.
+Their host runtime path must support authenticated probe, catalog-track enumeration, search, latest or recent lookup, and stream resolution through `RemoteMediaServices`.
+Mock tests must stay isolated from real user servers, while real-server smoke tests may exist only as opt-in tests driven by environment variables.
+Real credentials must not be stored in source files, profile persistence, test fixtures, logs, or packaging artifacts.

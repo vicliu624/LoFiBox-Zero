@@ -399,6 +399,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_remote_media_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_remote_media_smoke COMMAND lofibox_remote_media_smoke)
 
+    add_executable(lofibox_real_emby_integration_smoke tests/real_emby_integration_smoke.cpp)
+    target_link_libraries(lofibox_real_emby_integration_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_real_emby_integration_smoke COMMAND lofibox_real_emby_integration_smoke)
+
     add_executable(lofibox_remote_source_security_smoke tests/remote_source_security_smoke.cpp)
     target_link_libraries(lofibox_remote_source_security_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_remote_source_security_smoke COMMAND lofibox_remote_source_security_smoke)

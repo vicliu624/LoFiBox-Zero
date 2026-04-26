@@ -64,6 +64,14 @@ public:
         return client_.recentTracks(profile, session, limit);
     }
 
+    [[nodiscard]] std::vector<app::RemoteTrack> libraryTracks(
+        const app::RemoteServerProfile& profile,
+        const app::RemoteSourceSession& session,
+        int limit) const override
+    {
+        return client_.libraryTracks(profile, session, limit);
+    }
+
 private:
     RemoteMediaToolClient client_{};
 };

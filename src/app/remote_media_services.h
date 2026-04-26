@@ -79,6 +79,16 @@ public:
         const RemoteServerProfile& profile,
         const RemoteSourceSession& session,
         int limit) const = 0;
+    [[nodiscard]] virtual std::vector<RemoteTrack> libraryTracks(
+        const RemoteServerProfile& profile,
+        const RemoteSourceSession& session,
+        int limit) const
+    {
+        (void)profile;
+        (void)session;
+        (void)limit;
+        return {};
+    }
 };
 
 class RemoteStreamResolver {

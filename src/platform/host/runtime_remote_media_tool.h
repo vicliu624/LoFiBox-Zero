@@ -27,6 +27,10 @@ public:
         const app::RemoteServerProfile& profile,
         const app::RemoteSourceSession& session,
         int limit) const;
+    [[nodiscard]] std::vector<app::RemoteTrack> libraryTracks(
+        const app::RemoteServerProfile& profile,
+        const app::RemoteSourceSession& session,
+        int limit) const;
     [[nodiscard]] std::optional<app::ResolvedRemoteStream> resolveTrack(
         const app::RemoteServerProfile& profile,
         const app::RemoteSourceSession& session,

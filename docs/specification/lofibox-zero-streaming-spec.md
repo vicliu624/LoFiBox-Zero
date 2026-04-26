@@ -155,6 +155,25 @@ That model should support:
 
 Persisted server connection profiles and saved-source rules belong to `docs/specification/lofibox-zero-persistence-spec.md`.
 
+### 6.2.1 First-Batch Real Provider Requirements
+
+The first-batch server providers are not allowed to remain manifest-only placeholders.
+For each provider family marked supported by `RemoteSourceRegistry`, the implementation must expose at least:
+
+- authenticated connection probing
+- library-track enumeration
+- title/artist/album/duration mapping into the unified `RemoteTrack` model
+- search where the server API supports it
+- recent or latest track lookup where the server API supports it
+- stream URL resolution into a `ResolvedRemoteStream`
+- mock protocol tests that do not require a real user server
+- an optional real-server smoke test that reads credentials only from environment variables and skips when unset
+
+`EmbySource` is a first-batch real provider.
+It must use Emby-compatible authentication, catalog, latest-item, search, and audio-stream endpoints rather than being represented only by a capability row in Source Manager.
+When an Emby server exposes no `Audio` catalog items but exposes media items that can be resolved through Emby's audio-stream endpoint, the provider may map those items as audio-playable remote items while preserving the same `RemoteTrack` and `ResolvedRemoteStream` boundaries.
+Real Emby credentials must never be committed, persisted in the profile store, printed in logs, or embedded in tests.
+
 ### 6.3 Catalog Browse And Search
 
 When the source exposes catalog structure, the product should be able to browse:

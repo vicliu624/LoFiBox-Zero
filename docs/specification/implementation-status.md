@@ -16,6 +16,7 @@ Use `project-architecture-spec.md` for enduring architecture rules.
 - local media-root scan and playable queue behavior
 - metadata, artwork, lyrics, and tag writeback runtime services
 - track identity runtime service with MusicBrainz fallback and optional Chromaprint/AcoustID fingerprint path
+- remote media runtime provider path for Jellyfin, OpenSubsonic/Navidrome-compatible servers, and Emby, including probe, catalog/search/recent lookup, and stream resolution behind app-facing remote service interfaces
 - host single-instance startup guard for the Linux device executable
 
 ## 3. Current Device-Side Scope
@@ -32,6 +33,7 @@ Use `project-architecture-spec.md` for enduring architecture rules.
 - local persistent fingerprint index
 - host-machine provisioning outside the development container for optional fingerprint dependency `fpcalc`
 - direct on-host desktop simulator support
+- full remote hierarchy pages for server artists, albums, playlists, folders, genres, favorites, and server-side writeback actions
 
 ## 5. Rule
 
