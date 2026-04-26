@@ -103,6 +103,7 @@ add_library(lofibox_zero_host_runtime STATIC
     src/platform/host/connectivity_provider.cpp
     src/platform/host/cover_art_archive_client.cpp
     src/platform/host/ffprobe_metadata_reader.cpp
+    src/platform/host/host_runtime_service_providers.cpp
     src/platform/host/lyrics_provider.cpp
     src/platform/host/lyrics_pipeline_components.cpp
     src/platform/host/lyrics_source_clients.cpp

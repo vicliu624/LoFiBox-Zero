@@ -21,6 +21,7 @@ This document is normative for the current C++ implementation.
 - `LibraryFact`: indexed tracks, albums, artists, playlists, source mapping, scan generations, play counts, and recently-played facts.
 - `UiProjection`: page, widget, desktop, and device-facing render/control models derived from product facts.
 - `RuntimeShell`: Linux host, device profile, desktop, container, VNC, or PocketFrame shell. Runtime shells adapt input/output; they do not redefine product facts.
+- `RuntimeServiceProvider`: host-side construction of service groups before they enter the shared app as injected capabilities.
 
 ## Mandatory Ownership
 
@@ -38,6 +39,7 @@ This document is normative for the current C++ implementation.
 - `LibraryStore` and `LibraryIndexer` own durable media-library facts.
 - `RemoteSourceRegistry` owns source provider registration and lookup.
 - `CredentialStore`, `CredentialRef`, `SecretRedactor`, and `TlsPolicy` own secret and network security boundaries.
+- `RuntimeServiceProvider` owns host service group construction; the app consumes only the completed `RuntimeServices` registry.
 - `AppProjectionBuilder` and page-specific projection builders own app-to-UI view-model assembly.
 - UI pages and widgets own layout and visual composition only.
 - Desktop integration owns event/notification adapters only and converts external events into product commands.
@@ -53,6 +55,7 @@ This document is normative for the current C++ implementation.
 - `LyricsProvider` must not hide cache, writeback, and match-confidence policy in one body.
 - `LibraryController` must not own database migration, scan scheduling, remote provider calls, or UI row rendering.
 - Runtime shells must not fork business logic for PocketFrame, Cardputer Zero, container, VNC, framebuffer, X11, or desktop widget targets.
+- Runtime service factories must not regain protocol, metadata, playback, cache, or remote implementation details.
 - Credentials, tokens, cookies, API keys, and auth headers must not be logged or stored as plain app state.
 
 ## Required Source Families
@@ -94,6 +97,7 @@ Every source must eventually define configuration, authentication, connection li
 - `LyricsPage` regains parsing or spectrum algorithms.
 - `LibraryController` regains list-open branching, database, or remote provider ownership.
 - host runtime protocol clients collapse into monolithic helper files.
+- runtime service factory code directly constructs concrete metadata/playback/remote services instead of composing service providers.
 
 ## Relation To Other Specifications
 

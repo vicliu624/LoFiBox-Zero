@@ -72,6 +72,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/platform/host/runtime_services_factory.cpp") {
+            if ($line -match '\bcreateHost(MetadataProvider|TrackIdentityProvider|ArtworkProvider|LyricsProvider|TagWriter|AudioPlaybackBackend|ConnectivityProvider|RemoteSourceProvider|RemoteCatalogProvider|RemoteStreamResolver)\s*\(') {
+                Add-Violation $violations $repoPath $lineNumber "runtime service provider" "runtime_services_factory.cpp must compose host service providers and must not directly construct concrete runtime capabilities"
+            }
+        }
+
         if ($repoPath -eq "src/platform/host/lyrics_provider.cpp") {
             if ($line -match 'class\s+LyricsCache|class\s+LyricsWritebackPolicy') {
                 Add-Violation $violations $repoPath $lineNumber "lyrics pipeline component" "LyricsProvider must compose lyrics pipeline components instead of owning cache/writeback policy internals"
