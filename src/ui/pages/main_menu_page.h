@@ -7,8 +7,8 @@
 #include <string>
 #include <string_view>
 
-#include "app/app_assets.h"
 #include "core/canvas.h"
+#include "ui/ui_models.h"
 
 namespace lofibox::ui::pages {
 
@@ -30,7 +30,7 @@ struct MainMenuView {
     MenuStorageView storage{};
     MenuIndexState index_state{MenuIndexState::Uninitialized};
     bool network_connected{false};
-    const app::AppAssets* assets{};
+    const UiAssets* assets{};
     std::string playback_summary{"NO TRACK"};
     int playback_summary_scroll_px{0};
 };

@@ -300,11 +300,27 @@ void blitScaledCanvas(
     }
 }
 
+ui::SpectrumFrame toUiSpectrumFrame(const AudioVisualizationFrame& frame)
+{
+    ui::SpectrumFrame view{};
+    view.available = frame.available;
+    view.bands = frame.bands;
+    return view;
+}
+
+ui::LyricsContent toUiLyricsContent(const TrackLyrics& lyrics)
+{
+    ui::LyricsContent view{};
+    view.plain = lyrics.plain;
+    view.synced = lyrics.synced;
+    return view;
+}
+
 } // namespace
 
 struct LoFiBoxApp::Impl {
     std::vector<fs::path> media_roots{};
-    AppAssets assets{};
+    ui::UiAssets assets{};
     LibraryController library_controller{};
     bool boot_ready{false};
     clock::time_point boot_started{clock::now()};
@@ -613,7 +629,7 @@ struct LoFiBoxApp::Impl {
     }
 };
 
-LoFiBoxApp::LoFiBoxApp(std::vector<std::filesystem::path> media_roots, AppAssets assets, RuntimeServices services)
+LoFiBoxApp::LoFiBoxApp(std::vector<std::filesystem::path> media_roots, ui::UiAssets assets, RuntimeServices services)
     : impl_(std::make_unique<Impl>())
 {
     impl_->media_roots = std::move(media_roots);
@@ -842,7 +858,7 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
             }
             return ui_pages::NowPlayingStatus::Empty;
         };
-        ui_pages::renderNowPlayingPage(canvas, ui_pages::NowPlayingView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->album : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.shuffle_enabled, playback.repeat_all, playback.repeat_one, playback.current_artwork ? &*playback.current_artwork : nullptr, playback.visualization_frame});
+        ui_pages::renderNowPlayingPage(canvas, ui_pages::NowPlayingView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->album : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.shuffle_enabled, playback.repeat_all, playback.repeat_one, playback.current_artwork ? &*playback.current_artwork : nullptr, toUiSpectrumFrame(playback.visualization_frame)});
         impl_->renderHelpIfOpen(canvas);
         return;
     }
@@ -860,7 +876,7 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
             }
             return ui_pages::NowPlayingStatus::Empty;
         };
-        ui_pages::renderLyricsPage(canvas, ui_pages::LyricsPageView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.lyrics_lookup_pending, playback.current_lyrics, playback.visualization_frame});
+        ui_pages::renderLyricsPage(canvas, ui_pages::LyricsPageView{track != nullptr, track ? track->title : std::string{}, track ? track->artist : std::string{}, track ? track->duration_seconds : 0, playback.elapsed_seconds, map_status(playback.status), playback.lyrics_lookup_pending, toUiLyricsContent(playback.current_lyrics), toUiSpectrumFrame(playback.visualization_frame)});
         impl_->renderHelpIfOpen(canvas);
         return;
     }

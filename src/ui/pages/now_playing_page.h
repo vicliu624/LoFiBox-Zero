@@ -6,8 +6,8 @@
 #include <optional>
 #include <string>
 
-#include "app/audio_visualization.h"
 #include "core/canvas.h"
+#include "ui/ui_models.h"
 
 namespace lofibox::ui::pages {
 
@@ -29,7 +29,7 @@ struct NowPlayingView {
     bool repeat_all{false};
     bool repeat_one{false};
     const core::Canvas* artwork{};
-    app::AudioVisualizationFrame visualization{};
+    SpectrumFrame visualization{};
 };
 
 void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view);

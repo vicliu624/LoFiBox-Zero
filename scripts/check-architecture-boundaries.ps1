@@ -42,12 +42,17 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
 
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index]
+        $lineNumber = $index + 1
+
+        if ($repoPath.StartsWith("src/ui/", [System.StringComparison]::Ordinal) -and $line -match '\bapp::') {
+            Add-Violation $violations $repoPath $lineNumber "app::" "UI code must use UI projection types and must not reference app namespace types"
+        }
+
         if ($line -notmatch $includeRegex) {
             continue
         }
 
         $include = $Matches[1]
-        $lineNumber = $index + 1
 
         if ($repoPath.StartsWith("src/core/", [System.StringComparison]::Ordinal)) {
             if (Test-AnyPrefix $include @("app/", "platform/", "audio/", "metadata/", "library/", "playback/", "remote/", "desktop/", "security/", "ui/")) {
@@ -56,8 +61,8 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath.StartsWith("src/ui/", [System.StringComparison]::Ordinal)) {
-            if (Test-AnyPrefix $include @("platform/", "audio/", "metadata/", "library/", "playback/", "remote/", "desktop/", "security/")) {
-                Add-Violation $violations $repoPath $lineNumber $include "UI code must not include platform or backend layers"
+            if (Test-AnyPrefix $include @("app/", "platform/", "audio/", "metadata/", "library/", "playback/", "remote/", "desktop/", "security/")) {
+                Add-Violation $violations $repoPath $lineNumber $include "UI code must use UI projection types and must not include app, platform, or backend layers"
             }
         }
 

@@ -63,7 +63,7 @@ void blendPixel(core::Canvas& canvas, int x, int y, core::Color color, std::uint
     return ::lofibox::ui::mixColor(mid, crest, (rise_position - 0.58f) / 0.42f);
 }
 
-[[nodiscard]] float sideFoamEnergy(const app::AudioVisualizationFrame& frame, float rise_position) noexcept
+[[nodiscard]] float sideFoamEnergy(const SpectrumFrame& frame, float rise_position) noexcept
 {
     const float band_position = std::clamp(rise_position, 0.0f, 1.0f);
     const float scaled = band_position * static_cast<float>(frame.bands.size() - 1);
@@ -86,7 +86,7 @@ void blendPixel(core::Canvas& canvas, int x, int y, core::Color color, std::uint
     return (wave_a * 0.48f) + (wave_b * 0.34f) + (wave_c * 0.18f);
 }
 
-[[nodiscard]] float adjacentEnergy(const app::AudioVisualizationFrame& frame, float rise_position) noexcept
+[[nodiscard]] float adjacentEnergy(const SpectrumFrame& frame, float rise_position) noexcept
 {
     constexpr float spread = 0.085f;
     const float lower = sideFoamEnergy(frame, std::clamp(rise_position - spread, 0.0f, 1.0f));
@@ -97,7 +97,7 @@ void blendPixel(core::Canvas& canvas, int x, int y, core::Color color, std::uint
 
 void renderFoamSide(
     core::Canvas& canvas,
-    const app::AudioVisualizationFrame& frame,
+    const SpectrumFrame& frame,
     double elapsed_seconds,
     bool left_side)
 {
@@ -150,7 +150,7 @@ void renderFoamSide(
     }
 }
 
-void renderSideFoamSpectrum(core::Canvas& canvas, const app::AudioVisualizationFrame& frame, double elapsed_seconds)
+void renderSideFoamSpectrum(core::Canvas& canvas, const SpectrumFrame& frame, double elapsed_seconds)
 {
     renderFoamSide(canvas, frame, elapsed_seconds, true);
     renderFoamSide(canvas, frame, elapsed_seconds, false);
@@ -254,7 +254,7 @@ std::optional<double> parseLyricTimestamp(std::string_view line, std::size_t& ta
     return close != std::string_view::npos && colon != std::string_view::npos && colon < close;
 }
 
-std::vector<LyricDisplayLine> lyricDisplayLines(const app::TrackLyrics& lyrics)
+std::vector<LyricDisplayLine> lyricDisplayLines(const LyricsContent& lyrics)
 {
     std::vector<LyricDisplayLine> lines{};
     const auto& source = lyrics.synced && !lyrics.synced->empty() ? lyrics.synced : lyrics.plain;

@@ -2,10 +2,10 @@
 
 #pragma once
 
-#include "app/app_assets.h"
+#include "ui/ui_models.h"
 
 namespace lofibox::platform::host {
 
-[[nodiscard]] app::AppAssets loadLegacyAssets();
+[[nodiscard]] ui::UiAssets loadLegacyAssets();
 
 } // namespace lofibox::platform::host

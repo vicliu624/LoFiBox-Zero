@@ -70,9 +70,9 @@ fs::path defaultAssetRoot()
 
 } // namespace
 
-app::AppAssets loadLegacyAssets()
+ui::UiAssets loadLegacyAssets()
 {
-    app::AppAssets assets{};
+    ui::UiAssets assets{};
 
     const fs::path asset_root = defaultAssetRoot();
     const fs::path base = asset_root / "ui" / "icons" / "legacy-lofibox";

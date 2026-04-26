@@ -143,9 +143,9 @@ Any future visual or input validation must go through a real Linux product targe
 
 - `src/core` is the truth layer for shared rendering primitives.
 - `src/app` is the truth layer for app composition and logical input handling.
-- `src/app/app_assets.h` owns the app-facing asset projection; host asset loading may return this projection without depending on the concrete `LoFiBoxApp`.
-- `src/ui` owns page renderers, shared UI primitives, visual themes, and UI-only view structs.
-- `src/app` may compose `src/ui` renderers for the current monolithic app surface, but page drawing code must not live under `src/app`.
+- `src/ui` owns page renderers, shared UI primitives, visual themes, and UI projection structs such as `UiAssets`, `SpectrumFrame`, and `LyricsContent`.
+- `src/ui` must not include `src/app` headers or reference `app::` internal types; UI can only render view/projection data already translated at the boundary.
+- `src/app` may compose `src/ui` renderers for the current monolithic app surface, but page drawing code must not live under `src/app`, and app/runtime/playback state must be converted into UI projection structs before reaching page renderers.
 - `src/playback`, `src/audio`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
 - `src/platform/host` and `src/platform/device` are adapter layers only.
 - `src/targets` must stay thin.

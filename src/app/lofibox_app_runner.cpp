@@ -12,7 +12,7 @@ namespace lofibox::app {
 
 void runLoFiBoxApp(
     platform::SurfacePresenter& presenter,
-    AppAssets assets,
+    ui::UiAssets assets,
     RuntimeServices services,
     std::chrono::milliseconds auto_exit_after)
 {

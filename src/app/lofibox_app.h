@@ -8,11 +8,11 @@
 #include <optional>
 #include <vector>
 
-#include "app/app_assets.h"
 #include "app/input_event.h"
 #include "app/playback_state.h"
 #include "app/runtime_services.h"
 #include "core/canvas.h"
+#include "ui/ui_models.h"
 
 namespace lofibox::app {
 
@@ -55,7 +55,7 @@ struct AppDebugSnapshot {
 
 class LoFiBoxApp {
 public:
-    explicit LoFiBoxApp(std::vector<std::filesystem::path> media_roots = {}, AppAssets assets = {}, RuntimeServices services = {});
+    explicit LoFiBoxApp(std::vector<std::filesystem::path> media_roots = {}, ui::UiAssets assets = {}, RuntimeServices services = {});
     ~LoFiBoxApp();
 
     void update();
