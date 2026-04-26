@@ -54,6 +54,21 @@ app::AudioVisualizationFrame AudioPipelineController::visualizationFrame() const
     return {};
 }
 
+void AudioPipelineController::setDspProfile(dsp::DspChainProfile profile)
+{
+    dsp_chain_.setProfile(profile);
+}
+
+const dsp::DspChainProfile& AudioPipelineController::dspProfile() const noexcept
+{
+    return dsp_chain_.profile();
+}
+
+float AudioPipelineController::processDspSample(float sample) const noexcept
+{
+    return dsp_chain_.processSample(sample);
+}
+
 app::AudioPlaybackBackend* AudioPipelineController::backend() const noexcept
 {
     if (!services_ || !services_->playback.audio_backend) {

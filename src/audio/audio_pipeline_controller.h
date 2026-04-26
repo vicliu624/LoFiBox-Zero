@@ -6,6 +6,7 @@
 
 #include "app/audio_visualization.h"
 #include "app/runtime_services.h"
+#include "audio/dsp/dsp_chain.h"
 
 namespace lofibox::audio {
 
@@ -20,11 +21,15 @@ public:
 
     [[nodiscard]] app::AudioPlaybackState state() const;
     [[nodiscard]] app::AudioVisualizationFrame visualizationFrame() const;
+    void setDspProfile(dsp::DspChainProfile profile);
+    [[nodiscard]] const dsp::DspChainProfile& dspProfile() const noexcept;
+    [[nodiscard]] float processDspSample(float sample) const noexcept;
 
 private:
     [[nodiscard]] app::AudioPlaybackBackend* backend() const noexcept;
 
     app::RuntimeServices* services_{nullptr};
+    dsp::DspChain dsp_chain_{};
 };
 
 } // namespace lofibox::audio

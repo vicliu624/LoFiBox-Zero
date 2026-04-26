@@ -34,6 +34,7 @@ option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX
 
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp
+    src/audio/dsp/dsp_chain.cpp
     src/app/input_actions.cpp
     src/app/app_command_executor.cpp
     src/app/app_lifecycle.cpp
@@ -320,6 +321,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_equalizer_smoke tests/equalizer_smoke.cpp)
     target_link_libraries(lofibox_equalizer_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_equalizer_smoke COMMAND lofibox_equalizer_smoke)
+
+    add_executable(lofibox_dsp_chain_smoke tests/dsp_chain_smoke.cpp)
+    target_link_libraries(lofibox_dsp_chain_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_dsp_chain_smoke COMMAND lofibox_dsp_chain_smoke)
 
     add_executable(lofibox_main_menu_visual_smoke tests/main_menu_visual_smoke.cpp)
     target_link_libraries(lofibox_main_menu_visual_smoke PRIVATE lofibox_zero_host_runtime)

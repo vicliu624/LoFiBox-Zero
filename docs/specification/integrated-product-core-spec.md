@@ -33,6 +33,7 @@ This document is normative for the current C++ implementation.
 - `PlaybackCompletionPolicy` owns repeat/shuffle/end-of-queue decisions.
 - `AudioPipeline` owns decoder-to-sink frame flow and DSP/visualization taps.
 - `AudioPipelineController` owns app-facing playback backend commands, backend state reads, and visualization tap reads.
+- `DspChain` owns EQ, ReplayGain, limiter, and future PCM processing nodes as pipeline concepts.
 - `VisualizationSource` owns the app-facing spectrum frame fact.
 - `TrackIdentityResolver` owns identity evidence and confidence calculation.
 - `MetadataResolverChain`, `ArtworkResolverChain`, and `LyricsResolverChain` own ordered lookup chains.
@@ -62,6 +63,7 @@ This document is normative for the current C++ implementation.
 - `PlaybackController` must not own backend clocks, backend threads, async enrichment workers, or completion policy.
 - `AudioPipeline` must not own queue selection or source browsing.
 - Playback runtime code must not directly poll concrete audio backends when an audio pipeline facade exists.
+- EQ, ReplayGain, limiter, and visualization must be modeled as audio pipeline/DSP concepts rather than UI page side effects.
 - `LyricsProvider` must not hide cache, writeback, and match-confidence policy in one body.
 - `LibraryController` must not own database migration, scan scheduling, remote provider calls, or UI row rendering.
 - Library scanning must go through `LibraryIndexer`; durable library persistence must go through `LibraryStore`.
