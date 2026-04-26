@@ -66,6 +66,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/app/playback_runtime_coordinator.cpp" -or $repoPath -eq "src/app/playback_runtime_coordinator.h") {
+            if ($line -match 'PlaybackBackendController|PlaybackVisualizationSource') {
+                Add-Violation $violations $repoPath $lineNumber "audio pipeline facade" "PlaybackRuntimeCoordinator must use the AudioPipelineController facade instead of backend/visualization adapters directly"
+            }
+        }
+
         if ($repoPath -eq "src/platform/host/runtime_enrichment_clients.cpp") {
             if ($line -match '\b(AcoustIdIdentityClient|MusicBrainzMetadataClient|CoverArtArchiveClient|LrclibClient|LyricsOvhClient|FfprobeMetadataReader)::') {
                 Add-Violation $violations $repoPath $lineNumber "enrichment protocol client" "runtime_enrichment_clients.cpp must stay shared helper/orchestration code; concrete protocol clients live in dedicated files"

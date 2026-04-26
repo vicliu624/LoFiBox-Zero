@@ -6,10 +6,9 @@
 #include <filesystem>
 
 #include "app/library_controller.h"
-#include "app/playback_backend_controller.h"
 #include "app/playback_completion_policy.h"
 #include "app/playback_session_clock.h"
-#include "app/playback_visualization_source.h"
+#include "audio/audio_pipeline_controller.h"
 
 namespace lofibox::app {
 
@@ -29,9 +28,8 @@ public:
 
 private:
     PlaybackSessionClock clock_{};
-    PlaybackBackendController backend_{};
+    audio::AudioPipelineController audio_pipeline_{};
     PlaybackCompletionPolicy completion_policy_{};
-    PlaybackVisualizationSource visualization_source_{};
 };
 
 } // namespace lofibox::app

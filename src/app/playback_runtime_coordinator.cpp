@@ -6,7 +6,7 @@ namespace lofibox::app {
 
 void PlaybackRuntimeCoordinator::setServices(RuntimeServices* services) noexcept
 {
-    backend_.setServices(services);
+    audio_pipeline_.bind(services);
 }
 
 void PlaybackRuntimeCoordinator::beginTrack(PlaybackSession& session) const noexcept
@@ -20,14 +20,14 @@ void PlaybackRuntimeCoordinator::beginTrack(PlaybackSession& session) const noex
 
 bool PlaybackRuntimeCoordinator::startBackend(const std::filesystem::path& path, PlaybackSession& session)
 {
-    session.audio_active = backend_.startFile(path, 0.0);
+    session.audio_active = audio_pipeline_.startFile(path, 0.0);
     return session.audio_active;
 }
 
 void PlaybackRuntimeCoordinator::pause(PlaybackSession& session) noexcept
 {
     if (session.status == PlaybackStatus::Playing) {
-        backend_.pause();
+        audio_pipeline_.pause();
         session.status = PlaybackStatus::Paused;
     }
 }
@@ -35,7 +35,7 @@ void PlaybackRuntimeCoordinator::pause(PlaybackSession& session) noexcept
 void PlaybackRuntimeCoordinator::resume(PlaybackSession& session) noexcept
 {
     if (session.status == PlaybackStatus::Paused) {
-        backend_.resume();
+        audio_pipeline_.resume();
         session.status = PlaybackStatus::Playing;
     }
 }
@@ -63,7 +63,7 @@ void PlaybackRuntimeCoordinator::tick(
 {
     clock_.advance(session, delta_seconds);
     if (session.audio_active) {
-        switch (backend_.state()) {
+        switch (audio_pipeline_.state()) {
         case AudioPlaybackState::Finished:
             if (advanceAfterFinish(queue, session, play_index)) {
                 return;
@@ -87,7 +87,7 @@ void PlaybackRuntimeCoordinator::tick(
             break;
         }
     }
-    session.visualization_frame = visualization_source_.currentFrame(backend_);
+    session.visualization_frame = audio_pipeline_.visualizationFrame();
 }
 
 } // namespace lofibox::app

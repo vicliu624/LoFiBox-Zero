@@ -33,6 +33,7 @@ option(LOFIBOX_BUILD_DEVICE "Build the Linux framebuffer device target." ${LOFIB
 option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
 
 add_library(lofibox_zero_core STATIC
+    src/audio/audio_pipeline_controller.cpp
     src/app/input_actions.cpp
     src/app/app_command_executor.cpp
     src/app/app_lifecycle.cpp

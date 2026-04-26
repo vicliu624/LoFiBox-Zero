@@ -31,6 +31,7 @@ This document is normative for the current C++ implementation.
 - `PlaybackTransitionCoordinator` owns atomic previous/next/natural-finish transition orchestration.
 - `PlaybackCompletionPolicy` owns repeat/shuffle/end-of-queue decisions.
 - `AudioPipeline` owns decoder-to-sink frame flow and DSP/visualization taps.
+- `AudioPipelineController` owns app-facing playback backend commands, backend state reads, and visualization tap reads.
 - `VisualizationSource` owns the app-facing spectrum frame fact.
 - `TrackIdentityResolver` owns identity evidence and confidence calculation.
 - `MetadataResolverChain`, `ArtworkResolverChain`, and `LyricsResolverChain` own ordered lookup chains.
@@ -55,6 +56,7 @@ This document is normative for the current C++ implementation.
 - Metadata providers must not inline online identity/MusicBrainz lookup ordering; they delegate enrichment orchestration.
 - `PlaybackController` must not own backend clocks, backend threads, async enrichment workers, or completion policy.
 - `AudioPipeline` must not own queue selection or source browsing.
+- Playback runtime code must not directly poll concrete audio backends when an audio pipeline facade exists.
 - `LyricsProvider` must not hide cache, writeback, and match-confidence policy in one body.
 - `LibraryController` must not own database migration, scan scheduling, remote provider calls, or UI row rendering.
 - `LibraryController` must not own raw library fact storage when a repository boundary exists.
