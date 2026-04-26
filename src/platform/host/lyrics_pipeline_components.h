@@ -6,7 +6,7 @@
 #include <string_view>
 
 #include "app/runtime_services.h"
-#include "metadata/match_confidence_guard.h"
+#include "metadata/enrichment_authority_policy.h"
 #include "platform/host/runtime_host_internal.h"
 
 namespace lofibox::platform::host::runtime_detail {
@@ -27,7 +27,7 @@ public:
     [[nodiscard]] bool shouldOnlyFillMissing(bool embedded_lyrics_rejected) const noexcept;
 
 private:
-    ::lofibox::metadata::MatchConfidenceGuard match_guard_{};
+    ::lofibox::metadata::EnrichmentAuthorityPolicy authority_policy_{};
 };
 
 } // namespace lofibox::platform::host::runtime_detail

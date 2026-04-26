@@ -382,6 +382,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_tag_writeback_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_tag_writeback_smoke COMMAND lofibox_tag_writeback_smoke)
 
+    add_executable(lofibox_lyrics_writeback_policy_smoke tests/lyrics_writeback_policy_smoke.cpp)
+    target_link_libraries(lofibox_lyrics_writeback_policy_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_lyrics_writeback_policy_smoke COMMAND lofibox_lyrics_writeback_policy_smoke)
+
     add_executable(lofibox_single_instance_lock_smoke tests/single_instance_lock_smoke.cpp)
     target_link_libraries(lofibox_single_instance_lock_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_single_instance_lock_smoke COMMAND lofibox_single_instance_lock_smoke)

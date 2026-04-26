@@ -31,7 +31,7 @@ bool LyricsWritebackPolicy::shouldWrite(const app::TrackLyrics& lyrics) const no
 
 bool LyricsWritebackPolicy::shouldWrite(const app::TrackLyrics& lyrics, const app::TrackIdentity& identity) const noexcept
 {
-    return match_guard_.acceptsAuthoritativeLyrics(lyrics, identity);
+    return authority_policy_.allowLyricsWriteback(identity, lyrics);
 }
 
 bool LyricsWritebackPolicy::shouldOnlyFillMissing(bool embedded_lyrics_rejected) const noexcept
