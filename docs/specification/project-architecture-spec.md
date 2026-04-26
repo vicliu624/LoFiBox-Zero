@@ -89,13 +89,19 @@ Any future visual or input validation must go through a real Linux product targe
 ## 6. Architecture Contract
 
 - UI code may depend on view models, logical canvas primitives, colors, text drawing, frame timing, and logical input events.
+- UI/page code must not include concrete platform adapters, backend protocol layers, desktop integration layers, security internals, playback internals, metadata internals, audio internals, or remote-provider internals.
 - Shared app code may depend on unified capability interfaces such as metadata, artwork, lyrics, audio-playback, tag-writing, and connectivity providers.
 - Shared app code may not depend on Linux headers, direct hardware paths, Docker/container facts, or desktop GUI libraries.
+- Shared app code must not include concrete `platform/host`, `platform/device`, or `platform/x11` adapters except for explicitly thin app-runner binding code.
+- `core` must not include `app`, `platform`, `audio`, `metadata`, `library`, `playback`, `remote`, `desktop`, `security`, or `ui`.
 - UI code must not directly call `FFmpeg`, `GStreamer`, `SMB`, `Jellyfin`, `SQLite`, `D-Bus`, or other low-level backend/protocol details.
 - `playback` must not know `Jellyfin`, `SMB`, `Subsonic`, `DLNA`, or other protocol details.
 - Remote-source code must obtain media objects and media streams; it must not own player state-machine semantics.
 - `metadata` and `library` must not depend on UI.
 - `desktop` integration may translate desktop events into player commands; it must not redefine core product state.
+- Host adapters may implement `RuntimeServices` and helper/resource resolution, but they must not include concrete page implementations or the concrete `LoFiBoxApp` type.
+- Device/X11 presentation adapters may translate platform input/output into app-facing interfaces, but they must not depend on host runtime, concrete pages, or concrete app construction details.
+- `targets` may compose app runners, host runtime services, asset loaders, presenters, and command-line parsing; they must not include page implementations or own product behavior.
 - Protocol clients must not directly persist plaintext passwords, tokens, API keys, cookies, or authentication headers.
 - Runtime user data must not be written to `/usr`, `/opt`, installation directories, or the current working directory.
 - Runtime paths must follow XDG:
@@ -137,16 +143,19 @@ Any future visual or input validation must go through a real Linux product targe
 
 - `src/core` is the truth layer for shared rendering primitives.
 - `src/app` is the truth layer for app composition and logical input handling.
+- `src/app/app_assets.h` owns the app-facing asset projection; host asset loading may return this projection without depending on the concrete `LoFiBoxApp`.
 - `src/playback`, `src/audio`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
 - `src/platform/host` and `src/platform/device` are adapter layers only.
 - `src/targets` must stay thin.
 - `src/platform/host/single_instance_lock.*` is the host-owned process lifecycle guard for the Linux executable target.
 - `tests` validate shared behavior without pulling in the device adapter.
 - `docker` and `scripts/run-dev-container.*` own container execution details.
+- `scripts/check-architecture-boundaries.ps1` is the repository-level dependency-direction gate and must be updated whenever this specification deliberately changes layer boundaries.
 
 ## 8. AI Constraints For Future Work
 
 - New platform-specific details must stay in the corresponding adapter layer.
+- Do not bypass `scripts/check-architecture-boundaries.ps1` to make a local feature compile; if it fails, either fix the dependency direction or first update this specification with a justified boundary change.
 - Container-specific tooling must stay in scripts and documentation; it must not leak Docker concepts into shared app or device code.
 - Vendor Linux hardware wrappers, if reintroduced, must stay behind our own device-side adapter code.
 - Linux input device paths, `evdev` details, and keyboard layout translation must stay inside the device adapter layer.

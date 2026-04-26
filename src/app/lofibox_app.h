@@ -8,6 +8,7 @@
 #include <optional>
 #include <vector>
 
+#include "app/app_assets.h"
 #include "app/input_event.h"
 #include "app/playback_state.h"
 #include "app/runtime_services.h"
@@ -50,16 +51,6 @@ struct AppDebugSnapshot {
     bool network_connected{false};
     int eq_band_count{0};
     int eq_selected_band{0};
-};
-
-struct AppAssets {
-    std::optional<core::Canvas> logo{};
-    std::optional<core::Canvas> music_icon{};
-    std::optional<core::Canvas> library_icon{};
-    std::optional<core::Canvas> playlists_icon{};
-    std::optional<core::Canvas> now_playing_icon{};
-    std::optional<core::Canvas> equalizer_icon{};
-    std::optional<core::Canvas> settings_icon{};
 };
 
 class LoFiBoxApp {

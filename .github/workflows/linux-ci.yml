@@ -22,6 +22,10 @@ jobs:
         shell: pwsh
         run: scripts/check-spdx.ps1
 
+      - name: Check Architecture Boundaries
+        shell: pwsh
+        run: scripts/check-architecture-boundaries.ps1
+
       - name: Install Linux Build Dependencies
         run: |
           sudo apt-get update

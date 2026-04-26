@@ -36,12 +36,18 @@ The long-term source layout is semantic rather than incidental:
 ## Hard Boundary Rules
 
 - UI must not directly call FFmpeg, SMB, Jellyfin, SQLite, D-Bus, or protocol clients.
+- UI/page code must not include concrete platform adapters or backend/protocol implementation layers.
+- Core code must not include app, platform, UI, playback, audio, metadata, library, remote, desktop, or security layers.
+- Host adapters implement runtime services and helper/resource resolution, but do not depend on concrete app/page classes.
+- Targets compose app runners and platform adapters; they do not own page implementations or product behavior.
 - Playback must not know protocol details.
 - Remote providers produce media objects and streams; they do not own playback state machines.
 - Metadata and library code do not depend on UI.
 - Desktop integration translates external events into player commands.
 - Protocol clients do not persist plaintext secrets.
 - Runtime user data follows XDG paths.
+
+The repository enforces include-direction rules with `scripts/check-architecture-boundaries.ps1`, wired into CI.
 
 ## Runtime Path Boundary
 

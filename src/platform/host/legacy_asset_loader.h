@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "app/lofibox_app.h"
+#include "app/app_assets.h"
 
 namespace lofibox::platform::host {
 

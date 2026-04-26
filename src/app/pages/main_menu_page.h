@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-#include "app/lofibox_app.h"
+#include "app/app_assets.h"
 #include "core/canvas.h"
 
 namespace lofibox::app::pages {
