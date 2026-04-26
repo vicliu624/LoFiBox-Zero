@@ -44,6 +44,13 @@ Current page renderers and shared UI primitives live under `src/ui`.
 `src/app/app_runtime_context.*` owns app runtime state, controllers, runtime services, and the target-interface implementations consumed by input, render, lifecycle, and command helpers; `LoFiBoxApp` is only the public facade.
 `src/app/app_runtime_state.*` owns scalar/session UI-facing runtime state such as navigation, settings, network status, metadata service status, EQ state, help state, boot timestamps, and media roots; `src/app/app_controller_set.*` owns controller objects such as library and playback controllers.
 `src/app/runtime_services.*` exposes `RuntimeServiceRegistry`, grouped by capability: `ConnectivityServices`, `MetadataServices`, `PlaybackServices`, and `RemoteMediaServices`; concrete host/device code fills providers, while shared app code consumes grouped capabilities only.
+`src/app/playback_controller.*` owns playback state-machine and queue semantics; `src/app/playback_enrichment_coordinator.*` owns asynchronous metadata/artwork/lyrics enrichment worker lifecycle and pending-result merge semantics.
+`src/app/library_query_service.*` owns library fact queries; `src/app/library_navigation_service.*` owns list title/row projection; `src/app/library_open_action_resolver.*` owns list-open action semantics; `src/app/library_list_context.h` owns current browse/list context.
+`src/app/app_projection_builder.*` owns app-state to UI view-model projection; `src/app/app_renderer.*` dispatches pages and boot/help chrome only.
+`src/ui/widgets/lyrics_layout.*` owns lyric parsing, active-line selection, and scrolling-window layout; `src/ui/effects/lyrics_spectrum_effect.*` owns lyrics-page spectrum visual algorithms.
+`src/platform/host/runtime_enrichment_clients.cpp` is shared enrichment helper/orchestration code; concrete host enrichment clients live in dedicated protocol files.
+`src/platform/host/lyrics_pipeline_components.*` owns lyrics cache and lyrics writeback policy; `src/platform/host/lyrics_provider.cpp` composes those components instead of hiding the whole lyrics chain.
+`src/platform/host/runtime_host_tools.*` names host helper sub-boundaries for text parsing, JSON helpers, cache-path derivation, and helper-script resolution.
 
 ## Hard Boundary Rules
 
@@ -59,6 +66,13 @@ Current page renderers and shared UI primitives live under `src/ui`.
 - `LoFiBoxApp` must not own runtime state, controllers, routing helpers, page render helpers, lifecycle helpers, command helpers, or debug-snapshot assembly; those belong to `AppRuntimeContext`.
 - `AppRuntimeContext` must not re-accumulate raw state/controller fields; runtime state belongs to `AppRuntimeState`, controller ownership belongs to `AppControllerSet`, and context remains the adapter across target interfaces.
 - Runtime service access must go through capability groups (`connectivity`, `metadata`, `playback`, `remote`) rather than top-level provider fields, so adding lyrics, tag writeback, streaming, or desktop capabilities does not turn the registry into a global grab bag.
+- `PlaybackController` must not own enrichment threads, pending enrichment maps, or network enrichment request merging; it delegates those to `PlaybackEnrichmentCoordinator`.
+- Runtime enrichment protocol clients must remain single-responsibility host clients; AcoustID, MusicBrainz, Cover Art Archive, LRCLIB, lyrics.ovh, and ffprobe behavior must not collapse back into one monolithic client file.
+- `LyricsProvider` may orchestrate lookup, but cache semantics, writeback policy, embedded reading, online resolution, and match guarding must remain distinct concepts.
+- `LibraryController` may coordinate library page behavior, but library fact queries, navigation row/title projection, open-action resolution, and list context state must stay separable.
+- `AppRenderer` must not translate app state into UI projection structs inline; projection building belongs to `AppProjectionBuilder`.
+- Lyrics pages must not own lyric parsing, active-line location, scrolling-window algorithms, or spectrum rendering algorithms; those belong to widgets/effects.
+- Host runtime helper utilities must be named by responsibility rather than hidden inside `runtime_host_internal`.
 - Core code must not include app, platform, UI, playback, audio, metadata, library, remote, desktop, or security layers.
 - Host adapters implement runtime services and helper/resource resolution, but do not depend on concrete app/page classes.
 - Targets compose app runners and platform adapters; they do not own page implementations or product behavior.

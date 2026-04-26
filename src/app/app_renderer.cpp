@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "app/app_projection_builder.h"
 #include "core/display_profile.h"
 #include "ui/pages/about_page.h"
 #include "ui/pages/equalizer_page.h"
@@ -20,64 +21,6 @@ namespace {
 
 namespace ui_pages = lofibox::ui::pages;
 using clock = std::chrono::steady_clock;
-
-constexpr std::string_view kNoMusic = "NO MUSIC";
-constexpr std::string_view kNoAlbums = "NO ALBUMS";
-constexpr std::string_view kNoSongs = "NO SONGS";
-constexpr std::string_view kNoGenres = "NO GENRES";
-constexpr std::string_view kNoComposers = "NO COMPOSERS";
-constexpr std::string_view kNoCompilations = "NO COMPILATIONS";
-constexpr std::string_view kEmpty = "EMPTY";
-constexpr std::string_view kVersion = "0.1.0";
-
-std::string formatStorage(const StorageInfo& storage)
-{
-    if (!storage.available || storage.capacity_bytes == 0) {
-        return "N/A";
-    }
-
-    const auto used = storage.capacity_bytes - storage.free_bytes;
-    const auto used_mb = static_cast<int>(used / (1024 * 1024));
-    const auto total_mb = static_cast<int>(storage.capacity_bytes / (1024 * 1024));
-    return std::to_string(used_mb) + "/" + std::to_string(total_mb) + "MB";
-}
-
-ui::SpectrumFrame toUiSpectrumFrame(const AudioVisualizationFrame& frame)
-{
-    ui::SpectrumFrame view{};
-    view.available = frame.available;
-    view.bands = frame.bands;
-    return view;
-}
-
-ui::LyricsContent toUiLyricsContent(const TrackLyrics& lyrics)
-{
-    ui::LyricsContent view{};
-    view.plain = lyrics.plain;
-    view.synced = lyrics.synced;
-    return view;
-}
-
-ui_pages::NowPlayingStatus toUiPlaybackStatus(PlaybackStatus status)
-{
-    switch (status) {
-    case PlaybackStatus::Empty: return ui_pages::NowPlayingStatus::Empty;
-    case PlaybackStatus::Paused: return ui_pages::NowPlayingStatus::Paused;
-    case PlaybackStatus::Playing: return ui_pages::NowPlayingStatus::Playing;
-    }
-    return ui_pages::NowPlayingStatus::Empty;
-}
-
-ui_pages::MenuIndexState toUiIndexState(LibraryIndexState state)
-{
-    switch (state) {
-    case LibraryIndexState::Uninitialized: return ui_pages::MenuIndexState::Uninitialized;
-    case LibraryIndexState::Loading: return ui_pages::MenuIndexState::Loading;
-    case LibraryIndexState::Ready: return ui_pages::MenuIndexState::Ready;
-    case LibraryIndexState::Degraded: return ui_pages::MenuIndexState::Degraded;
-    }
-    return ui_pages::MenuIndexState::Uninitialized;
-}
 
 std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPage page)
 {
@@ -126,39 +69,6 @@ void renderHelpIfOpen(core::Canvas& canvas, const AppRenderTarget& target)
     ui::drawPageHelpModal(canvas, title, helpRowsForPage(target.helpPage()));
 }
 
-std::string playbackSummary(const AppRenderTarget& target)
-{
-    const auto& playback = target.playbackSession();
-    if (!playback.current_track_id) {
-        return "NO TRACK";
-    }
-    const auto* track = target.findTrack(*playback.current_track_id);
-    if (track == nullptr) {
-        return "NO TRACK";
-    }
-    std::string summary = playback.status == PlaybackStatus::Paused ? "PAUSED  " : "PLAYING  ";
-    summary += track->title.empty() ? "UNKNOWN" : track->title;
-    if (!track->artist.empty() && track->artist != "UNKNOWN") {
-        summary += " - ";
-        summary += track->artist;
-    }
-    return summary;
-}
-
-std::string emptyLabelForPage(AppPage page)
-{
-    switch (page) {
-    case AppPage::Artists: return std::string(kNoMusic);
-    case AppPage::Albums: return std::string(kNoAlbums);
-    case AppPage::Songs: return std::string(kNoSongs);
-    case AppPage::Genres: return std::string(kNoGenres);
-    case AppPage::Composers: return std::string(kNoComposers);
-    case AppPage::Compilations: return std::string(kNoCompilations);
-    case AppPage::PlaylistDetail: return std::string(kEmpty);
-    default: return std::string(kEmpty);
-    }
-}
-
 void renderBootPage(core::Canvas& canvas, const AppRenderTarget& target)
 {
     canvas.fillRect(0, 0, core::kDisplayWidth, core::kDisplayHeight, ui::kBgRoot);
@@ -183,14 +93,7 @@ void renderMainMenu(core::Canvas& canvas, const AppRenderTarget& target)
 {
     ui_pages::renderMainMenuPage(
         canvas,
-        ui_pages::MainMenuView{
-            target.mainMenuIndex(),
-            ui_pages::MenuStorageView{target.storage().available, target.storage().capacity_bytes, target.storage().free_bytes},
-            toUiIndexState(target.libraryState()),
-            target.networkConnected(),
-            &target.assets(),
-            playbackSummary(target),
-            static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(clock::now().time_since_epoch()).count() / 45)});
+        buildMainMenuProjection(target));
     renderHelpIfOpen(canvas, target);
 }
 
@@ -198,23 +101,9 @@ void renderNowPlaying(core::Canvas& canvas, const AppRenderTarget& target)
 {
     ui::drawListPageFrame(canvas);
     ui::drawTopBar(canvas, target.pageModel().title, true);
-    const auto& playback = target.playbackSession();
-    const TrackRecord* track = playback.current_track_id ? target.findTrack(*playback.current_track_id) : nullptr;
     ui_pages::renderNowPlayingPage(
         canvas,
-        ui_pages::NowPlayingView{
-            track != nullptr,
-            track ? track->title : std::string{},
-            track ? track->artist : std::string{},
-            track ? track->album : std::string{},
-            track ? track->duration_seconds : 0,
-            playback.elapsed_seconds,
-            toUiPlaybackStatus(playback.status),
-            playback.shuffle_enabled,
-            playback.repeat_all,
-            playback.repeat_one,
-            playback.current_artwork ? &*playback.current_artwork : nullptr,
-            toUiSpectrumFrame(playback.visualization_frame)});
+        buildNowPlayingProjection(target));
     renderHelpIfOpen(canvas, target);
 }
 
@@ -222,39 +111,17 @@ void renderLyrics(core::Canvas& canvas, const AppRenderTarget& target)
 {
     ui::drawListPageFrame(canvas);
     ui::drawTopBar(canvas, target.pageModel().title, true);
-    const auto& playback = target.playbackSession();
-    const TrackRecord* track = playback.current_track_id ? target.findTrack(*playback.current_track_id) : nullptr;
     ui_pages::renderLyricsPage(
         canvas,
-        ui_pages::LyricsPageView{
-            track != nullptr,
-            track ? track->title : std::string{},
-            track ? track->artist : std::string{},
-            track ? track->duration_seconds : 0,
-            playback.elapsed_seconds,
-            toUiPlaybackStatus(playback.status),
-            playback.lyrics_lookup_pending,
-            toUiLyricsContent(playback.current_lyrics),
-            toUiSpectrumFrame(playback.visualization_frame)});
+        buildLyricsProjection(target));
     renderHelpIfOpen(canvas, target);
 }
 
 void renderList(core::Canvas& canvas, const AppRenderTarget& target)
 {
-    const auto model = target.pageModel();
-    const auto& rows = model.rows;
-    const auto page = target.currentPage();
     ui_pages::renderListPage(
         canvas,
-        ui_pages::ListPageView{
-            model.title,
-            !model.browse_list,
-            model.browse_list ? "F1:HELP" : "",
-            rows,
-            rows.empty() ? emptyLabelForPage(page) : std::string{},
-            target.listSelection().selected,
-            target.listSelection().scroll,
-            false});
+        buildListProjection(target));
     renderHelpIfOpen(canvas, target);
 }
 
@@ -278,11 +145,11 @@ void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
         renderLyrics(canvas, target);
         return;
     case AppPage::Equalizer:
-        ui_pages::renderEqualizerPage(canvas, ui_pages::EqualizerPageView{target.eqState().bands, target.eqState().selected_band, target.eqState().preset_name});
+        ui_pages::renderEqualizerPage(canvas, buildEqualizerProjection(target));
         renderHelpIfOpen(canvas, target);
         return;
     case AppPage::About:
-        ui_pages::renderAboutPage(canvas, ui_pages::AboutPageView{std::string(kVersion), formatStorage(target.storage())});
+        ui_pages::renderAboutPage(canvas, buildAboutProjection(target));
         renderHelpIfOpen(canvas, target);
         return;
     case AppPage::MusicIndex:

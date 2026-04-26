@@ -9,10 +9,13 @@
 #include <vector>
 
 #include "app/app_page.h"
+#include "app/library_list_context.h"
 #include "app/library_model.h"
 #include "app/runtime_services.h"
 
 namespace lofibox::app {
+
+class LibraryOpenActionResolver;
 
 struct LibraryOpenResult {
     enum class Kind {
@@ -50,6 +53,8 @@ public:
     [[nodiscard]] LibraryOpenResult openSelectedListItem(AppPage page, int selected);
 
 private:
+    friend class LibraryOpenActionResolver;
+
     void setSongsContextAlbum(const AlbumRecord& album);
     void setSongsContextFiltered(SongsMode mode, std::string label, std::vector<int> ids);
     [[nodiscard]] std::vector<AlbumRecord> visibleAlbums() const;
@@ -58,11 +63,7 @@ private:
 
     LibraryIndexState state_{LibraryIndexState::Uninitialized};
     LibraryModel library_{};
-    AlbumsContext albums_context_{};
-    SongsContext songs_context_{};
-    PlaylistContext playlist_context_{};
-    std::vector<int> on_the_go_ids_{};
-    SongSortMode song_sort_mode_{SongSortMode::TitleAscending};
+    LibraryListContext list_context_{};
 };
 
 } // namespace lofibox::app

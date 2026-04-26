@@ -2,12 +2,8 @@
 
 #pragma once
 
-#include <cstdint>
-#include <mutex>
-#include <thread>
-#include <vector>
-
 #include "app/library_controller.h"
+#include "app/playback_enrichment_coordinator.h"
 #include "app/playback_state.h"
 #include "app/runtime_services.h"
 
@@ -15,8 +11,6 @@ namespace lofibox::app {
 
 class PlaybackController {
 public:
-    ~PlaybackController();
-
     void setServices(RuntimeServices services);
 
     [[nodiscard]] const PlaybackSession& session() const noexcept;
@@ -41,21 +35,13 @@ private:
     [[nodiscard]] bool advanceAfterFinish(LibraryController& library_controller);
     void refreshArtwork(const LibraryController& library_controller, ArtworkReadMode mode = ArtworkReadMode::AllowOnline);
     void refreshMetadata(LibraryController& library_controller, MetadataReadMode mode = MetadataReadMode::AllowOnline);
-    void requestEnrichment(const TrackRecord& track);
-    void applyPendingEnrichments(LibraryController& library_controller);
     void synchronizeBackendState(LibraryController& library_controller);
     void updateVisualizationFrame();
-
-    [[nodiscard]] static TrackMetadata metadataFromTrack(const TrackRecord& track);
-    static void applyMetadataToTrack(TrackRecord& track, const TrackMetadata& metadata);
 
     QueueState queue_{};
     PlaybackSession session_{};
     RuntimeServices services_{};
-    std::mutex enrichment_mutex_{};
-    std::vector<PlaybackEnrichmentResult> pending_enrichments_{};
-    std::vector<std::thread> enrichment_threads_{};
-    std::uint64_t enrichment_generation_{0};
+    PlaybackEnrichmentCoordinator enrichment_{};
 };
 
 } // namespace lofibox::app

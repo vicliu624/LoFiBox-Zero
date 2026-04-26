@@ -5,38 +5,16 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
-#include <filesystem>
-#include <mutex>
 #include <optional>
 #include <random>
-#include <thread>
 #include <utility>
 
 namespace lofibox::app {
-namespace {
-
-std::string metadataOrCurrent(const std::optional<std::string>& metadata_value, const std::string& current)
-{
-    if (metadata_value && !metadata_value->empty()) {
-        return *metadata_value;
-    }
-    return current;
-}
-
-} // namespace
-
-PlaybackController::~PlaybackController()
-{
-    for (auto& thread : enrichment_threads_) {
-        if (thread.joinable()) {
-            thread.join();
-        }
-    }
-}
 
 void PlaybackController::setServices(RuntimeServices services)
 {
     services_ = std::move(services);
+    enrichment_.setServices(services_);
 }
 
 const PlaybackSession& PlaybackController::session() const noexcept
@@ -51,7 +29,7 @@ PlaybackSession& PlaybackController::mutableSession() noexcept
 
 void PlaybackController::update(double delta_seconds, LibraryController& library_controller)
 {
-    applyPendingEnrichments(library_controller);
+    enrichment_.applyPending(library_controller, session_);
     if (session_.status == PlaybackStatus::Playing) {
         session_.elapsed_seconds += std::max(0.0, delta_seconds);
     }
@@ -90,7 +68,7 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     ++track->play_count;
     track->last_played = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-    requestEnrichment(*track);
+    enrichment_.request(*track);
     return true;
 }
 
@@ -241,91 +219,7 @@ void PlaybackController::refreshMetadata(LibraryController& library_controller, 
     }
 
     const auto metadata = services_.metadata.metadata_provider->read(track->path, mode);
-    applyMetadataToTrack(*track, metadata);
-}
-
-void PlaybackController::requestEnrichment(const TrackRecord& track)
-{
-    const auto services_snapshot = services_;
-    const int track_id = track.id;
-    const std::filesystem::path path = track.path;
-    const TrackMetadata seed_metadata = metadataFromTrack(track);
-    const std::uint64_t generation = ++enrichment_generation_;
-
-    enrichment_threads_.emplace_back([this, services_snapshot, track_id, path, seed_metadata, generation]() {
-        PlaybackEnrichmentResult result{};
-        result.track_id = track_id;
-        result.path = path;
-        result.generation = generation;
-        result.metadata = services_snapshot.metadata.metadata_provider->read(path, MetadataReadMode::AllowOnline);
-
-        TrackMetadata lyrics_metadata = seed_metadata;
-        if (result.metadata.title) lyrics_metadata.title = result.metadata.title;
-        if (result.metadata.artist) lyrics_metadata.artist = result.metadata.artist;
-        if (result.metadata.album) lyrics_metadata.album = result.metadata.album;
-        if (result.metadata.genre) lyrics_metadata.genre = result.metadata.genre;
-        if (result.metadata.composer) lyrics_metadata.composer = result.metadata.composer;
-        if (result.metadata.duration_seconds) lyrics_metadata.duration_seconds = result.metadata.duration_seconds;
-
-        result.artwork = services_snapshot.metadata.artwork_provider->read(path);
-        result.lyrics = services_snapshot.metadata.lyrics_provider->fetch(path, lyrics_metadata);
-
-        std::lock_guard lock(enrichment_mutex_);
-        pending_enrichments_.push_back(std::move(result));
-    });
-}
-
-void PlaybackController::applyPendingEnrichments(LibraryController& library_controller)
-{
-    std::vector<PlaybackEnrichmentResult> results{};
-    {
-        std::lock_guard lock(enrichment_mutex_);
-        results.swap(pending_enrichments_);
-    }
-
-    for (auto& result : results) {
-        auto* track = library_controller.findMutableTrack(result.track_id);
-        if (!track || track->path != result.path) {
-            continue;
-        }
-
-        applyMetadataToTrack(*track, result.metadata);
-
-        if (!session_.current_track_id || *session_.current_track_id != result.track_id) {
-            continue;
-        }
-        if (result.generation != enrichment_generation_) {
-            continue;
-        }
-
-        if (result.artwork) {
-            session_.current_artwork = std::move(result.artwork);
-        }
-        session_.current_lyrics = std::move(result.lyrics);
-        session_.lyrics_lookup_pending = false;
-    }
-}
-
-TrackMetadata PlaybackController::metadataFromTrack(const TrackRecord& track)
-{
-    TrackMetadata metadata{};
-    metadata.title = track.title;
-    metadata.artist = track.artist;
-    metadata.album = track.album;
-    metadata.genre = track.genre;
-    metadata.composer = track.composer;
-    metadata.duration_seconds = track.duration_seconds;
-    return metadata;
-}
-
-void PlaybackController::applyMetadataToTrack(TrackRecord& track, const TrackMetadata& metadata)
-{
-    if (metadata.title) track.title = metadataOrCurrent(metadata.title, track.title);
-    if (metadata.artist) track.artist = metadataOrCurrent(metadata.artist, track.artist);
-    if (metadata.album) track.album = metadataOrCurrent(metadata.album, track.album);
-    if (metadata.genre) track.genre = metadataOrCurrent(metadata.genre, track.genre);
-    if (metadata.composer) track.composer = metadataOrCurrent(metadata.composer, track.composer);
-    if (metadata.duration_seconds) track.duration_seconds = *metadata.duration_seconds;
+    PlaybackEnrichmentCoordinator::applyMetadataToTrack(*track, metadata);
 }
 
 void PlaybackController::synchronizeBackendState(LibraryController& library_controller)

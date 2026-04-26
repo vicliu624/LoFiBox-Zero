@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "platform/host/lyrics_pipeline_components.h"
 #include "platform/host/runtime_enrichment_clients.h"
 #include "platform/host/runtime_logger.h"
 
@@ -18,8 +19,6 @@ namespace fs = std::filesystem;
 namespace lofibox::platform::host {
 namespace {
 using namespace runtime_detail;
-
-constexpr int kLyricsLookupVersion = 5;
 
 [[nodiscard]] bool lrcTimestampStartsAt(std::string_view value, std::size_t index)
 {
@@ -173,7 +172,7 @@ constexpr int kLyricsLookupVersion = 5;
     return false;
 }
 
-[[nodiscard]] bool embeddedLyricsLookMismatched(
+bool embeddedLyricsLookMismatched(
     const app::TrackLyrics& lyrics,
     const fs::path& path,
     const app::TrackMetadata& metadata)
@@ -381,7 +380,7 @@ private:
     std::optional<fs::path> python_path_{};
 };
 
-class OnlineLyricsProviderChain final {
+class OnlineLyricsResolver final {
 public:
     [[nodiscard]] bool available() const
     {
@@ -431,12 +430,12 @@ public:
 
     [[nodiscard]] bool available() const override
     {
-        return online_lyrics_chain_.available();
+        return online_lyrics_resolver_.available();
     }
 
     [[nodiscard]] std::string displayName() const override
     {
-        return "Embedded + " + online_lyrics_chain_.displayName();
+        return "Embedded + " + online_lyrics_resolver_.displayName();
     }
 
     [[nodiscard]] app::TrackLyrics fetch(const fs::path& path, const app::TrackMetadata& metadata) const override
@@ -457,21 +456,18 @@ public:
                 logRuntime(RuntimeLogLevel::Warn, "lyrics", "Embedded lyrics rejected as mismatched for " + pathUtf8String(path));
             } else {
                 entry.lyrics = embedded_lyrics;
-                storeLyricsCache(*cache_, key, entry.lyrics);
+                lyrics_cache_.storeHit(*cache_, key, entry);
                 logRuntime(RuntimeLogLevel::Debug, "lyrics", "Embedded lyrics hit for " + pathUtf8String(path));
                 return entry.lyrics;
             }
         }
 
-        if (!entry.online_lyrics_attempted && entry.lyrics_lookup_version >= kLyricsLookupVersion && fs::exists(lyricsCachePath(*cache_, key))) {
-            entry.lyrics = loadLyricsCache(*cache_, key);
-        }
-        if (entry.lyrics.plain || entry.lyrics.synced) {
+        if (lyrics_cache_.loadCurrentCachedLyrics(*cache_, key, entry)) {
             return entry.lyrics;
         }
 
         const bool lyrics_lookup_current = entry.online_lyrics_attempted && entry.lyrics_lookup_version >= kLyricsLookupVersion;
-        if (!online_lyrics_chain_.available() || !connectivity_ || !connectivity_->connected() || lyrics_lookup_current) {
+        if (!online_lyrics_resolver_.available() || !connectivity_ || !connectivity_->connected() || lyrics_lookup_current) {
             if (lyrics_lookup_current) {
                 logRuntime(RuntimeLogLevel::Debug, "lyrics", "Online lyrics skipped; current miss cache for " + pathUtf8String(path));
             }
@@ -492,13 +488,11 @@ public:
             }
         }
 
-        entry.lyrics = online_lyrics_chain_.fetch(path, lyrics_metadata);
+        entry.lyrics = online_lyrics_resolver_.fetch(path, lyrics_metadata);
 
-        entry.online_lyrics_attempted = true;
-        entry.lyrics_lookup_version = kLyricsLookupVersion;
-        storeMetadataCache(*cache_, key, entry);
+        lyrics_cache_.storeLookupAttempt(*cache_, key, entry);
         if (entry.lyrics.plain || entry.lyrics.synced) {
-            storeLyricsCache(*cache_, key, entry.lyrics);
+            lyrics_cache_.storeHit(*cache_, key, entry);
             logRuntime(RuntimeLogLevel::Info, "lyrics", "Online lyrics hit for " + pathUtf8String(path));
             if (tag_writer_ && tag_writer_->available()) {
                 app::TagWriteRequest request{};
@@ -506,8 +500,8 @@ public:
                 if (identity.found) {
                     request.identity = identity;
                 }
-                request.only_fill_missing = !embedded_lyrics_rejected;
-                if (entry.lyrics.source == "LRCLIB") {
+                request.only_fill_missing = writeback_policy_.shouldOnlyFillMissing(embedded_lyrics_rejected);
+                if (writeback_policy_.shouldWrite(entry.lyrics)) {
                     if (tag_writer_->write(path, request)) {
                         logRuntime(RuntimeLogLevel::Info, "lyrics", "Wrote lyrics back to file: " + pathUtf8String(path));
                     } else {
@@ -530,7 +524,9 @@ private:
     std::shared_ptr<app::TagWriter> tag_writer_{};
     std::shared_ptr<app::TrackIdentityProvider> track_identity_provider_{};
     EmbeddedLyricsReader embedded_reader_{};
-    OnlineLyricsProviderChain online_lyrics_chain_{};
+    OnlineLyricsResolver online_lyrics_resolver_{};
+    LyricsCache lyrics_cache_{};
+    LyricsWritebackPolicy writeback_policy_{};
 };
 
 } // namespace

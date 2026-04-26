@@ -60,6 +60,42 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/app/playback_controller.cpp" -or $repoPath -eq "src/app/playback_controller.h") {
+            if ($line -match '\bstd::thread\b|\bstd::mutex\b|pending_enrichment|enrichment_threads|requestEnrichment|applyPendingEnrichments') {
+                Add-Violation $violations $repoPath $lineNumber "playback enrichment ownership" "PlaybackController must own playback state/queue semantics only; asynchronous enrichment belongs to PlaybackEnrichmentCoordinator"
+            }
+        }
+
+        if ($repoPath -eq "src/platform/host/runtime_enrichment_clients.cpp") {
+            if ($line -match '\b(AcoustIdIdentityClient|MusicBrainzMetadataClient|CoverArtArchiveClient|LrclibClient|LyricsOvhClient|FfprobeMetadataReader)::') {
+                Add-Violation $violations $repoPath $lineNumber "enrichment protocol client" "runtime_enrichment_clients.cpp must stay shared helper/orchestration code; concrete protocol clients live in dedicated files"
+            }
+        }
+
+        if ($repoPath -eq "src/platform/host/lyrics_provider.cpp") {
+            if ($line -match 'class\s+LyricsCache|class\s+LyricsWritebackPolicy') {
+                Add-Violation $violations $repoPath $lineNumber "lyrics pipeline component" "LyricsProvider must compose lyrics pipeline components instead of owning cache/writeback policy internals"
+            }
+        }
+
+        if ($repoPath -eq "src/app/app_renderer.cpp") {
+            if ($line -match '\b(toUiSpectrumFrame|toUiLyricsContent|toUiPlaybackStatus|toUiIndexState|playbackSummary|emptyLabelForPage|formatStorage)\b') {
+                Add-Violation $violations $repoPath $lineNumber "projection builder ownership" "AppRenderer must dispatch pages only; app-state to UI projection belongs to AppProjectionBuilder"
+            }
+        }
+
+        if ($repoPath -eq "src/app/library_controller.cpp") {
+            if ($line -match 'case\s+AppPage::|case\s+\d+\s*:') {
+                Add-Violation $violations $repoPath $lineNumber "library open action ownership" "LibraryController must not own list-open branching; delegate open-action semantics to LibraryOpenActionResolver"
+            }
+        }
+
+        if ($repoPath -eq "src/ui/pages/lyrics_page.cpp") {
+            if ($line -match '^\s*(void|int|std::optional|std::vector<|struct)\s+(renderFoamSide|renderSideFoamSpectrum|parseLyricTimestamp|lyricDisplayLines|activeLyricIndex|LyricDisplayLine)\b|struct\s+LyricDisplayLine') {
+                Add-Violation $violations $repoPath $lineNumber "lyrics page algorithm ownership" "LyricsPage must compose layout/effect widgets; lyric parsing and spectrum algorithms belong to ui/widgets or ui/effects"
+            }
+        }
+
         if ($line -match '\bservices(_snapshot|_)?\.(metadata_provider|track_identity_provider|artwork_provider|audio_playback_backend|lyrics_provider|tag_writer|connectivity_provider|remote_source_provider|remote_catalog_provider|remote_stream_resolver)\b') {
             Add-Violation $violations $repoPath $lineNumber "runtime service grouping" "Runtime services must be accessed through capability groups: connectivity, metadata, playback, or remote"
         }

@@ -38,18 +38,25 @@ add_library(lofibox_zero_core STATIC
     src/app/app_lifecycle.cpp
     src/app/app_input_router.cpp
     src/app/app_page_model.cpp
+    src/app/app_projection_builder.cpp
     src/app/app_renderer.cpp
     src/app/app_runtime_context.cpp
     src/app/library_controller.cpp
+    src/app/library_navigation_service.cpp
+    src/app/library_open_action_resolver.cpp
+    src/app/library_query_service.cpp
     src/app/library_scanner.cpp
     src/app/lofibox_app.cpp
     src/app/lofibox_app_runner.cpp
+    src/app/playback_enrichment_coordinator.cpp
     src/ui/pages/about_page.cpp
     src/ui/pages/equalizer_page.cpp
     src/ui/pages/list_page.cpp
     src/ui/pages/lyrics_page.cpp
     src/ui/pages/main_menu_page.cpp
     src/ui/pages/now_playing_page.cpp
+    src/ui/effects/lyrics_spectrum_effect.cpp
+    src/ui/widgets/lyrics_layout.cpp
     src/app/playback_controller.cpp
     src/app/runtime_services.cpp
     src/ui/ui_primitives.cpp
@@ -77,17 +84,24 @@ else()
 endif()
 
 add_library(lofibox_zero_host_runtime STATIC
+    src/platform/host/acoustid_client.cpp
     src/platform/host/audio_playback_backend.cpp
     src/platform/host/artwork_provider.cpp
     src/platform/host/connectivity_provider.cpp
+    src/platform/host/cover_art_archive_client.cpp
+    src/platform/host/ffprobe_metadata_reader.cpp
     src/platform/host/lyrics_provider.cpp
+    src/platform/host/lyrics_pipeline_components.cpp
+    src/platform/host/lyrics_source_clients.cpp
     src/platform/host/legacy_asset_loader.cpp
     src/platform/host/metadata_provider.cpp
+    src/platform/host/musicbrainz_client.cpp
     src/platform/host/png_canvas_loader.cpp
     src/platform/host/remote_media_runtime.cpp
     src/platform/host/runtime_cache_store.cpp
     src/platform/host/runtime_enrichment_clients.cpp
     src/platform/host/runtime_host_internal.cpp
+    src/platform/host/runtime_host_tools.cpp
     src/platform/host/runtime_logger.cpp
     src/platform/host/runtime_paths.cpp
     src/platform/host/runtime_process.cpp
