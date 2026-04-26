@@ -51,6 +51,9 @@ add_library(lofibox_zero_core STATIC
     src/app/library_scanner.cpp
     src/app/lofibox_app.cpp
     src/app/lofibox_app_runner.cpp
+    src/app/media_item.cpp
+    src/app/media_search_service.cpp
+    src/app/mixed_playback_queue.cpp
     src/app/playback_enrichment_coordinator.cpp
     src/app/playback_backend_controller.cpp
     src/app/playback_completion_policy.cpp
@@ -294,6 +297,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_library_repository_smoke tests/library_repository_smoke.cpp)
     target_link_libraries(lofibox_library_repository_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_library_repository_smoke COMMAND lofibox_library_repository_smoke)
+
+    add_executable(lofibox_media_search_queue_smoke tests/media_search_queue_smoke.cpp)
+    target_link_libraries(lofibox_media_search_queue_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_media_search_queue_smoke COMMAND lofibox_media_search_queue_smoke)
 
     add_executable(lofibox_audio_pipeline_controller_smoke tests/audio_pipeline_controller_smoke.cpp)
     target_link_libraries(lofibox_audio_pipeline_controller_smoke PRIVATE lofibox_zero_core)

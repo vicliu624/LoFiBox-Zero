@@ -19,6 +19,7 @@ This document is normative for the current C++ implementation.
 - `AudioPipeline`: decoder, PCM frame flow, DSP chain, output sink, and visualization tap.
 - `EnrichmentPipeline`: metadata, artwork, lyrics, identity, confidence, cache, and writeback decisions.
 - `LibraryFact`: indexed tracks, albums, artists, playlists, source mapping, scan generations, play counts, and recently-played facts.
+- `MediaItem`: unified local, URL, radio, and remote-server playable item identity used by search and mixed queues.
 - `UiProjection`: page, widget, desktop, and device-facing render/control models derived from product facts.
 - `RuntimeShell`: Linux host, device profile, desktop, container, VNC, or PocketFrame shell. Runtime shells adapt input/output; they do not redefine product facts.
 - `RuntimeServiceProvider`: host-side construction of service groups before they enter the shared app as injected capabilities.
@@ -91,6 +92,7 @@ Every source must eventually define configuration, authentication, connection li
 - Metadata enrichment must distinguish lookup, acceptance, cache, and writeback.
 - Existing embedded metadata must not be overwritten by weaker online evidence.
 - Library facts must survive UI navigation changes.
+- Search and queue semantics must operate on `MediaItem` values so local and remote content can be mixed without teaching playback or UI about provider internals.
 - Runtime paths must follow XDG and must not write user state into install directories.
 - Debian package validation must remain green after core boundary work.
 
