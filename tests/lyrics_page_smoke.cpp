@@ -49,7 +49,7 @@ int main()
     touchFile(root / "lyrics-track.mp3");
 
     lofibox::app::RuntimeServices services{};
-    services.lyrics_provider = std::make_shared<FixedLyricsProvider>();
+    services.metadata.lyrics_provider = std::make_shared<FixedLyricsProvider>();
 
     lofibox::app::LoFiBoxApp app{{root}, {}, std::move(services)};
     app.update();

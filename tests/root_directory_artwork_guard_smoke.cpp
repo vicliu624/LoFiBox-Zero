@@ -98,7 +98,7 @@ int main()
 #endif
 
     auto services = lofibox::platform::host::createHostRuntimeServices();
-    const auto artwork = services.artwork_provider->read(audio_path);
+    const auto artwork = services.metadata.artwork_provider->read(audio_path);
 
 #if defined(_WIN32)
     if (original_root.has_value()) {

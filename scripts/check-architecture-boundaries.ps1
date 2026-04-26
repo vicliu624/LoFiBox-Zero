@@ -60,6 +60,10 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($line -match '\bservices(_snapshot|_)?\.(metadata_provider|track_identity_provider|artwork_provider|audio_playback_backend|lyrics_provider|tag_writer|connectivity_provider|remote_source_provider|remote_catalog_provider|remote_stream_resolver)\b') {
+            Add-Violation $violations $repoPath $lineNumber "runtime service grouping" "Runtime services must be accessed through capability groups: connectivity, metadata, playback, or remote"
+        }
+
         if ($line -notmatch $includeRegex) {
             continue
         }

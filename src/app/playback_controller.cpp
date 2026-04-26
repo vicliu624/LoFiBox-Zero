@@ -86,7 +86,7 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     session_.visualization_frame = {};
     refreshMetadata(library_controller, MetadataReadMode::LocalOnly);
     refreshArtwork(library_controller, ArtworkReadMode::LocalOnly);
-    session_.audio_active = services_.audio_playback_backend->playFile(track->path, 0.0);
+    session_.audio_active = services_.playback.audio_backend->playFile(track->path, 0.0);
     ++track->play_count;
     track->last_played = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -112,8 +112,8 @@ void PlaybackController::stepQueue(LibraryController& library_controller, int de
 void PlaybackController::pause() noexcept
 {
     if (session_.status == PlaybackStatus::Playing) {
-        if (services_.audio_playback_backend) {
-            services_.audio_playback_backend->pause();
+        if (services_.playback.audio_backend) {
+            services_.playback.audio_backend->pause();
         }
         session_.status = PlaybackStatus::Paused;
     }
@@ -122,8 +122,8 @@ void PlaybackController::pause() noexcept
 void PlaybackController::resume() noexcept
 {
     if (session_.status == PlaybackStatus::Paused) {
-        if (services_.audio_playback_backend) {
-            services_.audio_playback_backend->resume();
+        if (services_.playback.audio_backend) {
+            services_.playback.audio_backend->resume();
         }
         session_.status = PlaybackStatus::Playing;
     }
@@ -226,7 +226,7 @@ void PlaybackController::refreshArtwork(const LibraryController& library_control
         return;
     }
     if (const auto* track = library_controller.findTrack(*session_.current_track_id)) {
-        session_.current_artwork = services_.artwork_provider->read(track->path, mode);
+        session_.current_artwork = services_.metadata.artwork_provider->read(track->path, mode);
     }
 }
 
@@ -240,7 +240,7 @@ void PlaybackController::refreshMetadata(LibraryController& library_controller, 
         return;
     }
 
-    const auto metadata = services_.metadata_provider->read(track->path, mode);
+    const auto metadata = services_.metadata.metadata_provider->read(track->path, mode);
     applyMetadataToTrack(*track, metadata);
 }
 
@@ -257,7 +257,7 @@ void PlaybackController::requestEnrichment(const TrackRecord& track)
         result.track_id = track_id;
         result.path = path;
         result.generation = generation;
-        result.metadata = services_snapshot.metadata_provider->read(path, MetadataReadMode::AllowOnline);
+        result.metadata = services_snapshot.metadata.metadata_provider->read(path, MetadataReadMode::AllowOnline);
 
         TrackMetadata lyrics_metadata = seed_metadata;
         if (result.metadata.title) lyrics_metadata.title = result.metadata.title;
@@ -267,8 +267,8 @@ void PlaybackController::requestEnrichment(const TrackRecord& track)
         if (result.metadata.composer) lyrics_metadata.composer = result.metadata.composer;
         if (result.metadata.duration_seconds) lyrics_metadata.duration_seconds = result.metadata.duration_seconds;
 
-        result.artwork = services_snapshot.artwork_provider->read(path);
-        result.lyrics = services_snapshot.lyrics_provider->fetch(path, lyrics_metadata);
+        result.artwork = services_snapshot.metadata.artwork_provider->read(path);
+        result.lyrics = services_snapshot.metadata.lyrics_provider->fetch(path, lyrics_metadata);
 
         std::lock_guard lock(enrichment_mutex_);
         pending_enrichments_.push_back(std::move(result));
@@ -330,11 +330,11 @@ void PlaybackController::applyMetadataToTrack(TrackRecord& track, const TrackMet
 
 void PlaybackController::synchronizeBackendState(LibraryController& library_controller)
 {
-    if (!session_.audio_active || !services_.audio_playback_backend) {
+    if (!session_.audio_active || !services_.playback.audio_backend) {
         return;
     }
 
-    switch (services_.audio_playback_backend->state()) {
+    switch (services_.playback.audio_backend->state()) {
     case AudioPlaybackState::Finished:
         if (advanceAfterFinish(library_controller)) {
             return;
@@ -363,11 +363,11 @@ void PlaybackController::synchronizeBackendState(LibraryController& library_cont
 
 void PlaybackController::updateVisualizationFrame()
 {
-    if (!services_.audio_playback_backend) {
+    if (!services_.playback.audio_backend) {
         session_.visualization_frame = {};
         return;
     }
-    session_.visualization_frame = services_.audio_playback_backend->visualizationFrame();
+    session_.visualization_frame = services_.playback.audio_backend->visualizationFrame();
 }
 
 } // namespace lofibox::app

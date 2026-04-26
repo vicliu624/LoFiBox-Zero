@@ -68,14 +68,14 @@ bool AppRuntimeContext::bootAnimationComplete() const
 
 void AppRuntimeContext::refreshNetworkStatus()
 {
-    state_.network.connected = services_.connectivity_provider->connected();
+    state_.network.connected = services_.connectivity.provider->connected();
     state_.network.status_message = state_.network.connected ? "ONLINE" : "OFFLINE";
 }
 
 void AppRuntimeContext::refreshMetadataServiceState()
 {
-    state_.metadata_service.available = services_.metadata_provider->available();
-    state_.metadata_service.display_name = services_.metadata_provider->displayName();
+    state_.metadata_service.available = services_.metadata.metadata_provider->available();
+    state_.metadata_service.display_name = services_.metadata.metadata_provider->displayName();
     state_.metadata_service.status = !state_.metadata_service.available ? "UNAVAILABLE" : (state_.network.connected ? "ONLINE" : "OFFLINE");
 }
 
@@ -162,7 +162,7 @@ void AppRuntimeContext::startLibraryLoading()
 
 void AppRuntimeContext::refreshLibrary()
 {
-    controllers_.library.refreshLibrary(state_.media_roots, *services_.metadata_provider);
+    controllers_.library.refreshLibrary(state_.media_roots, *services_.metadata.metadata_provider);
 }
 
 void AppRuntimeContext::showMainMenu()

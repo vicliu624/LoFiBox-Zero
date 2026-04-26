@@ -88,35 +88,35 @@ std::shared_ptr<T> makeNullShared()
 
 RuntimeServices withNullRuntimeServices(RuntimeServices services)
 {
-    if (!services.metadata_provider) {
-        services.metadata_provider = makeNullShared<NullMetadataProvider>();
+    if (!services.connectivity.provider) {
+        services.connectivity.provider = makeNullShared<NullConnectivityProvider>();
     }
-    if (!services.track_identity_provider) {
-        services.track_identity_provider = makeNullShared<NullTrackIdentityProvider>();
+    if (!services.metadata.metadata_provider) {
+        services.metadata.metadata_provider = makeNullShared<NullMetadataProvider>();
     }
-    if (!services.artwork_provider) {
-        services.artwork_provider = makeNullShared<NullArtworkProvider>();
+    if (!services.metadata.track_identity_provider) {
+        services.metadata.track_identity_provider = makeNullShared<NullTrackIdentityProvider>();
     }
-    if (!services.audio_playback_backend) {
-        services.audio_playback_backend = makeNullShared<NullAudioPlaybackBackend>();
+    if (!services.metadata.artwork_provider) {
+        services.metadata.artwork_provider = makeNullShared<NullArtworkProvider>();
     }
-    if (!services.lyrics_provider) {
-        services.lyrics_provider = makeNullShared<NullLyricsProvider>();
+    if (!services.metadata.lyrics_provider) {
+        services.metadata.lyrics_provider = makeNullShared<NullLyricsProvider>();
     }
-    if (!services.tag_writer) {
-        services.tag_writer = makeNullShared<NullTagWriter>();
+    if (!services.metadata.tag_writer) {
+        services.metadata.tag_writer = makeNullShared<NullTagWriter>();
     }
-    if (!services.connectivity_provider) {
-        services.connectivity_provider = makeNullShared<NullConnectivityProvider>();
+    if (!services.playback.audio_backend) {
+        services.playback.audio_backend = makeNullShared<NullAudioPlaybackBackend>();
     }
-    if (!services.remote_source_provider) {
-        services.remote_source_provider = makeNullShared<NullRemoteSourceProvider>();
+    if (!services.remote.remote_source_provider) {
+        services.remote.remote_source_provider = makeNullShared<NullRemoteSourceProvider>();
     }
-    if (!services.remote_catalog_provider) {
-        services.remote_catalog_provider = makeNullShared<NullRemoteCatalogProvider>();
+    if (!services.remote.remote_catalog_provider) {
+        services.remote.remote_catalog_provider = makeNullShared<NullRemoteCatalogProvider>();
     }
-    if (!services.remote_stream_resolver) {
-        services.remote_stream_resolver = makeNullShared<NullRemoteStreamResolver>();
+    if (!services.remote.remote_stream_resolver) {
+        services.remote.remote_stream_resolver = makeNullShared<NullRemoteStreamResolver>();
     }
     return services;
 }

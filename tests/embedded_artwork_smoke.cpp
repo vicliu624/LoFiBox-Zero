@@ -69,13 +69,13 @@ int main()
     }
 
     auto services = lofibox::platform::host::createHostRuntimeServices();
-    if (!services.artwork_provider->available()) {
+    if (!services.metadata.artwork_provider->available()) {
         std::cout << "artwork provider unavailable; skipping artwork smoke.\n";
         fs::remove_all(root, ec);
         return 0;
     }
 
-    const auto artwork = services.artwork_provider->read(audio_path);
+    const auto artwork = services.metadata.artwork_provider->read(audio_path);
     if (!artwork.has_value()) {
         std::cerr << "Expected embedded artwork to be extracted.\n";
         fs::remove_all(root, ec);

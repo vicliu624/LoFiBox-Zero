@@ -71,13 +71,13 @@ int main()
     }
 
     auto services = lofibox::platform::host::createHostRuntimeServices();
-    if (!services.metadata_provider->available()) {
+    if (!services.metadata.metadata_provider->available()) {
         std::cout << "metadata provider unavailable; skipping metadata smoke.\n";
         fs::remove_all(root, ec);
         return 0;
     }
 
-    const auto metadata = services.metadata_provider->read(audio_path);
+    const auto metadata = services.metadata.metadata_provider->read(audio_path);
     if (!metadata.title || *metadata.title != "Test Title") {
         std::cerr << "Expected title metadata.\n";
         fs::remove_all(root, ec);
@@ -172,7 +172,7 @@ int main()
     if (!test_media_fixture::runCommand(*ffmpeg_path, ogg_args) || !fs::exists(ogg_path)) {
         std::cout << "Failed to generate Ogg fixture; skipping Ogg metadata assertion.\n";
     } else {
-        const auto ogg_metadata = services.metadata_provider->read(ogg_path);
+        const auto ogg_metadata = services.metadata.metadata_provider->read(ogg_path);
         if (!ogg_metadata.title || *ogg_metadata.title != "Ogg Title") {
             std::cerr << "Expected Ogg stream title metadata.\n";
             fs::remove_all(root, ec);

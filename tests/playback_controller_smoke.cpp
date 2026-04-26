@@ -101,10 +101,10 @@ int main()
 
     auto services = lofibox::app::withNullRuntimeServices();
     auto backend = std::make_shared<FinishingAudioBackend>();
-    services.audio_playback_backend = backend;
+    services.playback.audio_backend = backend;
     lofibox::app::LibraryController library{};
     library.startLoading();
-    library.refreshLibrary({root}, *services.metadata_provider);
+    library.refreshLibrary({root}, *services.metadata.metadata_provider);
     library.setSongsContextAll();
 
     const auto ids = library.trackIdsForCurrentSongs();
@@ -265,7 +265,7 @@ int main()
 
     auto race_services = lofibox::app::withNullRuntimeServices();
     auto race_backend = std::make_shared<FinishOnSecondPollBackend>();
-    race_services.audio_playback_backend = race_backend;
+    race_services.playback.audio_backend = race_backend;
     lofibox::app::PlaybackController race_playback{};
     race_playback.setServices(race_services);
     library.setSongsContextAll();
@@ -286,7 +286,7 @@ int main()
 
     auto failed_services = lofibox::app::withNullRuntimeServices();
     auto failed_backend = std::make_shared<FailedAudioBackend>();
-    failed_services.audio_playback_backend = failed_backend;
+    failed_services.playback.audio_backend = failed_backend;
     lofibox::app::PlaybackController failed_playback{};
     failed_playback.setServices(failed_services);
     if (!failed_playback.startTrack(library, ids.front())) {

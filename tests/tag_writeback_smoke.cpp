@@ -83,7 +83,7 @@ int main()
     }
 
     auto services = lofibox::platform::host::createHostRuntimeServices();
-    if (!services.tag_writer->available()) {
+    if (!services.metadata.tag_writer->available()) {
         std::cout << "tag writer unavailable; skipping writeback smoke.\n";
         fs::remove_all(root, ec);
         return 0;
@@ -110,13 +110,13 @@ int main()
     request.lyrics->synced = "[00:01.00]Writeback first line\n[00:02.00]Writeback second line";
     request.lyrics->source = "TEST";
 
-    if (!services.tag_writer->write(audio_path, request)) {
+    if (!services.metadata.tag_writer->write(audio_path, request)) {
         std::cerr << "Expected tag writer to write metadata back to file.\n";
         fs::remove_all(root, ec);
         return 1;
     }
 
-    const auto metadata = services.metadata_provider->read(audio_path);
+    const auto metadata = services.metadata.metadata_provider->read(audio_path);
     if (!metadata.title || *metadata.title != "Writeback Title") {
         std::cerr << "Expected written title metadata.\n";
         fs::remove_all(root, ec);
@@ -133,7 +133,7 @@ int main()
         return 1;
     }
 
-    const auto artwork = services.artwork_provider->read(audio_path);
+    const auto artwork = services.metadata.artwork_provider->read(audio_path);
     if (!artwork.has_value()) {
         std::cerr << "Expected written artwork to be readable.\n";
         fs::remove_all(root, ec);
@@ -164,7 +164,7 @@ int main()
         return 1;
     }
 
-    const auto readback_lyrics = services.lyrics_provider->fetch(audio_path, metadata);
+    const auto readback_lyrics = services.metadata.lyrics_provider->fetch(audio_path, metadata);
     if (!readback_lyrics.plain || readback_lyrics.plain->find("Writeback plain lyrics") == std::string::npos) {
         std::cerr << "Expected lyrics provider to read embedded lyrics back from file tags.\n";
         fs::remove_all(root, ec);
@@ -209,7 +209,7 @@ int main()
         return 1;
     }
 
-    const auto repaired_lyrics = services.lyrics_provider->fetch(collapsed_audio_path, {});
+    const auto repaired_lyrics = services.metadata.lyrics_provider->fetch(collapsed_audio_path, {});
     if (!repaired_lyrics.synced || repaired_lyrics.synced->find("line\n[00:02.00]") == std::string::npos) {
         std::cerr << "Expected embedded lyrics reader to repair collapsed LRC line breaks.\n";
         fs::remove_all(root, ec);

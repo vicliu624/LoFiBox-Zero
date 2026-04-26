@@ -135,9 +135,9 @@ server.serve_forever()
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
     auto services = lofibox::platform::host::createHostRuntimeServices();
-    if (!services.remote_source_provider->available()
-        || !services.remote_catalog_provider->available()
-        || !services.remote_stream_resolver->available()) {
+    if (!services.remote.remote_source_provider->available()
+        || !services.remote.remote_catalog_provider->available()
+        || !services.remote.remote_stream_resolver->available()) {
         std::cerr << "Expected remote media capabilities to be available.\n";
         fs::remove_all(root, ec);
         return 1;
@@ -145,17 +145,17 @@ server.serve_forever()
 
     const auto jellyfin_profile = lofibox::app::RemoteServerProfile{
         lofibox::app::RemoteServerKind::Jellyfin, "jf", "Jellyfin", "http://127.0.0.1:" + std::to_string(port), "user", "pass", ""};
-    const auto jf_session = services.remote_source_provider->probe(jellyfin_profile);
+    const auto jf_session = services.remote.remote_source_provider->probe(jellyfin_profile);
     if (!jf_session.available || jf_session.access_token.empty()) {
         std::cerr << "Expected Jellyfin probe to succeed.\n";
         return 1;
     }
-    const auto jf_tracks = services.remote_catalog_provider->searchTracks(jellyfin_profile, jf_session, "Song", 5);
+    const auto jf_tracks = services.remote.remote_catalog_provider->searchTracks(jellyfin_profile, jf_session, "Song", 5);
     if (jf_tracks.empty() || jf_tracks.front().id != "trk1") {
         std::cerr << "Expected Jellyfin search to return a track.\n";
         return 1;
     }
-    const auto jf_stream = services.remote_stream_resolver->resolveTrack(jellyfin_profile, jf_session, jf_tracks.front());
+    const auto jf_stream = services.remote.remote_stream_resolver->resolveTrack(jellyfin_profile, jf_session, jf_tracks.front());
     if (!jf_stream || jf_stream->url.find("/Audio/trk1/stream") == std::string::npos) {
         std::cerr << "Expected Jellyfin resolver to build stream URL.\n";
         return 1;
@@ -163,17 +163,17 @@ server.serve_forever()
 
     const auto subsonic_profile = lofibox::app::RemoteServerProfile{
         lofibox::app::RemoteServerKind::OpenSubsonic, "sub", "Navidrome", "http://127.0.0.1:" + std::to_string(port), "user", "pass", ""};
-    const auto sub_session = services.remote_source_provider->probe(subsonic_profile);
+    const auto sub_session = services.remote.remote_source_provider->probe(subsonic_profile);
     if (!sub_session.available) {
         std::cerr << "Expected OpenSubsonic probe to succeed.\n";
         return 1;
     }
-    const auto sub_tracks = services.remote_catalog_provider->searchTracks(subsonic_profile, sub_session, "Song", 5);
+    const auto sub_tracks = services.remote.remote_catalog_provider->searchTracks(subsonic_profile, sub_session, "Song", 5);
     if (sub_tracks.empty() || sub_tracks.front().id != "trk2") {
         std::cerr << "Expected OpenSubsonic search to return a track.\n";
         return 1;
     }
-    const auto sub_stream = services.remote_stream_resolver->resolveTrack(subsonic_profile, sub_session, sub_tracks.front());
+    const auto sub_stream = services.remote.remote_stream_resolver->resolveTrack(subsonic_profile, sub_session, sub_tracks.front());
     if (!sub_stream || sub_stream->url.find("/rest/stream.view") == std::string::npos) {
         std::cerr << "Expected OpenSubsonic resolver to build stream URL.\n";
         return 1;
@@ -181,17 +181,17 @@ server.serve_forever()
 
     const auto emby_profile = lofibox::app::RemoteServerProfile{
         lofibox::app::RemoteServerKind::Emby, "emb", "Emby", "http://127.0.0.1:" + std::to_string(port), "user", "pass", ""};
-    const auto emby_session = services.remote_source_provider->probe(emby_profile);
+    const auto emby_session = services.remote.remote_source_provider->probe(emby_profile);
     if (!emby_session.available || emby_session.access_token.empty()) {
         std::cerr << "Expected Emby probe to succeed.\n";
         return 1;
     }
-    const auto emby_tracks = services.remote_catalog_provider->searchTracks(emby_profile, emby_session, "Song", 5);
+    const auto emby_tracks = services.remote.remote_catalog_provider->searchTracks(emby_profile, emby_session, "Song", 5);
     if (emby_tracks.empty() || emby_tracks.front().id != "trk1") {
         std::cerr << "Expected Emby search to return a track.\n";
         return 1;
     }
-    const auto emby_stream = services.remote_stream_resolver->resolveTrack(emby_profile, emby_session, emby_tracks.front());
+    const auto emby_stream = services.remote.remote_stream_resolver->resolveTrack(emby_profile, emby_session, emby_tracks.front());
     if (!emby_stream || emby_stream->url.find("/Audio/trk1/stream.mp3") == std::string::npos) {
         std::cerr << "Expected Emby resolver to build stream URL.\n";
         return 1;

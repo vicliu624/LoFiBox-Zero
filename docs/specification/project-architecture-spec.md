@@ -153,6 +153,7 @@ Any future visual or input validation must go through a real Linux product targe
 - `src/app/app_lifecycle.*` owns application tick ordering: runtime status refresh, media-library loading, boot-page transition, and playback update; `LoFiBoxApp` delegates `update()` through a narrow lifecycle target interface.
 - `src/app/app_runtime_context.*` owns runtime state, runtime services, controllers, and the target-interface implementations used by input routing, render routing, lifecycle, and command execution; `LoFiBoxApp` must remain a thin public facade and must not directly include app state, controllers, page model, render router, input router, lifecycle, or command executor headers.
 - `src/app/app_runtime_state.*` owns scalar/session runtime state; `src/app/app_controller_set.*` owns app controllers; `AppRuntimeContext` may adapt these objects to target interfaces but must not become a new raw-field aggregate.
+- `src/app/runtime_services.*` owns the runtime capability registry; runtime services must be grouped as connectivity, metadata, playback, and remote capabilities instead of exposing top-level provider fields.
 - `src/playback`, `src/audio`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
 - `src/platform/host` and `src/platform/device` are adapter layers only.
 - `src/targets` must stay thin.
@@ -172,6 +173,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Media-pipeline work must follow `lofibox-zero-media-pipeline-spec.md` before format support is expanded in code.
 - `TrackSource`, `Decoder`, `MetadataProvider`, `DspChain`, and `AudioSink` are valid responsibility boundaries when implementing the real playback stack.
 - `TrackIdentityProvider`, `MetadataProvider`, `ArtworkProvider`, `LyricsProvider`, `AudioPlaybackBackend`, `ConnectivityProvider`, and `TagWriter` are valid responsibility boundaries for host runtime capability work.
+- `RuntimeServiceRegistry`, `ConnectivityServices`, `MetadataServices`, `PlaybackServices`, and `RemoteMediaServices` are valid runtime injection boundaries; new providers must join the correct capability group instead of adding flat global fields.
 - Shared app logic must not instantiate host-specific metadata readers, artwork readers, playback backends, or connectivity probes directly; those implementations must be injected from platform adapter code.
 - Audio-DSP work must follow `lofibox-zero-audio-dsp-spec.md` before EQ surface area or runtime processing behavior is expanded.
 - `EqProfile`, `EqEngine`, `EqManager`, `PresetRepository`, and `OutputDeviceBinding` are valid responsibility boundaries for mature EQ and DSP work.

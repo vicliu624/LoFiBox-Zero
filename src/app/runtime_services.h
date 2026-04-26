@@ -147,18 +147,36 @@ public:
     [[nodiscard]] virtual std::string displayName() const = 0;
 };
 
-struct RuntimeServices {
+struct ConnectivityServices {
+    std::shared_ptr<ConnectivityProvider> provider{};
+};
+
+struct MetadataServices {
     std::shared_ptr<MetadataProvider> metadata_provider{};
     std::shared_ptr<TrackIdentityProvider> track_identity_provider{};
     std::shared_ptr<ArtworkProvider> artwork_provider{};
-    std::shared_ptr<AudioPlaybackBackend> audio_playback_backend{};
     std::shared_ptr<LyricsProvider> lyrics_provider{};
     std::shared_ptr<TagWriter> tag_writer{};
-    std::shared_ptr<ConnectivityProvider> connectivity_provider{};
+};
+
+struct PlaybackServices {
+    std::shared_ptr<AudioPlaybackBackend> audio_backend{};
+};
+
+struct RemoteMediaServices {
     std::shared_ptr<RemoteSourceProvider> remote_source_provider{};
     std::shared_ptr<RemoteCatalogProvider> remote_catalog_provider{};
     std::shared_ptr<RemoteStreamResolver> remote_stream_resolver{};
 };
+
+struct RuntimeServiceRegistry {
+    ConnectivityServices connectivity{};
+    MetadataServices metadata{};
+    PlaybackServices playback{};
+    RemoteMediaServices remote{};
+};
+
+using RuntimeServices = RuntimeServiceRegistry;
 
 [[nodiscard]] RuntimeServices withNullRuntimeServices(RuntimeServices services = {});
 

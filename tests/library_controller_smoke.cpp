@@ -32,7 +32,7 @@ int main()
     auto services = lofibox::app::withNullRuntimeServices();
     lofibox::app::LibraryController controller{};
     controller.startLoading();
-    controller.refreshLibrary({root}, *services.metadata_provider);
+    controller.refreshLibrary({root}, *services.metadata.metadata_provider);
 
     if (controller.state() != lofibox::app::LibraryIndexState::Ready) {
         std::cerr << "Expected controller to scan into Ready state.\n";
