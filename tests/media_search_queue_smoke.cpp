@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "app/media_search_service.h"
-#include "app/mixed_playback_queue.h"
+#include "playback/mixed_playback_queue.h"
 
 #include <cassert>
 
@@ -39,3 +39,4 @@ int main()
     assert(queue.step(-1)->remote_track_id == "r1");
     return 0;
 }
+

@@ -166,6 +166,7 @@ Any future visual or input validation must go through a real Linux product targe
 - `src/ui/widgets/lyrics_layout.*` owns lyric line parsing and active-line/window selection. `src/ui/effects/lyrics_spectrum_effect.*` owns lyrics-page visual spectrum algorithms.
 - `src/platform/host/runtime_host_tools.*` owns named host utility sub-boundaries for text parsing, JSON helpers, cache path derivation, and helper script resolution.
 - `src/playback`, `src/audio`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
+- A semantic source directory must not be an empty aspiration. If a directory exists under `src`, it must contain its implementation contract or implementation files, and `scripts/check-implementation-placement.ps1` must reject hidden implementation elsewhere.
 - `src/platform/host` and `src/platform/device` are adapter layers only.
 - `src/targets` must stay thin.
 - `src/platform/host/single_instance_lock.*` is the host-owned process lifecycle guard for the Linux executable target.

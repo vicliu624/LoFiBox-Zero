@@ -26,6 +26,10 @@ jobs:
         shell: pwsh
         run: scripts/check-architecture-boundaries.ps1
 
+      - name: Check Implementation Placement
+        shell: pwsh
+        run: scripts/check-implementation-placement.ps1
+
       - name: Install Linux Build Dependencies
         run: |
           sudo apt-get update

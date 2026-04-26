@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
 
@@ -6,7 +6,7 @@
 
 #include "app/input_actions.h"
 #include "app/library_model.h"
-#include "app/playback_state.h"
+#include "playback/playback_state.h"
 
 namespace lofibox::desktop {
 
@@ -52,3 +52,4 @@ public:
     const app::TrackRecord* track);
 
 } // namespace lofibox::desktop
+

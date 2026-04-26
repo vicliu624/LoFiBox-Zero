@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <filesystem>
 #include <fstream>
@@ -7,7 +7,7 @@
 #include <set>
 
 #include "app/library_controller.h"
-#include "app/playback_controller.h"
+#include "playback/playback_controller.h"
 #include "app/runtime_services.h"
 
 namespace fs = std::filesystem;
@@ -306,3 +306,4 @@ int main()
     fs::remove_all(root, ec);
     return 0;
 }
+

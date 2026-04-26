@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
 
@@ -7,7 +7,7 @@
 #include "app/app_state.h"
 #include "app/library_controller.h"
 #include "app/navigation_state.h"
-#include "app/playback_controller.h"
+#include "playback/playback_controller.h"
 
 namespace lofibox::app {
 
@@ -44,3 +44,4 @@ void commandMoveSelection(AppCommandTarget& target, int delta);
 void commandConfirmListPage(AppCommandTarget& target);
 
 } // namespace lofibox::app
+

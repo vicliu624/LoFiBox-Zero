@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include <optional>
 
 #include "app/app_page.h"
-#include "app/playback_state.h"
+#include "playback/playback_state.h"
 
 namespace lofibox::app {
 
@@ -29,3 +29,4 @@ struct AppDebugSnapshot {
 };
 
 } // namespace lofibox::app
+

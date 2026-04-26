@@ -17,6 +17,7 @@ Use `project-architecture-spec.md` for enduring architecture rules.
 - metadata, artwork, lyrics, and tag writeback runtime services
 - track identity runtime service with MusicBrainz fallback and optional Chromaprint/AcoustID fingerprint path
 - remote media runtime provider path for Jellyfin, OpenSubsonic/Navidrome-compatible servers, and Emby, including probe, catalog/search/recent lookup, and stream resolution behind app-facing remote service interfaces
+- implementation placement gate for source ownership: first-batch remote provider behavior lives under `src/remote/*`, playback implementation lives under `src/playback`, audio output/decoder contracts live under `src/audio/*`, and helper entrypoints cannot hide protocol implementation details
 - host single-instance startup guard for the Linux device executable
 
 ## 3. Current Device-Side Scope

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+﻿# SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.24)
 
@@ -34,6 +34,8 @@ option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX
 
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp
+        src/audio/decoder/audio_decoder_contract.cpp
+        src/audio/output/audio_output_contract.cpp
     src/audio/dsp/dsp_chain.cpp
     src/app/input_actions.cpp
     src/app/app_command_executor.cpp
@@ -54,13 +56,13 @@ add_library(lofibox_zero_core STATIC
     src/app/lofibox_app_runner.cpp
     src/app/media_item.cpp
     src/app/media_search_service.cpp
-    src/app/mixed_playback_queue.cpp
-    src/app/playback_enrichment_coordinator.cpp
-    src/app/playback_backend_controller.cpp
-    src/app/playback_completion_policy.cpp
-    src/app/playback_runtime_coordinator.cpp
-    src/app/playback_session_clock.cpp
-    src/app/playback_visualization_source.cpp
+    src/playback/mixed_playback_queue.cpp
+    src/playback/playback_enrichment_coordinator.cpp
+    src/playback/playback_backend_controller.cpp
+    src/playback/playback_completion_policy.cpp
+    src/playback/playback_runtime_coordinator.cpp
+    src/playback/playback_session_clock.cpp
+    src/playback/playback_visualization_source.cpp
     src/app/remote_profile_store.cpp
     src/app/settings_projection_builder.cpp
     src/app/source_manager_projection.cpp
@@ -72,13 +74,15 @@ add_library(lofibox_zero_core STATIC
     src/ui/pages/now_playing_page.cpp
     src/ui/effects/lyrics_spectrum_effect.cpp
     src/ui/widgets/lyrics_layout.cpp
-    src/app/playback_controller.cpp
+    src/playback/playback_controller.cpp
     src/app/runtime_services.cpp
     src/metadata/enrichment_authority_policy.cpp
     src/metadata/match_confidence_guard.cpp
     src/metadata/metadata_merge_policy.cpp
     src/remote/common/remote_provider_contract.cpp
     src/remote/common/remote_source_registry.cpp
+        src/playlist/playlist_parser.cpp
+        src/plugins/plugin_manifest.cpp
     src/desktop/desktop_integration_boundary.cpp
     src/security/credential_policy.cpp
     src/ui/ui_primitives.cpp
@@ -109,7 +113,7 @@ endif()
 
 add_library(lofibox_zero_host_runtime STATIC
     src/platform/host/acoustid_client.cpp
-    src/platform/host/audio_playback_backend.cpp
+    src/audio/output/host_audio_playback_backend.cpp
     src/platform/host/artwork_provider.cpp
     src/platform/host/connectivity_provider.cpp
     src/platform/host/cover_art_archive_client.cpp
@@ -227,6 +231,13 @@ install(DIRECTORY assets/ui/icons/
 
 install(FILES scripts/tag_writer.py scripts/remote_media_tool.py
     DESTINATION "${LOFIBOX_PRIVATE_LIBDIR}"
+)
+
+install(DIRECTORY src/remote/
+    DESTINATION "${LOFIBOX_PRIVATE_LIBDIR}/remote"
+    FILES_MATCHING
+    PATTERN "*.py"
+    PATTERN "__pycache__" EXCLUDE
 )
 
 install(FILES data/io.github.vicliu624.lofibox.desktop
@@ -434,3 +445,5 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_helper_script_path_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_helper_script_path_smoke COMMAND lofibox_helper_script_path_smoke)
   endif()
+
+
