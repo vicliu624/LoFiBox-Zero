@@ -35,6 +35,10 @@ int main()
         std::cerr << "Expected desktop media next command to map to app action.\n";
         return 1;
     }
+    if (adapter.toUserAction(lofibox::desktop::DesktopCommand::Stop) != lofibox::app::UserAction::Back) {
+        std::cerr << "Expected desktop stop command to map to app back/stop-facing action.\n";
+        return 1;
+    }
 
     lofibox::app::PlaybackSession session{};
     session.status = lofibox::app::PlaybackStatus::Playing;
@@ -44,6 +48,16 @@ int main()
     const auto desktop_projection = lofibox::desktop::buildDesktopNowPlayingProjection(session, &track);
     if (!desktop_projection.playing || desktop_projection.title != "Desktop Song" || desktop_projection.artist != "Desktop Artist") {
         std::cerr << "Expected desktop now-playing projection to be derived from playback and library facts.\n";
+        return 1;
+    }
+    const auto mpris_projection = lofibox::desktop::buildDesktopMprisProjection(session);
+    if (mpris_projection.playback_status != "Playing" || !mpris_projection.can_play || !mpris_projection.can_pause) {
+        std::cerr << "Expected desktop MPRIS projection to expose playback capabilities.\n";
+        return 1;
+    }
+    const auto notification_projection = lofibox::desktop::buildDesktopNotificationProjection(session, &track);
+    if (!notification_projection.should_show || notification_projection.summary != "Desktop Song") {
+        std::cerr << "Expected desktop notification projection to be derived from now-playing facts.\n";
         return 1;
     }
 

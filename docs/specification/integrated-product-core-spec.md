@@ -51,6 +51,7 @@ This document is normative for the current C++ implementation.
 - `AppProjectionBuilder` and page-specific projection builders own app-to-UI view-model assembly.
 - UI pages and widgets own layout and visual composition only.
 - Desktop integration owns event/notification adapters only and converts external events into product commands.
+- Desktop MPRIS, media-key, and notification adapters own external projection/command shapes only; they consume playback/library facts and emit app commands.
 
 ## Invalid Ownership
 
