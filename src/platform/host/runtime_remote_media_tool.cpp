@@ -22,6 +22,7 @@ std::string toKindString(app::RemoteServerKind kind)
     switch (kind) {
     case app::RemoteServerKind::Jellyfin: return "jellyfin";
     case app::RemoteServerKind::OpenSubsonic: return "opensubsonic";
+    case app::RemoteServerKind::Navidrome: return "opensubsonic";
     case app::RemoteServerKind::Emby: return "emby";
     }
     return "jellyfin";

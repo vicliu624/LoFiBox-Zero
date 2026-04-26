@@ -179,6 +179,19 @@ server.serve_forever()
         return 1;
     }
 
+    const auto navidrome_profile = lofibox::app::RemoteServerProfile{
+        lofibox::app::RemoteServerKind::Navidrome, "nav", "Navidrome", "http://127.0.0.1:" + std::to_string(port), "user", "pass", ""};
+    const auto nav_session = services.remote.remote_source_provider->probe(navidrome_profile);
+    if (!nav_session.available) {
+        std::cerr << "Expected Navidrome probe to use the OpenSubsonic-compatible path.\n";
+        return 1;
+    }
+    const auto nav_tracks = services.remote.remote_catalog_provider->searchTracks(navidrome_profile, nav_session, "Song", 5);
+    if (nav_tracks.empty() || nav_tracks.front().id != "trk2") {
+        std::cerr << "Expected Navidrome search to return an OpenSubsonic track.\n";
+        return 1;
+    }
+
     const auto emby_profile = lofibox::app::RemoteServerProfile{
         lofibox::app::RemoteServerKind::Emby, "emb", "Emby", "http://127.0.0.1:" + std::to_string(port), "user", "pass", ""};
     const auto emby_session = services.remote.remote_source_provider->probe(emby_profile);

@@ -9,11 +9,14 @@
 #include <utility>
 #include <vector>
 
+#include "security/credential_policy.h"
+
 namespace lofibox::app {
 
 enum class RemoteServerKind {
     Jellyfin,
     OpenSubsonic,
+    Navidrome,
     Emby,
 };
 
@@ -25,6 +28,8 @@ struct RemoteServerProfile {
     std::string username{};
     std::string password{};
     std::string api_token{};
+    ::lofibox::security::CredentialRef credential_ref{};
+    ::lofibox::security::TlsPolicy tls_policy{};
 };
 
 struct RemoteSourceSession {

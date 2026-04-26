@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include <iostream>
+
+#include "remote/common/remote_source_registry.h"
+#include "security/credential_policy.h"
+
+int main()
+{
+    lofibox::remote::RemoteSourceRegistry registry{};
+    if (!registry.supported(lofibox::app::RemoteServerKind::Jellyfin)
+        || !registry.supported(lofibox::app::RemoteServerKind::OpenSubsonic)
+        || !registry.supported(lofibox::app::RemoteServerKind::Navidrome)
+        || !registry.supported(lofibox::app::RemoteServerKind::Emby)) {
+        std::cerr << "Expected first-batch remote source kinds to be registered.\n";
+        return 1;
+    }
+    if (!registry.openSubsonicCompatible(lofibox::app::RemoteServerKind::Navidrome)
+        || registry.providerFamily(lofibox::app::RemoteServerKind::Navidrome) != "opensubsonic") {
+        std::cerr << "Expected Navidrome to be governed as OpenSubsonic-compatible.\n";
+        return 1;
+    }
+
+    lofibox::app::RemoteServerProfile profile{};
+    profile.kind = lofibox::app::RemoteServerKind::Navidrome;
+    profile.credential_ref.id = "credential/navidrome/home";
+    if (profile.credential_ref.id.empty() || !profile.tls_policy.verify_peer) {
+        std::cerr << "Expected remote source profiles to carry credential refs and secure TLS defaults.\n";
+        return 1;
+    }
+
+    lofibox::security::SecretRedactor redactor{};
+    const auto redacted = redactor.redact("https://host/rest/stream.view?id=1&api_key=secret-token&token=abc");
+    if (redacted.find("secret-token") != std::string::npos || redacted.find("token=abc") != std::string::npos) {
+        std::cerr << "Expected secret redactor to remove API keys and tokens from logs.\n";
+        return 1;
+    }
+
+    return 0;
+}

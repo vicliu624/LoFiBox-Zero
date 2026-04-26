@@ -67,6 +67,8 @@ add_library(lofibox_zero_core STATIC
     src/app/runtime_services.cpp
     src/metadata/match_confidence_guard.cpp
     src/metadata/metadata_merge_policy.cpp
+    src/remote/common/remote_source_registry.cpp
+    src/security/credential_policy.cpp
     src/ui/ui_primitives.cpp
     src/core/bitmap_font.cpp
     src/core/canvas.cpp
@@ -343,6 +345,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_remote_media_smoke tests/remote_media_smoke.cpp)
     target_link_libraries(lofibox_remote_media_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_remote_media_smoke COMMAND lofibox_remote_media_smoke)
+
+    add_executable(lofibox_remote_source_security_smoke tests/remote_source_security_smoke.cpp)
+    target_link_libraries(lofibox_remote_source_security_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_remote_source_security_smoke COMMAND lofibox_remote_source_security_smoke)
 
     add_executable(lofibox_filename_metadata_guess_smoke tests/filename_metadata_guess_smoke.cpp)
     target_link_libraries(lofibox_filename_metadata_guess_smoke PRIVATE lofibox_zero_host_runtime)

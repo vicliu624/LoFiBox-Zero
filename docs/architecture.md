@@ -56,6 +56,8 @@ Current page renderers and shared UI primitives live under `src/ui`.
 The integrated product core distinguishes media identity, media source, media stream, playback facts, audio pipeline, enrichment pipeline, library facts, UI projection, and runtime shell responsibilities. Those distinctions are normative in `docs/specification/integrated-product-core-spec.md`.
 `src/metadata/metadata_merge_policy.*` owns safe merge rules for enrichment results; `src/metadata/match_confidence_guard.*` owns confidence checks before authoritative writeback decisions.
 `src/app/library_mutation_service.*` owns library fact mutations such as play count and last-played timestamp updates.
+`src/remote/common/remote_source_registry.*` owns the first-batch remote source registry and treats Navidrome as an OpenSubsonic-compatible provider family.
+`src/security/credential_policy.*` owns credential references, TLS defaults, and secret redaction helpers for remote/source work.
 
 ## Hard Boundary Rules
 
