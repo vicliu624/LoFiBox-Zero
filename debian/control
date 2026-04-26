@@ -1,0 +1,31 @@
+Source: lofibox
+Section: sound
+Priority: optional
+Maintainer: LoFiBox contributors <maintainers@example.invalid>
+Build-Depends:
+ cmake,
+ debhelper-compat (= 13),
+ libfreetype-dev,
+ libx11-dev,
+ libxkbcommon-dev,
+ pkgconf
+Standards-Version: 4.7.0
+Homepage: https://github.com/vicliu624/LoFiBox-Zero
+Vcs-Browser: https://github.com/vicliu624/LoFiBox-Zero
+Vcs-Git: https://github.com/vicliu624/LoFiBox-Zero.git
+Rules-Requires-Root: no
+
+Package: lofibox
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ python3,
+ python3-mutagen
+Recommends:
+ fonts-noto-cjk
+Description: chromeless desktop-widget music player
+ LoFiBox is a pure C++ Linux music player with a compact chromeless
+ desktop-widget surface. It is designed around local playback, media-library
+ browsing, metadata and artwork, remote-source extensibility, and a DSP-ready
+ audio pipeline.

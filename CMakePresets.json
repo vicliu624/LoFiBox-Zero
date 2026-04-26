@@ -1,0 +1,107 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-vs2022-test-debug",
+      "displayName": "Windows VS2022 Debug Tests",
+      "description": "Generate a Visual Studio 2022 solution for shared-layer tests.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/test",
+      "architecture": {
+        "value": "x64"
+      },
+      "cacheVariables": {
+        "LOFIBOX_BUILD_DEVICE": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "linux-device-debug",
+      "displayName": "Linux Debug Device",
+      "description": "Configure the Linux framebuffer device target.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/device",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "LOFIBOX_BUILD_DEVICE": "ON",
+        "BUILD_TESTING": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-test-debug",
+      "displayName": "Linux Debug Tests",
+      "description": "Configure shared-layer tests on Linux.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/test",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "LOFIBOX_BUILD_DEVICE": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-vs2022-debug-build-tests",
+      "displayName": "Build Windows Tests",
+      "configurePreset": "windows-vs2022-test-debug",
+      "configuration": "Debug",
+      "targets": [
+        "hello_app_smoke"
+      ]
+    },
+    {
+      "name": "linux-device-debug-build",
+      "displayName": "Build Linux Device",
+      "configurePreset": "linux-device-debug",
+      "targets": [
+        "lofibox_zero_device"
+      ]
+    },
+    {
+      "name": "linux-test-debug-build",
+      "displayName": "Build Linux Tests",
+      "configurePreset": "linux-test-debug",
+      "targets": [
+        "hello_app_smoke"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-vs2022-debug-test",
+      "displayName": "Run Windows Tests",
+      "configurePreset": "windows-vs2022-test-debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-debug-test",
+      "displayName": "Run Linux Tests",
+      "configurePreset": "linux-test-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

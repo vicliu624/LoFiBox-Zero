@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#pragma once
+
+#include <array>
+#include <string>
+
+#include "core/canvas.h"
+
+namespace lofibox::app::pages {
+
+struct EqualizerPageView {
+    std::array<int, 10> bands{};
+    int selected_band{0};
+    std::string preset_name{};
+};
+
+void renderEqualizerPage(core::Canvas& canvas, const EqualizerPageView& view);
+
+} // namespace lofibox::app::pages

@@ -1,0 +1,21 @@
+LoFiBox is licensed primarily under the GNU General Public License,
+version 3 or later.
+
+See `LICENSE` for the full GPL-3.0 license text.
+
+Repository-level license policy:
+
+- Source code, scripts, build files, and project documentation:
+  `GPL-3.0-or-later`
+- AppStream, desktop, and MIME metadata:
+  `CC0-1.0`
+- Project-created installable logo, SVG, and UI icon assets:
+  `GPL-3.0-or-later`
+- Generated test fixtures:
+  `CC0-1.0`
+- Third-party code and resources:
+  their original licenses, recorded in `docs/third-party.md` and
+  `debian/copyright`
+
+Files may carry a more specific SPDX license identifier when they belong
+to one of the non-GPL license domains above.

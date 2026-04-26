@@ -1,0 +1,2 @@
+# Upstream CMake install target owns installed file placement.
+# Keep this file as the Debian packaging hook point for future package splits.

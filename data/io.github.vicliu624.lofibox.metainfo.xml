@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<component type="desktop-application">
+  <id>io.github.vicliu624.lofibox</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>LoFiBox</name>
+  <summary>Chromeless desktop-widget music player</summary>
+  <description>
+    <p>
+      LoFiBox is a pure C++ Linux music player with a compact chromeless
+      desktop-widget surface, local playback, media-library browsing, metadata,
+      artwork, remote-source, and DSP-oriented architecture goals.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.vicliu624.lofibox.desktop</launchable>
+  <categories>
+    <category>Audio</category>
+    <category>Music</category>
+    <category>Player</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-04-26" />
+  </releases>
+  <developer id="io.github.vicliu624">
+    <name>LoFiBox contributors</name>
+  </developer>
+  <url type="homepage">https://github.com/vicliu624/LoFiBox-Zero</url>
+</component>

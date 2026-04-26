@@ -1,0 +1,39 @@
+build/
+obj-*/
+out/
+.cache/
+.idea/
+.vscode/
+.tmp/
+runs/
+*.deb
+*.dsc
+*.changes
+*.buildinfo
+*.debian.tar.*
+*.orig.tar.*
+*.orig.tar
+*.tar.xz
+
+# Debian helper build residues.
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/lofibox/
+debian/*.substvars
+debian/*.debhelper.log
+
+# Local device/window-manager experiments do not belong to the product source.
+clockworkpi-kernel_*.deb
+kanshi-uconsole-config
+labwc-rc.xml
+uconsole-config.txt
+check-browsers.sh
+verify-browsers-removed.sh
+
+# Local compiler/linker byproducts from ad-hoc probes.
+*.obj
+*.o
+*.exe
+*.pdb
+*.ilk

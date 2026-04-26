@@ -1,0 +1,5 @@
+lofibox (0.1.0-1) UNRELEASED; urgency=medium
+
+  * Initial Debian packaging skeleton.
+
+ -- LoFiBox contributors <maintainers@example.invalid>  Sun, 26 Apr 2026 00:00:00 +0800

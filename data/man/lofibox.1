@@ -1,0 +1,37 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.\"
+.TH LOFIBOX 1 "April 2026" "LoFiBox 0.1.0" "User Commands"
+.SH NAME
+lofibox \- chromeless desktop-widget music player
+.SH SYNOPSIS
+.B lofibox
+[\fB\-\-help\fR]
+[\fB\-\-version\fR]
+.SH DESCRIPTION
+.B LoFiBox
+is a compact Linux music player with a chromeless desktop-widget surface.
+It is designed for local music playback, media-library browsing, metadata
+and artwork display, remote-source extensibility, and a DSP-ready audio
+pipeline.
+.SH OPTIONS
+.TP
+.B \-\-help
+Show command-line help and exit.
+.TP
+.B \-\-version
+Show the application version and exit.
+.SH FILES
+.TP
+.I ~/.config/lofibox/
+User configuration directory.
+.TP
+.I ~/.local/share/lofibox/
+User data directory.
+.TP
+.I ~/.cache/lofibox/
+User cache directory.
+.TP
+.I ~/.local/state/lofibox/
+User state directory.
+.SH SEE ALSO
+.BR xdg-basedir (7)

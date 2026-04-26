@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-lofibox-playlist">
+    <comment>LoFiBox playlist</comment>
+    <glob pattern="*.lofibox-playlist"/>
+  </mime-type>
+</mime-info>

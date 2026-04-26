@@ -1,0 +1,17 @@
+# LoFiBox source packages are built in Linux/Debian environments; keep
+# repository text normalized to LF.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.deb binary
+*.xz binary
+*.gz binary
+*.zip binary

@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+test -x /usr/bin/lofibox
+test -f /usr/share/applications/io.github.vicliu624.lofibox.desktop
+test -f /usr/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
+test -f /usr/share/icons/hicolor/scalable/apps/io.github.vicliu624.lofibox.svg
+test -f /usr/lib/lofibox/tag_writer.py
+test -f /usr/lib/lofibox/remote_media_tool.py
+python3 - <<'PY'
+import mutagen
+PY
+
+lofibox --help >/dev/null
+lofibox --version >/dev/null
+
+desktop-file-validate /usr/share/applications/io.github.vicliu624.lofibox.desktop
+appstreamcli validate --no-net /usr/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml

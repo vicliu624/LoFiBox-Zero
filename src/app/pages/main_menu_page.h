@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#pragma once
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
+
+#include "app/lofibox_app.h"
+#include "core/canvas.h"
+
+namespace lofibox::app::pages {
+
+enum class MenuIndexState {
+    Uninitialized,
+    Loading,
+    Ready,
+    Degraded,
+};
+
+struct MenuStorageView {
+    bool available{false};
+    std::uintmax_t capacity_bytes{0};
+    std::uintmax_t free_bytes{0};
+};
+
+struct MainMenuView {
+    int selected{1};
+    MenuStorageView storage{};
+    MenuIndexState index_state{MenuIndexState::Uninitialized};
+    bool network_connected{false};
+    const AppAssets* assets{};
+    std::string playback_summary{"NO TRACK"};
+    int playback_summary_scroll_px{0};
+};
+
+void renderMainMenuPage(core::Canvas& canvas, const MainMenuView& view);
+
+} // namespace lofibox::app::pages

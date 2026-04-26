@@ -1,0 +1,42 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+# LoFiBox Engineering Check Report
+
+This report records the current repository posture against the official Debian/Ubuntu archive target.
+
+## Current Status
+
+- Offline build: install-skeleton CMake configure/install passes in the existing local Docker image `lofibox-zero/dev-container:trixie`; full clean-chroot and source-package builds are still not proven.
+- Debian package build: `scripts/create-orig-tarball.ps1` plus `scripts/run-dpkg-buildpackage.ps1 -BuildArgs "-us -uc"` now passes with the dedicated local package-build image `lofibox-zero/package-build:trixie`, producing source and binary artifacts including `.dsc`, `.debian.tar.xz`, `.orig.tar.xz`, `.changes`, `.buildinfo`, `.deb`, and dbgsym `.deb`.
+- Debian build dependency check: `scripts/check-debian-builddeps.ps1 -Image lofibox-zero/package-build:trixie` passes. The older local dev image still lacks `debhelper-compat (= 13)` by design.
+- Package smoke status: installing the generated `.deb` in the package-build image, running `lofibox --help`, `lofibox --version`, `desktop-file-validate`, and `appstreamcli validate --no-net` passes. The Docker image excludes `/usr/share/man/*` at install time, so manpage presence must be checked from package contents in that image.
+- Autopkgtest status: `autopkgtest lofibox_0.1.0-1_amd64.changes -- null` passes with `smoke PASS`. The smoke test validates installed binary availability, CLI help/version behavior, desktop metadata, AppStream metadata, and hicolor icon installation. It is intentionally not marked `superficial` so autopkgtest exits successfully as a real package-level gate.
+- CI/package validation alignment: `.github/workflows/linux-ci.yml` now runs the same package-level gates after CMake tests: Debian binary package build, `lintian`, and `autopkgtest`. Local validation is represented by `scripts/run-debian-package-validation.ps1`, which orchestrates orig tarball creation, package build, lintian, and autopkgtest using the dedicated local package-build image.
+- Lintian status: only `initial-upload-closes-no-bugs` remains, which is expected until an ITP/release bug number exists. The package-build script now copies the source tree into a normalized-permission Linux workspace before building, avoiding Windows bind-mount executable-bit pollution in source packages.
+- Compile warning governance: project-owned warnings must be fixed at source; third-party implementation warnings may only be suppressed at the narrow include site and must be documented in `docs/third-party.md`.
+- SPDX governance: project-owned C/C++, CMake, scripts, CI files, documentation, man pages, desktop metadata, AppStream metadata, MIME metadata, and SVG files now carry SPDX headers. `scripts/check-spdx.ps1` is wired into CI as the repository-level header gate.
+- Vendored dependency status: `src/third_party/stb_image.h` is registered as `MIT OR Unlicense`; it still needs a keep-vendored versus system-package decision.
+- Copyright status: initial license policy is established: code/docs `GPL-3.0-or-later`, metadata `CC0-1.0`, project-created installable visual assets `GPL-3.0-or-later`, generated fixtures `CC0-1.0`, third-party material by original license.
+- PNG resource status: upstream author confirmed all PNG resources in this repository are self-created and not downloaded from third-party sources.
+- Design prototype status: `assets/design` has been removed from the repository because prototype images are not runtime assets and should not be packaged.
+- XDG path compliance: a host runtime path boundary now exists for config, data, cache, state, runtime, and temporary paths. Runtime cache, runtime logs, script payloads, and single-instance locks use that boundary; `lofibox_xdg_paths_smoke` validates Linux XDG environment handling.
+- Runtime helper compliance: Python helper scripts are installed into the private application directory and resolved in the order `LOFIBOX_HELPER_DIR`, installed private helper directory, then source-tree `scripts/` fallback. `tag_writer.py` depends on `python3` and `python3-mutagen`, both declared in `debian/control`; `remote_media_tool.py` currently uses only Python standard-library modules. Autopkgtest verifies installed helper files and Mutagen availability, while `lofibox_helper_script_path_smoke` validates explicit override behavior.
+- Debian source package condition: initial `debian/` skeleton exists and local `3.0 (quilt)` source-package build passes using a generated `lofibox_0.1.0.orig.tar.xz`; real upload readiness still needs an upstream release tag and maintainer/release metadata.
+- Desktop integration condition: `.desktop`, AppStream, hicolor icon, and MIME package files exist and validate in WSL; MPRIS, D-Bus, media keys, and notifications remain implementation work.
+- Test isolation condition: specified as required; implementation must ensure no dependency on real user music, external internet, real audio devices, or polluted `HOME`.
+
+## Engineer Decision Points
+
+- Exact copyright holder naming policy for future organization or maintainer transfer.
+- GUI toolkit or rendering backend policy for the Linux desktop target.
+- Whether providers are internally compiled first or exposed as binary plugins with a C ABI.
+- Exact Debian maintainer identity, homepage, VCS URLs, and release tag policy.
+- Which dependencies are mandatory, optional, `Recommends`, or provider-package-specific.
+- Whether the existing local Docker image should be rebuilt to include `desktop-file-utils` and `appstream`, or whether metadata validation should remain a WSL/CI-only check until the image is refreshed.
+- A dedicated local package-build image definition now exists at `docker/package-build.Dockerfile`; it derives from `lofibox-zero/dev-container:trixie` and keeps Debian package tooling separate from simulator/runtime images.
+- Font policy is now system-font based; keep `fonts-noto-cjk` as Debian packaging recommendation and do not reintroduce vendored CJK font binaries without a new copyright review.
+
+## Immediate Governance Result
+
+The current specification baseline now treats Debian/Ubuntu official archive readiness as a hard engineering constraint and feature completeness as a hard product constraint.
+Future implementation must organize complexity through architecture, dependencies, providers, tests, and packaging rather than deleting capability domains.

@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Linux CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build And Test On Linux
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v4
+
+      - name: Check SPDX Headers
+        shell: pwsh
+        run: scripts/check-spdx.ps1
+
+      - name: Install Linux Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            appstream \
+            autopkgtest \
+            cmake \
+            debhelper \
+            desktop-file-utils \
+            g++ \
+            lintian \
+            ninja-build \
+            pkg-config \
+            libfreetype6-dev \
+            libxkbcommon-dev \
+            libx11-dev \
+            pkgconf
+
+      - name: Configure Shared Linux Tests
+        run: cmake --preset linux-test-debug
+
+      - name: Build Shared Linux Tests
+        run: cmake --build --preset linux-test-debug-build
+
+      - name: Run Shared Linux Tests
+        run: ctest --preset linux-debug-test
+
+      - name: Configure Linux Install Skeleton
+        run: >
+          cmake -S . -B build/install-skeleton -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DLOFIBOX_BUILD_DEVICE=OFF
+          -DLOFIBOX_BUILD_X11=OFF
+          -DBUILD_TESTING=OFF
+
+      - name: Validate Desktop Metadata
+        run: |
+          desktop-file-validate data/io.github.vicliu624.lofibox.desktop
+          appstreamcli validate --no-net data/io.github.vicliu624.lofibox.metainfo.xml
+
+      - name: Validate Install Skeleton
+        run: |
+          cmake --install build/install-skeleton --prefix "$PWD/.tmp/install-root"
+          test -f .tmp/install-root/share/applications/io.github.vicliu624.lofibox.desktop
+          test -f .tmp/install-root/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
+          test -f .tmp/install-root/share/icons/hicolor/scalable/apps/io.github.vicliu624.lofibox.svg
+          test -f .tmp/install-root/share/mime/packages/io.github.vicliu624.lofibox.xml
+          test -f .tmp/install-root/share/doc/lofibox/architecture.md
+
+      - name: Configure Linux Device Target
+        run: cmake --preset linux-device-debug
+
+      - name: Build Linux Device Target
+        run: cmake --build --preset linux-device-debug-build
+
+      - name: Build Debian Package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Run Lintian
+        run: lintian ../lofibox_0.1.0-1_amd64.changes
+
+      - name: Run Autopkgtest Smoke
+        run: autopkgtest ../lofibox_0.1.0-1_amd64.changes -- null

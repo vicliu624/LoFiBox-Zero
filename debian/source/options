@@ -1,0 +1,2 @@
+extend-diff-ignore = (^|/)(\.cache|\.tmp|build|out|runs|obj-[^/]+)(/|$)
+extend-diff-ignore = (^|/)(.*\.(deb|buildinfo|changes|dsc|debian\.tar\..*))$
