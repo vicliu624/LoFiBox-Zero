@@ -34,6 +34,7 @@ option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX
 
 add_library(lofibox_zero_core STATIC
     src/app/input_actions.cpp
+    src/app/app_lifecycle.cpp
     src/app/app_input_router.cpp
     src/app/app_renderer.cpp
     src/app/library_controller.cpp
@@ -224,6 +225,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_app_input_router_smoke tests/app_input_router_smoke.cpp)
     target_link_libraries(lofibox_app_input_router_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_app_input_router_smoke COMMAND lofibox_app_input_router_smoke)
+
+    add_executable(lofibox_app_lifecycle_smoke tests/app_lifecycle_smoke.cpp)
+    target_link_libraries(lofibox_app_lifecycle_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_app_lifecycle_smoke COMMAND lofibox_app_lifecycle_smoke)
 
     add_executable(lofibox_library_scan_smoke tests/library_scan_smoke.cpp)
     target_link_libraries(lofibox_library_scan_smoke PRIVATE lofibox_zero_core)

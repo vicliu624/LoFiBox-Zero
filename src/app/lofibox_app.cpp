@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
-#include <random>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -13,6 +12,7 @@
 
 #include "app/app_state.h"
 #include "app/app_input_router.h"
+#include "app/app_lifecycle.h"
 #include "app/app_renderer.h"
 #include "app/library_controller.h"
 #include "app/navigation_state.h"
@@ -53,11 +53,10 @@ std::string_view pageTitleDefault(AppPage page) noexcept
 
 } // namespace
 
-struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget {
+struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTarget {
     std::vector<fs::path> media_roots{};
     ui::UiAssets ui_assets{};
     LibraryController library_controller{};
-    bool boot_ready{false};
     clock::time_point boot_started{clock::now()};
     NavigationState navigation{};
     int main_menu_index{1};
@@ -72,7 +71,6 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget {
     clock::time_point now_playing_confirm_blocked_until{};
     bool help_open{false};
     AppPage help_page{AppPage::MainMenu};
-    std::mt19937 random{12345U};
 
     [[nodiscard]] std::string networkStatusLabel() const
     {
@@ -100,7 +98,7 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget {
         metadata_service.status = !metadata_service.available ? "UNAVAILABLE" : (network.connected ? "ONLINE" : "OFFLINE");
     }
 
-    void refreshRuntimeStatusIfDue(bool force = false)
+    void refreshRuntimeStatus(bool force)
     {
         const auto now = clock::now();
         if (!force && last_status_refresh != clock::time_point{} && now - last_status_refresh < std::chrono::seconds{2}) {
@@ -111,9 +109,24 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget {
         refreshMetadataServiceState();
     }
 
+    void refreshRuntimeStatusIfDue() override
+    {
+        refreshRuntimeStatus(false);
+    }
+
     [[nodiscard]] AppPage currentPage() const noexcept override
     {
         return navigation.currentPage();
+    }
+
+    [[nodiscard]] clock::time_point lastUpdate() const noexcept override
+    {
+        return last_update;
+    }
+
+    void setLastUpdate(clock::time_point value) noexcept override
+    {
+        last_update = value;
     }
 
     [[nodiscard]] const ui::UiAssets& assets() const noexcept override
@@ -129,6 +142,26 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget {
     [[nodiscard]] LibraryIndexState libraryState() const noexcept override
     {
         return library_controller.state();
+    }
+
+    void startLibraryLoading() override
+    {
+        library_controller.startLoading();
+    }
+
+    void refreshLibrary() override
+    {
+        library_controller.refreshLibrary(media_roots, *services.metadata_provider);
+    }
+
+    void showMainMenu() override
+    {
+        navigation.replaceStack({AppPage::MainMenu});
+    }
+
+    void updatePlayback(double delta_seconds) override
+    {
+        playback_controller.update(delta_seconds, library_controller);
     }
 
     [[nodiscard]] StorageInfo storage() const override
@@ -169,16 +202,6 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget {
     [[nodiscard]] const TrackRecord* findTrack(int id) const noexcept override
     {
         return library_controller.findTrack(id);
-    }
-
-    [[nodiscard]] TrackRecord* findMutableTrack(int id) noexcept
-    {
-        return library_controller.findMutableTrack(id);
-    }
-
-    void resetListSelection() noexcept
-    {
-        navigation.resetListSelection();
     }
 
     void pushPage(AppPage page) override
@@ -429,35 +452,14 @@ LoFiBoxApp::LoFiBoxApp(std::vector<std::filesystem::path> media_roots, ui::UiAss
     impl_->ui_assets = std::move(assets);
     impl_->services = withNullRuntimeServices(std::move(services));
     impl_->playback_controller.setServices(impl_->services);
-    impl_->refreshRuntimeStatusIfDue(true);
+    impl_->refreshRuntimeStatus(true);
 }
 
 LoFiBoxApp::~LoFiBoxApp() = default;
 
 void LoFiBoxApp::update()
 {
-    const auto now = clock::now();
-    const double delta = std::chrono::duration<double>(now - impl_->last_update).count();
-    impl_->last_update = now;
-    impl_->refreshRuntimeStatusIfDue();
-
-    if (impl_->library_controller.state() == LibraryIndexState::Uninitialized) {
-        impl_->library_controller.startLoading();
-        return;
-    }
-
-    if (impl_->library_controller.state() == LibraryIndexState::Loading) {
-        impl_->library_controller.refreshLibrary(impl_->media_roots, *impl_->services.metadata_provider);
-    }
-
-    if (impl_->currentPage() == AppPage::Boot
-        && impl_->library_controller.state() != LibraryIndexState::Uninitialized
-        && impl_->library_controller.state() != LibraryIndexState::Loading
-        && impl_->bootAnimationComplete()) {
-        impl_->navigation.replaceStack({AppPage::MainMenu});
-    }
-
-    impl_->playback_controller.update(delta, impl_->library_controller);
+    updateAppLifecycle(*impl_);
 }
 
 void LoFiBoxApp::handleInput(const InputEvent& event)
