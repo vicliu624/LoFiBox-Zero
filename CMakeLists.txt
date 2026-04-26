@@ -288,6 +288,14 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_metadata_merge_policy_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_metadata_merge_policy_smoke COMMAND lofibox_metadata_merge_policy_smoke)
 
+    add_executable(lofibox_library_repository_smoke tests/library_repository_smoke.cpp)
+    target_link_libraries(lofibox_library_repository_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_library_repository_smoke COMMAND lofibox_library_repository_smoke)
+
+    add_executable(lofibox_audio_pipeline_controller_smoke tests/audio_pipeline_controller_smoke.cpp)
+    target_link_libraries(lofibox_audio_pipeline_controller_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_audio_pipeline_controller_smoke COMMAND lofibox_audio_pipeline_controller_smoke)
+
     add_executable(lofibox_equalizer_smoke tests/equalizer_smoke.cpp)
     target_link_libraries(lofibox_equalizer_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_equalizer_smoke COMMAND lofibox_equalizer_smoke)
@@ -360,6 +368,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_remote_source_security_smoke tests/remote_source_security_smoke.cpp)
     target_link_libraries(lofibox_remote_source_security_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_remote_source_security_smoke COMMAND lofibox_remote_source_security_smoke)
+
+    add_executable(lofibox_runtime_service_provider_smoke tests/runtime_service_provider_smoke.cpp)
+    target_link_libraries(lofibox_runtime_service_provider_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_runtime_service_provider_smoke COMMAND lofibox_runtime_service_provider_smoke)
 
     add_executable(lofibox_filename_metadata_guess_smoke tests/filename_metadata_guess_smoke.cpp)
     target_link_libraries(lofibox_filename_metadata_guess_smoke PRIVATE lofibox_zero_host_runtime)
