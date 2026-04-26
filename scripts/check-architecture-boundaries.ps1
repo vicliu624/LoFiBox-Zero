@@ -48,6 +48,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             Add-Violation $violations $repoPath $lineNumber "app::" "UI code must use UI projection types and must not reference app namespace types"
         }
 
+        if ($repoPath -eq "src/app/lofibox_app.cpp") {
+            if ($line -match 'case\s+\d+\s*:|selected\s*==\s*\d+|std::clamp|\.startTrack\s*\(|\.openSelectedListItem\s*\(|\.setShuffleEnabled\s*\(|\.setRepeatOne\s*\(|\.setRepeatAll\s*\(|\.cycleSongSortMode\s*\(') {
+                Add-Violation $violations $repoPath $lineNumber "command semantics" "LoFiBoxApp must delegate page command semantics to app_command_executor instead of owning menu/list/playback/EQ branching"
+            }
+        }
+
         if ($line -notmatch $includeRegex) {
             continue
         }

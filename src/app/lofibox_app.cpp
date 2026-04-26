@@ -2,7 +2,6 @@
 
 #include "app/lofibox_app.h"
 
-#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -10,6 +9,7 @@
 #include <vector>
 
 #include "app/app_state.h"
+#include "app/app_command_executor.h"
 #include "app/app_input_router.h"
 #include "app/app_lifecycle.h"
 #include "app/app_page_model.h"
@@ -22,9 +22,8 @@ namespace fs = std::filesystem;
 
 namespace lofibox::app {
 using clock = std::chrono::steady_clock;
-constexpr int kMainMenuItemCount = 6;
 
-struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTarget {
+struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTarget, AppCommandTarget {
     std::vector<fs::path> media_roots{};
     ui::UiAssets ui_assets{};
     LibraryController library_controller{};
@@ -83,6 +82,36 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
     [[nodiscard]] AppPage currentPage() const noexcept override
     {
         return navigation.currentPage();
+    }
+
+    NavigationState& navigationState() noexcept override
+    {
+        return navigation;
+    }
+
+    LibraryController& libraryController() noexcept override
+    {
+        return library_controller;
+    }
+
+    PlaybackController& playbackController() noexcept override
+    {
+        return playback_controller;
+    }
+
+    EqState& eqState() noexcept override
+    {
+        return eq;
+    }
+
+    int& mainMenuIndex() noexcept override
+    {
+        return main_menu_index;
+    }
+
+    void closeHelpForCommand() noexcept override
+    {
+        closeHelp();
     }
 
     [[nodiscard]] clock::time_point lastUpdate() const noexcept override
@@ -172,14 +201,12 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
 
     void pushPage(AppPage page) override
     {
-        closeHelp();
-        navigation.pushPage(page);
+        commandPushPage(*this, page);
     }
 
     void popPage() override
     {
-        closeHelp();
-        navigation.popPage();
+        commandPopPage(*this);
     }
 
     void closeHelp() noexcept override
@@ -208,52 +235,22 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
 
     void playFromMenu() override
     {
-        const auto& session = playback_controller.session();
-        if (session.status == PlaybackStatus::Paused && session.current_track_id) {
-            playback_controller.resume();
-            return;
-        }
-        if (session.status == PlaybackStatus::Playing) {
-            return;
-        }
-        if (session.current_track_id) {
-            playback_controller.resume();
-            return;
-        }
-
-        const auto ids = library_controller.allSongIdsSorted();
-        if (!ids.empty()) {
-            library_controller.setSongsContextAll();
-            (void)playback_controller.startTrack(library_controller, ids.front());
-        }
+        commandPlayFromMenu(*this);
     }
 
     void pausePlayback() override
     {
-        playback_controller.pause();
+        commandPausePlayback(*this);
     }
 
     void stepTrack(int delta) override
     {
-        playback_controller.stepQueue(library_controller, delta);
+        commandStepTrack(*this, delta);
     }
 
     void cycleMainMenuPlaybackMode() override
     {
-        const auto& session = playback_controller.session();
-        if (session.shuffle_enabled) {
-            playback_controller.setShuffleEnabled(false);
-            playback_controller.setRepeatOne(true);
-            return;
-        }
-        if (session.repeat_one) {
-            playback_controller.setRepeatOne(false);
-            playback_controller.setRepeatAll(false);
-            return;
-        }
-        playback_controller.setRepeatOne(false);
-        playback_controller.setRepeatAll(false);
-        playback_controller.setShuffleEnabled(true);
+        commandCycleMainMenuPlaybackMode(*this);
     }
 
     [[nodiscard]] AppPageModel pageModel() const override
@@ -268,26 +265,19 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
             metadata_service.display_name});
     }
 
-    void clampListSelection()
-    {
-        const auto model = pageModel();
-        navigation.clampListSelection(static_cast<int>(model.rows.size()), model.max_visible_rows);
-    }
-
     void moveMainMenuSelection(int delta) override
     {
-        main_menu_index = (main_menu_index + kMainMenuItemCount + delta) % kMainMenuItemCount;
+        commandMoveMainMenuSelection(*this, delta);
     }
 
     void resetMainMenuSelection() noexcept override
     {
-        main_menu_index = 0;
+        commandResetMainMenuSelection(*this);
     }
 
     void moveSelection(int delta) override
     {
-        const auto model = pageModel();
-        navigation.moveSelection(delta, static_cast<int>(model.rows.size()), model.max_visible_rows);
+        commandMoveSelection(*this, delta);
     }
 
     [[nodiscard]] bool isBrowseListPage() const noexcept override
@@ -302,90 +292,42 @@ struct LoFiBoxApp::Impl final : AppInputTarget, AppRenderTarget, AppLifecycleTar
 
     void confirmMainMenu() override
     {
-        switch (main_menu_index) {
-        case 0:
-            library_controller.setSongsContextAll();
-            pushPage(AppPage::Songs);
-            break;
-        case 1:
-            pushPage(AppPage::MusicIndex);
-            break;
-        case 2:
-            pushPage(AppPage::Playlists);
-            break;
-        case 3:
-            pushPage(AppPage::NowPlaying);
-            break;
-        case 4:
-            pushPage(AppPage::Equalizer);
-            break;
-        case 5:
-            pushPage(AppPage::Settings);
-            break;
-        default:
-            break;
-        }
+        commandConfirmMainMenu(*this);
     }
 
     void toggleShuffle() override
     {
-        playback_controller.toggleShuffle();
+        commandToggleShuffle(*this);
     }
 
     void cycleRepeatMode() override
     {
-        playback_controller.cycleRepeatMode();
+        commandCycleRepeatMode(*this);
     }
 
     void togglePlayPause() override
     {
-        playback_controller.togglePlayPause();
+        commandTogglePlayPause(*this);
     }
 
     void moveEqualizerSelection(int delta) override
     {
-        eq.selected_band = std::clamp(eq.selected_band + delta, 0, static_cast<int>(eq.bands.size()) - 1);
+        commandMoveEqualizerSelection(*this, delta);
     }
 
     void adjustSelectedEqualizerBand(int delta) override
     {
-        auto& band = eq.bands[static_cast<std::size_t>(eq.selected_band)];
-        band = std::clamp(band + delta, -12, 12);
+        commandAdjustSelectedEqualizerBand(*this, delta);
     }
 
     void cycleSongSortModeAndClamp() override
     {
-        library_controller.cycleSongSortMode();
-        clampListSelection();
+        commandCycleSongSortModeAndClamp(*this);
     }
 
     void confirmListPage() override
     {
-        const int selected = navigation.list_selection.selected;
-        const auto page = currentPage();
-        const auto library_result = library_controller.openSelectedListItem(page, selected);
-        switch (library_result.kind) {
-        case LibraryOpenResult::Kind::PushPage:
-            pushPage(library_result.page);
-            return;
-        case LibraryOpenResult::Kind::StartTrack:
-            if (playback_controller.startTrack(library_controller, library_result.track_id) && currentPage() != AppPage::NowPlaying) {
-                pushPage(AppPage::NowPlaying);
-            }
-            return;
-        case LibraryOpenResult::Kind::None:
-            break;
-        }
-
-        switch (page) {
-        case AppPage::Settings:
-            if (selected == 6) {
-                pushPage(AppPage::About);
-            }
-            break;
-        default:
-            break;
-        }
+        commandConfirmListPage(*this);
     }
 };
 
