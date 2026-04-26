@@ -55,6 +55,8 @@ add_library(lofibox_zero_core STATIC
     src/app/playback_runtime_coordinator.cpp
     src/app/playback_session_clock.cpp
     src/app/playback_visualization_source.cpp
+    src/app/settings_projection_builder.cpp
+    src/app/source_manager_projection.cpp
     src/ui/pages/about_page.cpp
     src/ui/pages/equalizer_page.cpp
     src/ui/pages/list_page.cpp
@@ -68,6 +70,7 @@ add_library(lofibox_zero_core STATIC
     src/metadata/match_confidence_guard.cpp
     src/metadata/metadata_merge_policy.cpp
     src/remote/common/remote_source_registry.cpp
+    src/desktop/desktop_integration_boundary.cpp
     src/security/credential_policy.cpp
     src/ui/ui_primitives.cpp
     src/core/bitmap_font.cpp
@@ -305,6 +308,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_network_settings_smoke tests/network_settings_smoke.cpp)
     target_link_libraries(lofibox_network_settings_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_network_settings_smoke COMMAND lofibox_network_settings_smoke)
+
+    add_executable(lofibox_projection_desktop_boundary_smoke tests/projection_desktop_boundary_smoke.cpp)
+    target_link_libraries(lofibox_projection_desktop_boundary_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_projection_desktop_boundary_smoke COMMAND lofibox_projection_desktop_boundary_smoke)
 
     add_executable(lofibox_embedded_metadata_smoke tests/embedded_metadata_smoke.cpp)
     target_link_libraries(lofibox_embedded_metadata_smoke PRIVATE lofibox_zero_host_runtime)

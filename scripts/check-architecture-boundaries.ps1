@@ -102,6 +102,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath.StartsWith("src/desktop/", [System.StringComparison]::Ordinal)) {
+            if ($line -match 'ui::|pages::|AudioPlaybackBackend|RemoteSourceProvider|RemoteCatalogProvider|RemoteStreamResolver') {
+                Add-Violation $violations $repoPath $lineNumber "desktop projection boundary" "Desktop integration must consume app commands/projections and must not depend on UI pages, playback backends, or remote providers"
+            }
+        }
+
         if ($repoPath -eq "src/ui/pages/lyrics_page.cpp") {
             if ($line -match '^\s*(void|int|std::optional|std::vector<|struct)\s+(renderFoamSide|renderSideFoamSpectrum|parseLyricTimestamp|lyricDisplayLines|activeLyricIndex|LyricDisplayLine)\b|struct\s+LyricDisplayLine') {
                 Add-Violation $violations $repoPath $lineNumber "lyrics page algorithm ownership" "LyricsPage must compose layout/effect widgets; lyric parsing and spectrum algorithms belong to ui/widgets or ui/effects"

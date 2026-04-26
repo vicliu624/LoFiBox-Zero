@@ -4,6 +4,7 @@
 
 #include <string_view>
 
+#include "app/settings_projection_builder.h"
 #include "ui/ui_primitives.h"
 
 namespace lofibox::app {
@@ -34,15 +35,12 @@ std::string_view pageTitleDefault(AppPage page) noexcept
 
 std::vector<std::pair<std::string, std::string>> settingsRows(const AppPageModelInput& input)
 {
-    return {
-        {"NETWORK", input.network_connected ? "ONLINE" : "OFFLINE"},
-        {"METADATA", input.metadata_display_name},
-        {"SLEEP TIMER", input.settings.sleep_timer_index == 0 ? "OFF" : "ON"},
-        {"BACKLIGHT", std::to_string(input.settings.backlight_index + 1)},
-        {"LANGUAGE", "EN"},
-        {"REMOTE MEDIA", "SERVERS"},
-        {"ABOUT", "INFO"},
-    };
+    return buildSettingsProjectionRows(SettingsProjectionInput{
+        input.network_connected,
+        input.metadata_display_name,
+        input.settings.sleep_timer_index,
+        input.settings.backlight_index,
+        true});
 }
 
 } // namespace

@@ -58,6 +58,8 @@ The integrated product core distinguishes media identity, media source, media st
 `src/app/library_mutation_service.*` owns library fact mutations such as play count and last-played timestamp updates.
 `src/remote/common/remote_source_registry.*` owns the first-batch remote source registry and treats Navidrome as an OpenSubsonic-compatible provider family.
 `src/security/credential_policy.*` owns credential references, TLS defaults, and secret redaction helpers for remote/source work.
+`src/app/settings_projection_builder.*` and `src/app/source_manager_projection.*` own Settings and Source Manager projection rows instead of letting page-model code hand-assemble source/server details.
+`src/desktop/desktop_integration_boundary.*` owns the initial desktop command and now-playing projection boundary; desktop adapters must consume this boundary rather than reading UI pages or backend objects directly.
 
 ## Hard Boundary Rules
 
