@@ -73,8 +73,8 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath -eq "src/app/lofibox_app.cpp") {
-            if (Test-AnyPrefix $include @("core/bitmap_font.h", "core/color.h")) {
-                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp composition must use UI primitives instead of owning low-level text/color drawing"
+            if (Test-AnyPrefix $include @("app/input_actions.h", "core/bitmap_font.h", "core/color.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp composition must use dedicated routing and UI primitives instead of owning input mapping or low-level drawing"
             }
         }
 

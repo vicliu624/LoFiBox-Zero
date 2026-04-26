@@ -8,6 +8,7 @@
 #include <optional>
 #include <vector>
 
+#include "app/app_page.h"
 #include "app/input_event.h"
 #include "app/playback_state.h"
 #include "app/runtime_services.h"
@@ -15,25 +16,6 @@
 #include "ui/ui_models.h"
 
 namespace lofibox::app {
-
-enum class AppPage {
-    Boot,
-    MainMenu,
-    MusicIndex,
-    Artists,
-    Albums,
-    Songs,
-    Genres,
-    Composers,
-    Compilations,
-    Playlists,
-    PlaylistDetail,
-    NowPlaying,
-    Lyrics,
-    Equalizer,
-    Settings,
-    About,
-};
 
 struct AppDebugSnapshot {
     AppPage current_page{AppPage::Boot};

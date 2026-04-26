@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#pragma once
+
+#include "app/app_page.h"
+#include "app/input_event.h"
+
+namespace lofibox::app {
+
+class AppInputTarget {
+public:
+    virtual ~AppInputTarget() = default;
+
+    [[nodiscard]] virtual AppPage currentPage() const noexcept = 0;
+    [[nodiscard]] virtual bool helpOpen() const noexcept = 0;
+    [[nodiscard]] virtual bool isBrowseListPage() const noexcept = 0;
+    [[nodiscard]] virtual bool nowPlayingConfirmBlocked() const = 0;
+
+    virtual void toggleHelpForCurrentPage() = 0;
+    virtual void closeHelp() = 0;
+    virtual void pushPage(AppPage page) = 0;
+    virtual void popPage() = 0;
+
+    virtual void playFromMenu() = 0;
+    virtual void pausePlayback() = 0;
+    virtual void stepTrack(int delta) = 0;
+    virtual void cycleMainMenuPlaybackMode() = 0;
+    virtual void moveMainMenuSelection(int delta) = 0;
+    virtual void resetMainMenuSelection() = 0;
+    virtual void confirmMainMenu() = 0;
+
+    virtual void toggleShuffle() = 0;
+    virtual void cycleRepeatMode() = 0;
+    virtual void togglePlayPause() = 0;
+
+    virtual void moveEqualizerSelection(int delta) = 0;
+    virtual void adjustSelectedEqualizerBand(int delta) = 0;
+
+    virtual void cycleSongSortModeAndClamp() = 0;
+    virtual void moveSelection(int delta) = 0;
+    virtual void confirmListPage() = 0;
+};
+
+void routeInput(AppInputTarget& target, const InputEvent& event);
+
+} // namespace lofibox::app

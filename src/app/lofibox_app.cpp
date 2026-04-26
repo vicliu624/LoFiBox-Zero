@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <random>
@@ -14,7 +13,7 @@
 #include <vector>
 
 #include "app/app_state.h"
-#include "app/input_actions.h"
+#include "app/app_input_router.h"
 #include "app/library_controller.h"
 #include "app/navigation_state.h"
 #include "ui/pages/about_page.h"
@@ -102,7 +101,7 @@ ui::LyricsContent toUiLyricsContent(const TrackLyrics& lyrics)
 
 } // namespace
 
-struct LoFiBoxApp::Impl {
+struct LoFiBoxApp::Impl final : AppInputTarget {
     std::vector<fs::path> media_roots{};
     ui::UiAssets assets{};
     LibraryController library_controller{};
@@ -160,7 +159,7 @@ struct LoFiBoxApp::Impl {
         refreshMetadataServiceState();
     }
 
-    [[nodiscard]] AppPage currentPage() const noexcept
+    [[nodiscard]] AppPage currentPage() const noexcept override
     {
         return navigation.currentPage();
     }
@@ -180,24 +179,24 @@ struct LoFiBoxApp::Impl {
         navigation.resetListSelection();
     }
 
-    void pushPage(AppPage page)
+    void pushPage(AppPage page) override
     {
         closeHelp();
         navigation.pushPage(page);
     }
 
-    void popPage()
+    void popPage() override
     {
         closeHelp();
         navigation.popPage();
     }
 
-    void closeHelp() noexcept
+    void closeHelp() noexcept override
     {
         help_open = false;
     }
 
-    void toggleHelpForCurrentPage() noexcept
+    void toggleHelpForCurrentPage() noexcept override
     {
         const auto page = currentPage();
         if (page == AppPage::Boot) {
@@ -211,7 +210,12 @@ struct LoFiBoxApp::Impl {
         help_open = true;
     }
 
-    void playFromMenu()
+    [[nodiscard]] bool helpOpen() const noexcept override
+    {
+        return help_open;
+    }
+
+    void playFromMenu() override
     {
         const auto& session = playback_controller.session();
         if (session.status == PlaybackStatus::Paused && session.current_track_id) {
@@ -233,7 +237,17 @@ struct LoFiBoxApp::Impl {
         }
     }
 
-    void cycleMainMenuPlaybackMode()
+    void pausePlayback() override
+    {
+        playback_controller.pause();
+    }
+
+    void stepTrack(int delta) override
+    {
+        playback_controller.stepQueue(library_controller, delta);
+    }
+
+    void cycleMainMenuPlaybackMode() override
     {
         const auto& session = playback_controller.session();
         if (session.shuffle_enabled) {
@@ -328,12 +342,22 @@ struct LoFiBoxApp::Impl {
         navigation.clampListSelection(static_cast<int>(currentRows().size()), ui::kMaxVisibleRows);
     }
 
-    void moveSelection(int delta)
+    void moveMainMenuSelection(int delta) override
+    {
+        main_menu_index = (main_menu_index + kMainMenuItemCount + delta) % kMainMenuItemCount;
+    }
+
+    void resetMainMenuSelection() noexcept override
+    {
+        main_menu_index = 0;
+    }
+
+    void moveSelection(int delta) override
     {
         navigation.moveSelection(delta, static_cast<int>(currentRows().size()), ui::kMaxVisibleRows);
     }
 
-    [[nodiscard]] bool isBrowseListPage() const noexcept
+    [[nodiscard]] bool isBrowseListPage() const noexcept override
     {
         switch (currentPage()) {
         case AppPage::MusicIndex:
@@ -351,12 +375,12 @@ struct LoFiBoxApp::Impl {
         }
     }
 
-    bool nowPlayingConfirmBlocked() const
+    bool nowPlayingConfirmBlocked() const override
     {
         return clock::now() < now_playing_confirm_blocked_until;
     }
 
-    void confirmMainMenu()
+    void confirmMainMenu() override
     {
         switch (main_menu_index) {
         case 0:
@@ -383,7 +407,39 @@ struct LoFiBoxApp::Impl {
         }
     }
 
-    void confirmListPage()
+    void toggleShuffle() override
+    {
+        playback_controller.toggleShuffle();
+    }
+
+    void cycleRepeatMode() override
+    {
+        playback_controller.cycleRepeatMode();
+    }
+
+    void togglePlayPause() override
+    {
+        playback_controller.togglePlayPause();
+    }
+
+    void moveEqualizerSelection(int delta) override
+    {
+        eq.selected_band = std::clamp(eq.selected_band + delta, 0, static_cast<int>(eq.bands.size()) - 1);
+    }
+
+    void adjustSelectedEqualizerBand(int delta) override
+    {
+        auto& band = eq.bands[static_cast<std::size_t>(eq.selected_band)];
+        band = std::clamp(band + delta, -12, 12);
+    }
+
+    void cycleSongSortModeAndClamp() override
+    {
+        library_controller.cycleSongSortMode();
+        clampListSelection();
+    }
+
+    void confirmListPage() override
     {
         const int selected = navigation.list_selection.selected;
         const auto page = currentPage();
@@ -453,114 +509,7 @@ void LoFiBoxApp::update()
 
 void LoFiBoxApp::handleInput(const InputEvent& event)
 {
-    const auto action = mapInput(event);
-    const auto page = impl_->currentPage();
-
-    if (page == AppPage::Boot) {
-        return;
-    }
-
-    if (event.key == InputKey::F1) {
-        impl_->toggleHelpForCurrentPage();
-        return;
-    }
-
-    if (impl_->help_open) {
-        if (action == UserAction::Back || event.key == InputKey::Enter) {
-            impl_->closeHelp();
-        }
-        return;
-    }
-
-    if (page == AppPage::MainMenu) {
-        if (event.key == InputKey::F2) {
-            impl_->playFromMenu();
-        } else if (event.key == InputKey::F3) {
-            impl_->playback_controller.pause();
-        } else if (event.key == InputKey::F4) {
-            impl_->playback_controller.stepQueue(impl_->library_controller, -1);
-        } else if (event.key == InputKey::F5) {
-            impl_->playback_controller.stepQueue(impl_->library_controller, 1);
-        } else if (event.key == InputKey::F6) {
-            impl_->cycleMainMenuPlaybackMode();
-        } else if (action == UserAction::Left) {
-            impl_->main_menu_index = (impl_->main_menu_index + kMainMenuItemCount - 1) % kMainMenuItemCount;
-        } else if (action == UserAction::Right) {
-            impl_->main_menu_index = (impl_->main_menu_index + 1) % kMainMenuItemCount;
-        } else if (action == UserAction::Home) {
-            impl_->main_menu_index = 0;
-        } else if (action == UserAction::Confirm) {
-            impl_->confirmMainMenu();
-        }
-        return;
-    }
-
-    if (page == AppPage::NowPlaying) {
-        if (action == UserAction::Back || action == UserAction::Home) {
-            impl_->popPage();
-        } else if (event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'L') {
-            impl_->pushPage(AppPage::Lyrics);
-        } else if (action == UserAction::Left) {
-            impl_->playback_controller.stepQueue(impl_->library_controller, -1);
-        } else if (action == UserAction::Right || action == UserAction::NextTrack) {
-            impl_->playback_controller.stepQueue(impl_->library_controller, 1);
-        } else if (action == UserAction::Up) {
-            impl_->playback_controller.toggleShuffle();
-        } else if (action == UserAction::Down) {
-            impl_->playback_controller.cycleRepeatMode();
-        } else if (action == UserAction::Confirm && !impl_->nowPlayingConfirmBlocked()) {
-            impl_->playback_controller.togglePlayPause();
-        }
-        return;
-    }
-
-    if (page == AppPage::Lyrics) {
-        if (action == UserAction::Back || action == UserAction::Home) {
-            impl_->popPage();
-        } else if (event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'L') {
-            impl_->popPage();
-        } else if (action == UserAction::Left) {
-            impl_->playback_controller.stepQueue(impl_->library_controller, -1);
-        } else if (action == UserAction::Right || action == UserAction::NextTrack) {
-            impl_->playback_controller.stepQueue(impl_->library_controller, 1);
-        }
-        return;
-    }
-
-    if (page == AppPage::Equalizer) {
-        if (action == UserAction::Back || action == UserAction::Home) {
-            impl_->popPage();
-        } else if (action == UserAction::Left) {
-            impl_->eq.selected_band = std::max(0, impl_->eq.selected_band - 1);
-        } else if (action == UserAction::Right) {
-            impl_->eq.selected_band = std::min(static_cast<int>(impl_->eq.bands.size()) - 1, impl_->eq.selected_band + 1);
-        } else if (action == UserAction::Up) {
-            auto& band = impl_->eq.bands[static_cast<std::size_t>(impl_->eq.selected_band)];
-            band = std::min(12, band + 1);
-        } else if (action == UserAction::Down) {
-            auto& band = impl_->eq.bands[static_cast<std::size_t>(impl_->eq.selected_band)];
-            band = std::max(-12, band - 1);
-        }
-        return;
-    }
-
-    if (impl_->isBrowseListPage()) {
-        if (event.key == InputKey::F3 && (page == AppPage::Songs || page == AppPage::PlaylistDetail)) {
-            impl_->library_controller.cycleSongSortMode();
-            impl_->clampListSelection();
-            return;
-        }
-    }
-
-    if (action == UserAction::Back || action == UserAction::Home) {
-        impl_->popPage();
-    } else if (action == UserAction::Up) {
-        impl_->moveSelection(-1);
-    } else if (action == UserAction::Down) {
-        impl_->moveSelection(1);
-    } else if (action == UserAction::Confirm) {
-        impl_->confirmListPage();
-    }
+    routeInput(*impl_, event);
 }
 
 void LoFiBoxApp::render(core::Canvas& canvas) const

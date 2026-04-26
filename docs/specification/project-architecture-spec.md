@@ -146,6 +146,7 @@ Any future visual or input validation must go through a real Linux product targe
 - `src/ui` owns page renderers, shared UI primitives, visual themes, and UI projection structs such as `UiAssets`, `SpectrumFrame`, and `LyricsContent`.
 - `src/ui` must not include `src/app` headers or reference `app::` internal types; UI can only render view/projection data already translated at the boundary.
 - `src/app` may compose `src/ui` renderers for the current monolithic app surface, but page drawing, chrome drawing, modal drawing, and low-level font/color drawing code must not live under `src/app`; app/runtime/playback state must be converted into UI projection structs before reaching page renderers.
+- `src/app/app_input_router.*` owns page-level input routing from `InputEvent`/`UserAction` to app commands; `LoFiBoxApp` delegates input handling to this router and must not directly include `app/input_actions.h`.
 - `src/playback`, `src/audio`, `src/metadata`, `src/library`, `src/playlist`, `src/remote`, `src/plugins`, `src/desktop`, `src/platform`, `src/security`, and `src/ui` are the target semantic structure for long-term source ownership.
 - `src/platform/host` and `src/platform/device` are adapter layers only.
 - `src/targets` must stay thin.
