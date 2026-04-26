@@ -82,6 +82,8 @@ add_library(lofibox_zero_core STATIC
     src/ui/ui_primitives.cpp
     src/core/bitmap_font.cpp
     src/core/canvas.cpp
+    src/library/library_indexer.cpp
+    src/library/library_store.cpp
 )
 
 target_include_directories(lofibox_zero_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
@@ -297,6 +299,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_library_repository_smoke tests/library_repository_smoke.cpp)
     target_link_libraries(lofibox_library_repository_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_library_repository_smoke COMMAND lofibox_library_repository_smoke)
+
+    add_executable(lofibox_library_store_smoke tests/library_store_smoke.cpp)
+    target_link_libraries(lofibox_library_store_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_library_store_smoke COMMAND lofibox_library_store_smoke)
 
     add_executable(lofibox_media_search_queue_smoke tests/media_search_queue_smoke.cpp)
     target_link_libraries(lofibox_media_search_queue_smoke PRIVATE lofibox_zero_core)

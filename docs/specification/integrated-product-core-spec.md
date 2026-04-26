@@ -63,6 +63,7 @@ This document is normative for the current C++ implementation.
 - Playback runtime code must not directly poll concrete audio backends when an audio pipeline facade exists.
 - `LyricsProvider` must not hide cache, writeback, and match-confidence policy in one body.
 - `LibraryController` must not own database migration, scan scheduling, remote provider calls, or UI row rendering.
+- Library scanning must go through `LibraryIndexer`; durable library persistence must go through `LibraryStore`.
 - `LibraryController` must not own raw library fact storage when a repository boundary exists.
 - Runtime shells must not fork business logic for PocketFrame, Cardputer Zero, container, VNC, framebuffer, X11, or desktop widget targets.
 - Runtime service factories must not regain protocol, metadata, playback, cache, or remote implementation details.

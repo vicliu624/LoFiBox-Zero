@@ -3,7 +3,7 @@
 #include "app/library_repository.h"
 
 #include "app/library_query_service.h"
-#include "app/library_scanner.h"
+#include "library/library_indexer.h"
 
 namespace lofibox::app {
 
@@ -29,7 +29,7 @@ void LibraryRepository::markLoading() noexcept
 
 void LibraryRepository::rescan(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider)
 {
-    library_ = scanLibrary(media_roots, metadata_provider);
+    library_ = library::LibraryIndexer{}.rebuild(media_roots, metadata_provider);
     state_ = library_.degraded ? LibraryIndexState::Degraded : LibraryIndexState::Ready;
 }
 
