@@ -74,3 +74,5 @@ Validation added/kept:
 
 - `lofibox_remote_browse_playback_flow_smoke` verifies remote profile selection through actual remote URI playback.
 - `ctest` currently covers 51 smoke tests across app, remote, library, metadata, cache, DSP, desktop/security, playback, and packaging-facing helpers.
+
+Host deployment note: `XdgRemoteProfileStore` now supports a user-state credential companion file at `~/.local/state/lofibox/remote-credentials.tsv`. This keeps source profiles free of raw secrets while allowing deployed devices without Secret Service/libsecret wiring to authenticate configured media servers.

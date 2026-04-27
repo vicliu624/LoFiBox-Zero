@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <string>
 
@@ -68,6 +69,40 @@ std::string unescapeStoredValue(const std::string& value)
     return value;
 }
 
+struct RemoteCredentialSecret {
+    std::string username{};
+    std::string password{};
+    std::string api_token{};
+};
+
+std::map<std::string, RemoteCredentialSecret> loadCredentialSecrets()
+{
+    const auto path = runtime_paths::appStateDir() / "remote-credentials.tsv";
+    std::map<std::string, RemoteCredentialSecret> secrets{};
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        return secrets;
+    }
+
+    std::string line{};
+    while (std::getline(input, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        const auto values = splitTabLine(line);
+        if (values.size() < 4U) {
+            continue;
+        }
+        secrets.emplace(
+            unescapeStoredValue(values[0]),
+            RemoteCredentialSecret{
+                unescapeStoredValue(values[1]),
+                unescapeStoredValue(values[2]),
+                unescapeStoredValue(values[3])});
+    }
+    return secrets;
+}
+
 } // namespace
 
 XdgRemoteProfileStore::XdgRemoteProfileStore(std::filesystem::path profile_path)
@@ -86,6 +121,7 @@ std::vector<app::RemoteServerProfile> XdgRemoteProfileStore::loadProfiles() cons
         return profiles;
     }
 
+    const auto secrets = loadCredentialSecrets();
     std::string line{};
     while (std::getline(input, line)) {
         if (line.empty() || line[0] == '#') {
@@ -104,6 +140,14 @@ std::vector<app::RemoteServerProfile> XdgRemoteProfileStore::loadProfiles() cons
         profile.credential_ref.id = unescapeStoredValue(values[5]);
         profile.tls_policy.verify_peer = values[6] != "false";
         profile.tls_policy.allow_self_signed = values[7] == "true";
+        const auto secret_id = profile.credential_ref.id.empty() ? profile.id : profile.credential_ref.id;
+        if (const auto found = secrets.find(secret_id); found != secrets.end()) {
+            if (!found->second.username.empty()) {
+                profile.username = found->second.username;
+            }
+            profile.password = found->second.password;
+            profile.api_token = found->second.api_token;
+        }
         profiles.push_back(std::move(profile));
     }
     return profiles;

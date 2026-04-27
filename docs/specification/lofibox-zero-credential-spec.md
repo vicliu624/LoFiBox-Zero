@@ -222,3 +222,13 @@ As of 2026-04-27, credentials are governed as lifecycle records rather than raw 
 - TLS verification remains enabled by default; certificate exceptions are explicit source policy, not implicit retry behavior
 
 The current compiled boundary is keyring-facing. Platform adapters such as Secret Service/libsecret must attach behind this boundary rather than changing source, UI, or playback models.
+
+## 11.1 Host XDG Credential Companion Store
+
+Until the Secret Service/libsecret adapter is enabled on a target host, host builds may load remote-source secrets from:
+
+- `~/.local/state/lofibox/remote-credentials.tsv`
+
+This file is a user-state credential companion file, not an ordinary source profile record. It must be created with user-only permissions such as `0600`, keyed by `credential_ref`, and must not be installed under `/usr`, committed to the repository, logged, or exported in diagnostics.
+
+The ordinary remote profile file continues to store only source identity, URL, username display value, TLS policy, and `credential_ref`. Runtime profile loading may merge password or token material from the companion store after profile parsing.
