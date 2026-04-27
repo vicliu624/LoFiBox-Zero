@@ -20,7 +20,8 @@ constexpr std::array<AppPage, 6> kMainMenuPages{
 constexpr int kEqMinGainDb = -12;
 constexpr int kEqMaxGainDb = 12;
 constexpr int kSettingsRemoteMediaIndex = 5;
-constexpr int kSettingsAboutIndex = 6;
+constexpr int kSettingsRemoteCredentialsIndex = 6;
+constexpr int kSettingsAboutIndex = 7;
 
 void clampListSelection(AppCommandTarget& target)
 {
@@ -178,7 +179,11 @@ void commandConfirmListPage(AppCommandTarget& target)
         break;
     }
 
-    if (page == AppPage::Settings && selected == kSettingsRemoteMediaIndex) {
+    if (page == AppPage::MusicIndex && target.handleLibraryRemoteConfirm(selected)) {
+        return;
+    }
+
+    if (page == AppPage::Settings && (selected == kSettingsRemoteMediaIndex || selected == kSettingsRemoteCredentialsIndex)) {
         commandPushPage(target, AppPage::SourceManager);
         return;
     }

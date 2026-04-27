@@ -125,11 +125,16 @@ struct X11Presenter::Impl {
         screen = DefaultScreen(display);
         visual = DefaultVisual(display, screen);
         depth = DefaultDepth(display, screen);
+        screen_width = DisplayWidth(display, screen);
+        screen_height = DisplayHeight(display, screen);
+        fixed_device_surface = screen_width <= core::kDisplayWidth || screen_height <= core::kDisplayHeight;
+        window_x = fixed_device_surface ? 0 : std::max(0, (screen_width - core::kDisplayWidth) / 2);
+        window_y = fixed_device_surface ? 0 : std::max(0, (screen_height - core::kDisplayHeight) / 2);
         window = XCreateSimpleWindow(
             display,
             RootWindow(display, screen),
-            0,
-            0,
+            window_x,
+            window_y,
             static_cast<unsigned int>(core::kDisplayWidth),
             static_cast<unsigned int>(core::kDisplayHeight),
             0,
@@ -143,7 +148,7 @@ struct X11Presenter::Impl {
         XSetWindowAttributes attributes{};
         attributes.override_redirect = True;
         XChangeWindowAttributes(display, window, CWOverrideRedirect, &attributes);
-        XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask);
+        XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
         XMapRaised(display, window);
         XSync(display, False);
         XSetInputFocus(display, window, RevertToParent, CurrentTime);
@@ -170,11 +175,21 @@ struct X11Presenter::Impl {
 
     Display* display{};
     int screen{};
+    int screen_width{};
+    int screen_height{};
     Visual* visual{};
     int depth{};
     Window window{};
+    int window_x{};
+    int window_y{};
     GC gc{};
     bool running{true};
+    bool fixed_device_surface{false};
+    bool dragging{false};
+    int drag_root_x{};
+    int drag_root_y{};
+    int drag_origin_x{};
+    int drag_origin_y{};
     std::vector<app::InputEvent> pending_inputs{};
 };
 
@@ -195,6 +210,18 @@ bool X11Presenter::pump()
         } else if (event.type == KeyPress) {
             auto translated = translateKey(impl_->display, event.xkey);
             impl_->pending_inputs.insert(impl_->pending_inputs.end(), translated.begin(), translated.end());
+        } else if (event.type == ButtonPress && event.xbutton.button == Button1 && !impl_->fixed_device_surface) {
+            impl_->dragging = true;
+            impl_->drag_root_x = event.xbutton.x_root;
+            impl_->drag_root_y = event.xbutton.y_root;
+            impl_->drag_origin_x = impl_->window_x;
+            impl_->drag_origin_y = impl_->window_y;
+        } else if (event.type == ButtonRelease && event.xbutton.button == Button1) {
+            impl_->dragging = false;
+        } else if (event.type == MotionNotify && impl_->dragging && !impl_->fixed_device_surface) {
+            impl_->window_x = impl_->drag_origin_x + (event.xmotion.x_root - impl_->drag_root_x);
+            impl_->window_y = impl_->drag_origin_y + (event.xmotion.y_root - impl_->drag_root_y);
+            XMoveWindow(impl_->display, impl_->window, impl_->window_x, impl_->window_y);
         }
     }
     return impl_->running;

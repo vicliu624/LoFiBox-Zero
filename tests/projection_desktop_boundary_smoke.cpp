@@ -15,7 +15,7 @@ int main()
         0,
         1,
         true});
-    if (settings_rows.size() != 7 || settings_rows[0].second != "ONLINE" || settings_rows[5].second != "SERVERS") {
+    if (settings_rows.size() != 8 || settings_rows[0].second != "ONLINE" || settings_rows[5].second != "PROFILES" || settings_rows[6].second != "XDG STATE") {
         std::cerr << "Expected Settings projection rows to expose network and remote source state.\n";
         return 1;
     }
@@ -25,7 +25,7 @@ int main()
         {lofibox::app::RemoteServerKind::Navidrome, "nav", "Home Navidrome", "https://navidrome.example", "", "", ""},
     };
     const auto source_rows = lofibox::app::buildSourceManagerRows(profiles);
-    if (source_rows.size() != 5 || source_rows[4].second != "NAVIDROME") {
+    if (source_rows.size() != 5 || source_rows[4].second != "NEEDS CRED") {
         std::cerr << "Expected Source Manager projection to include local/direct/radio and remote server rows.\n";
         return 1;
     }

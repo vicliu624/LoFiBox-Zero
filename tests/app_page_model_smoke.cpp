@@ -13,7 +13,7 @@ int main()
     input.metadata_display_name = "BUILT-IN";
     input.settings.backlight_index = 2;
     const auto settings_model = lofibox::app::buildAppPageModel(input);
-    if (settings_model.title != "SETTINGS" || settings_model.rows.size() != 7 || settings_model.rows[0].second != "ONLINE" || settings_model.rows[3].second != "3") {
+    if (settings_model.title != "SETTINGS" || settings_model.rows.size() != 8 || settings_model.rows[0].second != "ONLINE" || settings_model.rows[3].second != "3") {
         std::cerr << "Expected Settings page model to own settings rows.\n";
         return 1;
     }

@@ -9,6 +9,7 @@ int main()
     lofibox::app::RemoteServerProfile profile{};
     profile.kind = lofibox::app::RemoteServerKind::Navidrome;
     profile.name = "Home Navidrome";
+    profile.base_url = "http://navidrome.local";
 
     const auto rows = lofibox::app::buildSourceManagerRows(
         {profile},
@@ -20,6 +21,6 @@ int main()
     assert(rows[3].first == "ADD Jellyfin");
     assert(rows[4].first == "ADD Navidrome");
     assert(rows[5].first == "Home Navidrome");
-    assert(rows[5].second == "NAVIDROME");
+    assert(rows[5].second == "NEEDS CRED");
     return 0;
 }

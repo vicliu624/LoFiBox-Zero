@@ -46,7 +46,11 @@ std::vector<std::pair<std::string, std::string>> buildSourceManagerRows(
         rows.emplace_back("ADD " + manifest.display_name, manifest.family);
     }
     for (const auto& profile : profiles) {
-        rows.emplace_back(profile.name.empty() ? kindLabel(profile.kind) : profile.name, kindLabel(profile.kind));
+        const bool has_endpoint = !profile.base_url.empty();
+        const bool has_secret = !profile.password.empty() || !profile.api_token.empty();
+        rows.emplace_back(
+            profile.name.empty() ? kindLabel(profile.kind) : profile.name,
+            has_endpoint && has_secret ? "CRED OK" : (has_endpoint ? "NEEDS CRED" : kindLabel(profile.kind)));
     }
     return rows;
 }

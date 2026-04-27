@@ -98,6 +98,7 @@ Every source must eventually define configuration, authentication, connection li
 - Existing embedded metadata must not be overwritten by weaker online evidence.
 - Weak online evidence must not write back metadata, artwork, or lyrics unless accepted by authority and match-confidence policy.
 - Library facts must survive UI navigation changes.
+- The Library entry surface must project both local library dimensions and reachable configured remote profiles. Selecting a remote profile from Library enters the same remote catalog browsing model used by Source Manager; it must not teach `LibraryController` to call remote providers.
 - Search and queue semantics must operate on `MediaItem` values so local and remote content can be mixed without teaching playback or UI about provider internals.
 - Runtime paths must follow XDG and must not write user state into install directories.
 - Debian package validation must remain green after core boundary work.

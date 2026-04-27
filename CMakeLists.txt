@@ -259,6 +259,11 @@ install(FILES data/io.github.vicliu624.lofibox.svg
     DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps"
 )
 
+install(FILES assets/ui/icons/legacy-lofibox/logo.png
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/180x180/apps"
+    RENAME io.github.vicliu624.lofibox.png
+)
+
 install(FILES data/mime/io.github.vicliu624.lofibox.xml
     DESTINATION "${CMAKE_INSTALL_DATADIR}/mime/packages"
 )

@@ -29,8 +29,8 @@ int main()
         return 1;
     }
 
-    if (snapshot.visible_count != 7) {
-        std::cerr << "Expected seven Settings rows including Network and Metadata.\n";
+    if (snapshot.visible_count != 8) {
+        std::cerr << "Expected eight Settings rows including Network, Metadata, and Remote Credentials.\n";
         return 1;
     }
 

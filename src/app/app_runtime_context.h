@@ -84,6 +84,7 @@ public:
     void adjustSelectedEqualizerBand(int delta) override;
     void cycleSongSortModeAndClamp() override;
     void confirmListPage() override;
+    bool handleLibraryRemoteConfirm(int selected) override;
     bool handleSourceManagerConfirm(int selected) override;
     bool handleRemoteBrowseConfirm(int selected) override;
     bool handleStreamDetailConfirm() override;
@@ -99,6 +100,8 @@ private:
     void refreshRuntimeStatus(bool force);
     void handlePendingOpenRequests();
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> currentPageRows() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> libraryIndexRows() const;
+    [[nodiscard]] int libraryRemoteRowBase() const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> remoteBrowseRows() const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> serverDiagnosticsRows() const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> streamDetailRows() const;

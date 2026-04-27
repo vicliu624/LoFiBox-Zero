@@ -9,6 +9,7 @@
 
 #include "app/source_manager_projection.h"
 #include "app/media_search_service.h"
+#include "app/remote_profile_store.h"
 #include "remote/common/remote_catalog_model.h"
 #include "remote/common/remote_provider_contract.h"
 #include "remote/common/remote_source_registry.h"
@@ -18,6 +19,7 @@ namespace lofibox::app {
 
 namespace {
 using clock = std::chrono::steady_clock;
+constexpr int kLibraryLocalRowCount = 6;
 
 RemoteServerKind kindForProtocol(StreamProtocol protocol) noexcept
 {
@@ -366,10 +368,14 @@ AppPageModel AppRuntimeContext::pageModel() const
 {
     const auto page = currentPage();
     auto page_rows = currentPageRows();
+    auto library_rows = controllers_.library.rowsForPage(page);
+    if (page == AppPage::MusicIndex) {
+        library_rows = libraryIndexRows();
+    }
     return buildAppPageModel(AppPageModelInput{
         page,
         controllers_.library.titleOverrideForPage(page),
-        controllers_.library.rowsForPage(page),
+        library_rows,
         state_.settings,
         state_.network.connected,
         state_.metadata_service.display_name,
@@ -462,6 +468,24 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::currentPageR
     }
 }
 
+std::vector<std::pair<std::string, std::string>> AppRuntimeContext::libraryIndexRows() const
+{
+    auto rows = controllers_.library.rowsForPage(AppPage::MusicIndex).value_or(std::vector<std::pair<std::string, std::string>>{});
+    for (const auto& profile : state_.remote_profiles) {
+        const auto kind = remoteServerKindToString(profile.kind);
+        const auto label = profile.name.empty() ? kind : profile.name;
+        const bool has_endpoint = !profile.base_url.empty();
+        const bool has_secret = !profile.password.empty() || !profile.api_token.empty();
+        rows.emplace_back(label, has_endpoint && has_secret ? "REMOTE READY" : "REMOTE SETUP");
+    }
+    return rows;
+}
+
+int AppRuntimeContext::libraryRemoteRowBase() const
+{
+    return kLibraryLocalRowCount;
+}
+
 std::vector<std::pair<std::string, std::string>> AppRuntimeContext::remoteBrowseRows() const
 {
     std::vector<std::pair<std::string, std::string>> rows{};
@@ -500,6 +524,8 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::serverDiagno
         {"TYPE", state_.selected_remote_kind ? "CONFIGURED" : "UNKNOWN"},
         {"CONNECTION", state_.selected_remote_session.available ? "ONLINE" : "OFFLINE"},
         {"MESSAGE", state_.selected_remote_session.message.empty() ? "-" : state_.selected_remote_session.message},
+        {"USER", profile && !profile->username.empty() ? profile->username : "-"},
+        {"CREDENTIAL", profile && !profile->credential_ref.id.empty() ? "XDG STATE" : "NONE"},
         {"TLS", profile && !profile->tls_policy.verify_peer ? "EXCEPTION" : "VERIFY"},
         {"PERMISSION", permission},
         {"TOKEN", state_.selected_remote_session.access_token.empty() ? "NONE" : "REDACTED"},
@@ -591,6 +617,21 @@ void AppRuntimeContext::loadRemoteRoot()
     if (state_.remote_browse_nodes.empty()) {
         state_.remote_browse_nodes = remote::RemoteCatalogMap::rootNodes();
     }
+}
+
+bool AppRuntimeContext::handleLibraryRemoteConfirm(int selected)
+{
+    const int remote_base = libraryRemoteRowBase();
+    if (selected < remote_base) {
+        return false;
+    }
+    const auto profile_index = static_cast<std::size_t>(selected - remote_base);
+    if (profile_index >= state_.remote_profiles.size()) {
+        return false;
+    }
+    openRemoteProfile(profile_index);
+    commandPushPage(*this, state_.selected_remote_session.available ? AppPage::RemoteBrowse : AppPage::ServerDiagnostics);
+    return true;
 }
 
 bool AppRuntimeContext::handleSourceManagerConfirm(int selected)

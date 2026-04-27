@@ -73,6 +73,10 @@ This means:
 - keyboard and page-local help affordances remain first-class
 - desktop standards are used for launch, metadata, media control, notifications, and file/URL opening rather than for adding product chrome
 
+The X11 desktop-widget shell must choose window behavior from physical display capability rather than board names. If the active physical display cannot provide free space beyond the minimum `320x170` product surface, the shell may present a fixed device-like surface. If the display is larger than the minimum surface, the shell must open centered and remain movable without requiring a traditional menu bar.
+
+The application icon must be installed through the hicolor icon theme under the desktop id `io.github.vicliu624.lofibox`, including the SVG metadata icon and a product-logo PNG fallback where available.
+
 ## 7. XDG Runtime Paths
 
 Runtime data must follow:

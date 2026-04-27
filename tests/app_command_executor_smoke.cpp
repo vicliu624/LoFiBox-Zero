@@ -65,10 +65,10 @@ int main()
     }
 
     target.navigation.replaceStack({lofibox::app::AppPage::Settings});
-    target.navigation.list_selection.selected = 6;
+    target.navigation.list_selection.selected = 7;
     lofibox::app::commandConfirmListPage(target);
     if (target.currentPage() != lofibox::app::AppPage::About) {
-        std::cerr << "Expected Settings row 6 to open About.\n";
+        std::cerr << "Expected Settings About row to open About.\n";
         return 1;
     }
 
