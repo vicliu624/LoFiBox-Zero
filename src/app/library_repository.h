@@ -7,6 +7,7 @@
 
 #include "app/library_model.h"
 #include "app/runtime_services.h"
+#include "library/library_governance.h"
 
 namespace lofibox::app {
 
@@ -15,6 +16,8 @@ public:
     [[nodiscard]] LibraryIndexState state() const noexcept;
     [[nodiscard]] const LibraryModel& model() const noexcept;
     [[nodiscard]] LibraryModel& mutableModel() noexcept;
+    [[nodiscard]] const std::vector<::lofibox::library::LibraryFileChange>& lastChanges() const noexcept;
+    [[nodiscard]] const std::vector<::lofibox::library::LibraryMigration>& migrationPlan() const noexcept;
 
     void markLoading() noexcept;
     void rescan(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider);
@@ -25,6 +28,8 @@ public:
 private:
     LibraryIndexState state_{LibraryIndexState::Uninitialized};
     LibraryModel library_{};
+    std::vector<::lofibox::library::LibraryFileChange> last_changes_{};
+    std::vector<::lofibox::library::LibraryMigration> migration_plan_{};
 };
 
 } // namespace lofibox::app

@@ -31,6 +31,11 @@ public:
         const app::RemoteServerProfile& profile,
         const app::RemoteSourceSession& session,
         int limit) const;
+    [[nodiscard]] std::vector<app::RemoteCatalogNode> browse(
+        const app::RemoteServerProfile& profile,
+        const app::RemoteSourceSession& session,
+        const app::RemoteCatalogNode& parent,
+        int limit) const;
     [[nodiscard]] std::optional<app::ResolvedRemoteStream> resolveTrack(
         const app::RemoteServerProfile& profile,
         const app::RemoteSourceSession& session,

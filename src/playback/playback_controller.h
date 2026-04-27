@@ -19,6 +19,7 @@ public:
 
     void update(double delta_seconds, LibraryController& library_controller);
     [[nodiscard]] bool startTrack(LibraryController& library_controller, int track_id);
+    [[nodiscard]] bool startRemoteStream(const ResolvedRemoteStream& stream, std::string title, std::string source);
     void stepQueue(LibraryController& library_controller, int delta);
     void pause() noexcept;
     void resume() noexcept;

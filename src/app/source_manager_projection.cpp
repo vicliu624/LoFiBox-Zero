@@ -12,6 +12,17 @@ std::string kindLabel(RemoteServerKind kind)
     case RemoteServerKind::OpenSubsonic: return "OPENSUBSONIC";
     case RemoteServerKind::Navidrome: return "NAVIDROME";
     case RemoteServerKind::Emby: return "EMBY";
+    case RemoteServerKind::DirectUrl: return "URL";
+    case RemoteServerKind::InternetRadio: return "RADIO";
+    case RemoteServerKind::PlaylistManifest: return "PLAYLIST";
+    case RemoteServerKind::Hls: return "HLS";
+    case RemoteServerKind::Dash: return "DASH";
+    case RemoteServerKind::Smb: return "SMB";
+    case RemoteServerKind::Nfs: return "NFS";
+    case RemoteServerKind::WebDav: return "WEBDAV";
+    case RemoteServerKind::Ftp: return "FTP";
+    case RemoteServerKind::Sftp: return "SFTP";
+    case RemoteServerKind::DlnaUpnp: return "DLNA";
     }
     return "REMOTE";
 }

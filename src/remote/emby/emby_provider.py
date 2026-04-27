@@ -55,6 +55,19 @@ def library_tracks(profile: Dict[str, Any], session: Dict[str, Any], limit: int)
     return tracks if tracks else playable_item_query(profile, session, limit)
 
 
+def browse(profile: Dict[str, Any], session: Dict[str, Any], parent: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
+    nodes = jellyfin_provider.browse(profile, session, parent, limit)
+    if nodes:
+        return nodes
+    kind = parent.get("kind", "root")
+    if kind in ("tracks", "recently-added", "recently-played", "favorites"):
+        return [
+            jellyfin_provider.node("tracks", item["id"], item["title"], item.get("artist", ""), playable=True, browsable=False)
+            for item in playable_item_query(profile, session, limit)
+        ]
+    return nodes
+
+
 def resolve(profile: Dict[str, Any], session: Dict[str, Any], track: Dict[str, Any]) -> Dict[str, Any]:
     token = session.get("access_token", "")
     user_id = session.get("user_id", "")

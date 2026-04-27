@@ -413,3 +413,15 @@ Until that page-level work exists, do not smuggle partial remote-source UI into 
 - Do not flatten live streams and on-demand tracks into one fake metadata model.
 - Do not let auth, cache, or protocol parsing details become the shared app's top-level concepts.
 - If later work changes the meaning of `PlayableItem`, `Track`, `Station`, or the provider boundaries above, update this specification before changing code structure.
+
+## 22. Current Implementation Convergence
+
+As of 2026-04-27, the implementation baseline must treat the following as concrete product-domain objects, not page-local conveniences:
+
+- `RemoteSource` families include direct URL, internet radio, playlist manifest, HLS, DASH, SMB, NFS, WebDAV, FTP, SFTP, DLNA/UPnP, Jellyfin, OpenSubsonic, Navidrome-compatible, and Emby.
+- `RemoteCatalogNode` is the shared browse model for artists, albums, tracks, genres, playlists, folders, favorites, recently added, recently played, and stations.
+- `StreamSourceClassifier` owns URI/protocol recognition for direct files, adaptive manifests, playlist manifests, radio-style streams, LAN shares, and discovery URLs.
+- `StreamingPlaybackPolicy` owns buffer thresholds, reconnect/retry plans, radio reconnection behavior, next-item and album/playlist prefetch, quality preference, transcoding preference, and stream diagnostics.
+- `RemoteStreamDiagnostics` is the stream-detail truth for source identity, redacted effective URL, protocol, bitrate, codec, buffer state, and connection state.
+
+UI pages, provider adapters, and playback orchestration must consume these shared models instead of inventing per-page or per-protocol representations.

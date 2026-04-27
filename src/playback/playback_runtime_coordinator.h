@@ -4,9 +4,11 @@
 
 #include <functional>
 #include <filesystem>
+#include <string>
 
 #include "app/library_controller.h"
 #include "playback/playback_completion_policy.h"
+#include "playback/playback_stability_policy.h"
 #include "playback/playback_session_clock.h"
 #include "audio/audio_pipeline_controller.h"
 
@@ -20,6 +22,7 @@ public:
 
     void beginTrack(PlaybackSession& session) const noexcept;
     [[nodiscard]] bool startBackend(const std::filesystem::path& path, PlaybackSession& session);
+    [[nodiscard]] bool startBackendUri(const std::string& uri, PlaybackSession& session);
     void pause(PlaybackSession& session) noexcept;
     void resume(PlaybackSession& session) noexcept;
     void stepQueue(const QueueState& queue, const PlaybackSession& session, int delta, const PlayIndexCallback& play_index) const;
@@ -30,6 +33,8 @@ private:
     PlaybackSessionClock clock_{};
     audio::AudioPipelineController audio_pipeline_{};
     PlaybackCompletionPolicy completion_policy_{};
+    PlaybackStabilityPolicy stability_policy_{};
+    GaplessCrossfadePolicy transition_policy_{};
 };
 
 } // namespace lofibox::app

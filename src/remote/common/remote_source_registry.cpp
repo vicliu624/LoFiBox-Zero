@@ -11,6 +11,17 @@ bool RemoteSourceRegistry::supported(app::RemoteServerKind kind) const noexcept
     case app::RemoteServerKind::OpenSubsonic:
     case app::RemoteServerKind::Navidrome:
     case app::RemoteServerKind::Emby:
+    case app::RemoteServerKind::DirectUrl:
+    case app::RemoteServerKind::InternetRadio:
+    case app::RemoteServerKind::PlaylistManifest:
+    case app::RemoteServerKind::Hls:
+    case app::RemoteServerKind::Dash:
+    case app::RemoteServerKind::Smb:
+    case app::RemoteServerKind::Nfs:
+    case app::RemoteServerKind::WebDav:
+    case app::RemoteServerKind::Ftp:
+    case app::RemoteServerKind::Sftp:
+    case app::RemoteServerKind::DlnaUpnp:
         return true;
     }
     return false;
@@ -38,6 +49,17 @@ std::vector<RemoteProviderManifest> RemoteSourceRegistry::manifests() const
         manifest(app::RemoteServerKind::OpenSubsonic),
         manifest(app::RemoteServerKind::Navidrome),
         manifest(app::RemoteServerKind::Emby),
+        manifest(app::RemoteServerKind::DirectUrl),
+        manifest(app::RemoteServerKind::InternetRadio),
+        manifest(app::RemoteServerKind::PlaylistManifest),
+        manifest(app::RemoteServerKind::Hls),
+        manifest(app::RemoteServerKind::Dash),
+        manifest(app::RemoteServerKind::Smb),
+        manifest(app::RemoteServerKind::Nfs),
+        manifest(app::RemoteServerKind::WebDav),
+        manifest(app::RemoteServerKind::Ftp),
+        manifest(app::RemoteServerKind::Sftp),
+        manifest(app::RemoteServerKind::DlnaUpnp),
     };
 }
 

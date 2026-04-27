@@ -3,6 +3,7 @@
 #include "app/library_repository.h"
 
 #include "app/library_query_service.h"
+#include "library/library_governance.h"
 #include "library/library_indexer.h"
 
 namespace lofibox::app {
@@ -22,6 +23,16 @@ LibraryModel& LibraryRepository::mutableModel() noexcept
     return library_;
 }
 
+const std::vector<::lofibox::library::LibraryFileChange>& LibraryRepository::lastChanges() const noexcept
+{
+    return last_changes_;
+}
+
+const std::vector<::lofibox::library::LibraryMigration>& LibraryRepository::migrationPlan() const noexcept
+{
+    return migration_plan_;
+}
+
 void LibraryRepository::markLoading() noexcept
 {
     state_ = LibraryIndexState::Loading;
@@ -29,7 +40,17 @@ void LibraryRepository::markLoading() noexcept
 
 void LibraryRepository::rescan(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider)
 {
-    library_ = library::LibraryIndexer{}.rebuild(media_roots, metadata_provider);
+    const auto before = library_;
+    auto next = library::LibraryIndexer{}.rebuild(media_roots, metadata_provider);
+    std::vector<std::filesystem::path> current_files{};
+    current_files.reserve(next.tracks.size());
+    for (const auto& track : next.tracks) {
+        current_files.push_back(track.path);
+    }
+    library::LibraryGovernanceService governance{};
+    last_changes_ = governance.incrementalChanges(before, current_files);
+    migration_plan_ = governance.migrationPlan(1, 1);
+    library_ = std::move(next);
     state_ = library_.degraded ? LibraryIndexState::Degraded : LibraryIndexState::Ready;
 }
 

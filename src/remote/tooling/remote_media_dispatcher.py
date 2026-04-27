@@ -63,6 +63,17 @@ def _library_tracks(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"tracks": _provider(kind).library_tracks(profile, session, limit)}
 
 
+def _browse(payload: Dict[str, Any]) -> Dict[str, Any]:
+    profile = payload["profile"]
+    session = payload["session"]
+    parent = payload["parent"]
+    limit = int(payload.get("limit", 50))
+    kind = _normalized_kind(profile)
+    if kind in ("opensubsonic", "navidrome"):
+        return {"nodes": _provider(kind).browse(profile, parent, limit)}
+    return {"nodes": _provider(kind).browse(profile, session, parent, limit)}
+
+
 def _resolve(payload: Dict[str, Any]) -> Dict[str, Any]:
     profile = payload["profile"]
     session = payload["session"]
@@ -83,6 +94,8 @@ def run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         return _recent(payload)
     if action == "library_tracks":
         return _library_tracks(payload)
+    if action == "browse":
+        return _browse(payload)
     if action == "resolve":
         return _resolve(payload)
     raise ValueError(f"Unsupported action: {action}")

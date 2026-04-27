@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <cstdlib>
+#include <chrono>
 #include <exception>
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "app/lofibox_app_runner.h"
 #include "platform/host/legacy_asset_loader.h"
@@ -74,7 +76,12 @@ int main(int argc, char** argv)
             std::move(options.input_device_path)};
         auto assets = lofibox::platform::host::loadLegacyAssets();
         auto services = lofibox::platform::host::createHostRuntimeServices();
-        lofibox::app::runLoFiBoxApp(device, std::move(assets), std::move(services));
+        lofibox::app::runLoFiBoxApp(
+            device,
+            std::move(assets),
+            std::move(services),
+            std::chrono::milliseconds::zero(),
+            lofibox::targets::positionalOpenUris(argc, argv));
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "Device startup failed: " << ex.what() << '\n';

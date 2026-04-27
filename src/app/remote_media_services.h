@@ -18,6 +18,17 @@ enum class RemoteServerKind {
     OpenSubsonic,
     Navidrome,
     Emby,
+    DirectUrl,
+    InternetRadio,
+    PlaylistManifest,
+    Hls,
+    Dash,
+    Smb,
+    Nfs,
+    WebDav,
+    Ftp,
+    Sftp,
+    DlnaUpnp,
 };
 
 struct RemoteServerProfile {
@@ -49,10 +60,77 @@ struct RemoteTrack {
     int duration_seconds{0};
 };
 
+enum class RemoteCatalogNodeKind {
+    Root,
+    Artists,
+    Artist,
+    Albums,
+    Album,
+    Tracks,
+    Genres,
+    Genre,
+    Playlists,
+    Playlist,
+    Folders,
+    Folder,
+    Favorites,
+    RecentlyAdded,
+    RecentlyPlayed,
+    Stations,
+};
+
+struct RemoteCatalogNode {
+    RemoteCatalogNodeKind kind{RemoteCatalogNodeKind::Root};
+    std::string id{};
+    std::string title{};
+    std::string subtitle{};
+    bool playable{false};
+    bool browsable{true};
+};
+
+enum class StreamProtocol {
+    File,
+    Http,
+    Https,
+    Hls,
+    Dash,
+    Icecast,
+    Shoutcast,
+    Smb,
+    Nfs,
+    WebDav,
+    Ftp,
+    Sftp,
+    DlnaUpnp,
+};
+
+enum class StreamQualityPreference {
+    Original,
+    Auto,
+    LowBandwidth,
+    Manual,
+};
+
+struct RemoteStreamDiagnostics {
+    std::string source_name{};
+    std::string resolved_url_redacted{};
+    StreamProtocol protocol{StreamProtocol::Http};
+    int bitrate_kbps{0};
+    std::string codec{};
+    int sample_rate_hz{0};
+    int channel_count{0};
+    bool live{false};
+    bool seekable{true};
+    bool connected{false};
+    std::string connection_status{};
+};
+
 struct ResolvedRemoteStream {
     std::string url{};
     std::vector<std::pair<std::string, std::string>> headers{};
     bool seekable{true};
+    StreamQualityPreference quality_preference{StreamQualityPreference::Auto};
+    RemoteStreamDiagnostics diagnostics{};
 };
 
 class RemoteSourceProvider {
@@ -86,6 +164,18 @@ public:
     {
         (void)profile;
         (void)session;
+        (void)limit;
+        return {};
+    }
+    [[nodiscard]] virtual std::vector<RemoteCatalogNode> browse(
+        const RemoteServerProfile& profile,
+        const RemoteSourceSession& session,
+        const RemoteCatalogNode& parent,
+        int limit) const
+    {
+        (void)profile;
+        (void)session;
+        (void)parent;
         (void)limit;
         return {};
     }

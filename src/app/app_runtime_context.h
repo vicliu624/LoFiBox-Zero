@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 #include "app/app_command_executor.h"
@@ -26,7 +27,8 @@ class AppRuntimeContext final : public AppInputTarget,
 public:
     explicit AppRuntimeContext(std::vector<std::filesystem::path> media_roots = {},
                                ui::UiAssets assets = {},
-                               RuntimeServices services = {});
+                               RuntimeServices services = {},
+                               std::vector<std::string> startup_uris = {});
 
     void update();
     void handleInput(const InputEvent& event);
@@ -82,6 +84,12 @@ public:
     void adjustSelectedEqualizerBand(int delta) override;
     void cycleSongSortModeAndClamp() override;
     void confirmListPage() override;
+    bool handleSourceManagerConfirm(int selected) override;
+    bool handleRemoteBrowseConfirm(int selected) override;
+    bool handleStreamDetailConfirm() override;
+    bool handleSearchConfirm(int selected) override;
+    void appendSearchCharacter(char ch) override;
+    void backspaceSearchQuery() override;
 
 private:
     using clock = std::chrono::steady_clock;
@@ -89,6 +97,16 @@ private:
     void refreshNetworkStatus();
     void refreshMetadataServiceState();
     void refreshRuntimeStatus(bool force);
+    void handlePendingOpenRequests();
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> currentPageRows() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> remoteBrowseRows() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> serverDiagnosticsRows() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> streamDetailRows() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> queueRows() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> searchRows() const;
+    [[nodiscard]] std::optional<RemoteServerProfile> selectedRemoteProfile() const;
+    void openRemoteProfile(std::size_t profile_index);
+    void loadRemoteRoot();
 
     AppRuntimeState state_{};
     AppControllerSet controllers_{};

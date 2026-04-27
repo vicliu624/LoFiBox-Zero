@@ -27,8 +27,8 @@ int main()
         std::cerr << "Expected Navidrome manifest to declare OpenSubsonic-compatible stream resolution.\n";
         return 1;
     }
-    if (registry.manifests().size() != 4U) {
-        std::cerr << "Expected first-batch remote provider manifests.\n";
+    if (registry.manifests().size() < 15U || !registry.supported(lofibox::app::RemoteServerKind::DirectUrl) || !registry.supported(lofibox::app::RemoteServerKind::Sftp)) {
+        std::cerr << "Expected first-batch and expanded remote provider manifests.\n";
         return 1;
     }
 

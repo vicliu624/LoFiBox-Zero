@@ -73,6 +73,15 @@ std::string playbackSummary(const AppRenderTarget& target)
 {
     const auto& playback = target.playbackSession();
     if (!playback.current_track_id) {
+        if (!playback.current_stream_title.empty()) {
+            std::string summary = playback.status == PlaybackStatus::Paused ? "PAUSED  " : "PLAYING  ";
+            summary += playback.current_stream_title;
+            if (!playback.current_stream_source.empty()) {
+                summary += " - ";
+                summary += playback.current_stream_source;
+            }
+            return summary;
+        }
         return "NO TRACK";
     }
     const auto* track = target.findTrack(*playback.current_track_id);
@@ -120,11 +129,12 @@ ui::pages::NowPlayingView buildNowPlayingProjection(const AppRenderTarget& targe
 {
     const auto& playback = target.playbackSession();
     const TrackRecord* track = playback.current_track_id ? target.findTrack(*playback.current_track_id) : nullptr;
+    const bool has_remote_stream = track == nullptr && !playback.current_stream_title.empty();
     return ui_pages::NowPlayingView{
-        track != nullptr,
-        track ? track->title : std::string{},
-        track ? track->artist : std::string{},
-        track ? track->album : std::string{},
+        track != nullptr || has_remote_stream,
+        track ? track->title : playback.current_stream_title,
+        track ? track->artist : playback.current_stream_source,
+        track ? track->album : playback.current_stream_url_redacted,
         track ? track->duration_seconds : 0,
         playback.elapsed_seconds,
         toUiPlaybackStatus(playback.status),
@@ -139,10 +149,11 @@ ui::pages::LyricsPageView buildLyricsProjection(const AppRenderTarget& target)
 {
     const auto& playback = target.playbackSession();
     const TrackRecord* track = playback.current_track_id ? target.findTrack(*playback.current_track_id) : nullptr;
+    const bool has_remote_stream = track == nullptr && !playback.current_stream_title.empty();
     return ui_pages::LyricsPageView{
-        track != nullptr,
-        track ? track->title : std::string{},
-        track ? track->artist : std::string{},
+        track != nullptr || has_remote_stream,
+        track ? track->title : playback.current_stream_title,
+        track ? track->artist : playback.current_stream_source,
         track ? track->duration_seconds : 0,
         playback.elapsed_seconds,
         toUiPlaybackStatus(playback.status),

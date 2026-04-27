@@ -14,6 +14,11 @@ namespace {
     return event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'L';
 }
 
+[[nodiscard]] bool isQueueToggle(const InputEvent& event) noexcept
+{
+    return event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'Q';
+}
+
 } // namespace
 
 void routeInput(AppInputTarget& target, const InputEvent& event)
@@ -65,6 +70,8 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
             target.popPage();
         } else if (isLyricsToggle(event)) {
             target.pushPage(AppPage::Lyrics);
+        } else if (isQueueToggle(event)) {
+            target.pushPage(AppPage::Queue);
         } else if (action == UserAction::Left) {
             target.stepTrack(-1);
         } else if (action == UserAction::Right || action == UserAction::NextTrack) {
@@ -107,7 +114,26 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
         return;
     }
 
+    if (page == AppPage::Search) {
+        if (event.key == InputKey::Character && event.text != '\0') {
+            target.appendSearchCharacter(event.text);
+            return;
+        }
+        if (event.key == InputKey::Backspace) {
+            target.backspaceSearchQuery();
+            return;
+        }
+    }
+
     if (target.isBrowseListPage()) {
+        if (event.key == InputKey::F4 && (page == AppPage::Playlists || page == AppPage::PlaylistDetail)) {
+            target.pushPage(AppPage::PlaylistEditor);
+            return;
+        }
+        if (event.key == InputKey::F2 && page != AppPage::Search) {
+            target.pushPage(AppPage::Search);
+            return;
+        }
         if (event.key == InputKey::F3 && (page == AppPage::Songs || page == AppPage::PlaylistDetail)) {
             target.cycleSongSortModeAndClamp();
             return;

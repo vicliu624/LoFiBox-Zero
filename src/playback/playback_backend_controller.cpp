@@ -15,6 +15,12 @@ bool PlaybackBackendController::startFile(const std::filesystem::path& path, dou
     return audio_backend != nullptr && audio_backend->playFile(path, start_seconds);
 }
 
+bool PlaybackBackendController::startUri(const std::string& uri, double start_seconds)
+{
+    auto* audio_backend = backend();
+    return audio_backend != nullptr && audio_backend->playUri(uri, start_seconds);
+}
+
 void PlaybackBackendController::pause() noexcept
 {
     if (auto* audio_backend = backend()) {

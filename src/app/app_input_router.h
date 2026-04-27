@@ -39,6 +39,8 @@ public:
     virtual void cycleSongSortModeAndClamp() = 0;
     virtual void moveSelection(int delta) = 0;
     virtual void confirmListPage() = 0;
+    virtual void appendSearchCharacter(char ch) { (void)ch; }
+    virtual void backspaceSearchQuery() {}
 };
 
 void routeInput(AppInputTarget& target, const InputEvent& event);

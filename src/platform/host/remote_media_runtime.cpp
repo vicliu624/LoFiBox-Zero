@@ -72,6 +72,15 @@ public:
         return client_.libraryTracks(profile, session, limit);
     }
 
+    [[nodiscard]] std::vector<app::RemoteCatalogNode> browse(
+        const app::RemoteServerProfile& profile,
+        const app::RemoteSourceSession& session,
+        const app::RemoteCatalogNode& parent,
+        int limit) const override
+    {
+        return client_.browse(profile, session, parent, limit);
+    }
+
 private:
     RemoteMediaToolClient client_{};
 };

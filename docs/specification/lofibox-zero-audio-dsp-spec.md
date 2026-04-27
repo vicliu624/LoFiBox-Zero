@@ -372,3 +372,14 @@ The implemented DSP domain must expose these final-form controls through shared 
 - Do not separate streamed and local DSP behavior unless a real media-semantic difference requires it.
 - Do not let a single early six-band screen become the long-term architecture boundary for DSP.
 - If later work changes the meaning of `DspChain`, `EqProfile`, `EqEngine`, `EqManager`, or `PresetRepository`, update this specification before changing code structure.
+
+## 15. Current Implementation Convergence
+
+As of 2026-04-27, the DSP baseline is a chain/profile domain rather than an EQ-page implementation detail:
+
+- `DspChainProfile` carries graphic EQ, parametric EQ, high-pass/low-pass filters, loudness, balance, limiter, ReplayGain mode, preamp, bypass, smoothing, and clipping-protection intent.
+- Preset governance includes built-in presets, user presets, import/export, duplication, rename, delete, and overwrite semantics.
+- Device/content bindings map output devices and content categories to DSP profile ids without making the UI page own that decision.
+- Playback stability policy owns gapless/crossfade preparation, transition lead time, and start/end jitter suppression as playback-chain behavior rather than visual behavior.
+
+Future rendering pages may expose simple, advanced, or professional controls, but they must not redefine the DSP domain.

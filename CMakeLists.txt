@@ -79,9 +79,12 @@ add_library(lofibox_zero_core STATIC
     src/app/runtime_services.cpp
     src/metadata/enrichment_authority_policy.cpp
     src/metadata/match_confidence_guard.cpp
+    src/metadata/metadata_governance.cpp
     src/metadata/metadata_merge_policy.cpp
+    src/remote/common/remote_catalog_model.cpp
     src/remote/common/remote_provider_contract.cpp
     src/remote/common/remote_source_registry.cpp
+    src/remote/common/stream_source_model.cpp
         src/playlist/playlist_parser.cpp
         src/plugins/plugin_manifest.cpp
     src/desktop/desktop_integration_boundary.cpp
@@ -89,8 +92,11 @@ add_library(lofibox_zero_core STATIC
     src/ui/ui_primitives.cpp
     src/core/bitmap_font.cpp
     src/core/canvas.cpp
+    src/library/library_governance.cpp
     src/library/library_indexer.cpp
     src/library/library_store.cpp
+    src/playback/playback_stability_policy.cpp
+    src/playback/streaming_playback_policy.cpp
 )
 
 target_include_directories(lofibox_zero_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
@@ -345,6 +351,34 @@ if(BUILD_TESTING)
     add_executable(lofibox_cache_manager_smoke tests/cache_manager_smoke.cpp)
     target_link_libraries(lofibox_cache_manager_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_cache_manager_smoke COMMAND lofibox_cache_manager_smoke)
+
+    add_executable(lofibox_streaming_completion_smoke tests/streaming_completion_smoke.cpp)
+    target_link_libraries(lofibox_streaming_completion_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_streaming_completion_smoke COMMAND lofibox_streaming_completion_smoke)
+
+    add_executable(lofibox_remote_browse_playback_flow_smoke tests/remote_browse_playback_flow_smoke.cpp)
+    target_link_libraries(lofibox_remote_browse_playback_flow_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_remote_browse_playback_flow_smoke COMMAND lofibox_remote_browse_playback_flow_smoke)
+
+    add_executable(lofibox_library_governance_smoke tests/library_governance_smoke.cpp)
+    target_link_libraries(lofibox_library_governance_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_library_governance_smoke COMMAND lofibox_library_governance_smoke)
+
+    add_executable(lofibox_metadata_governance_smoke tests/metadata_governance_smoke.cpp)
+    target_link_libraries(lofibox_metadata_governance_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_metadata_governance_smoke COMMAND lofibox_metadata_governance_smoke)
+
+    add_executable(lofibox_playback_stability_smoke tests/playback_stability_smoke.cpp)
+    target_link_libraries(lofibox_playback_stability_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_playback_stability_smoke COMMAND lofibox_playback_stability_smoke)
+
+    add_executable(lofibox_desktop_security_completion_smoke tests/desktop_security_completion_smoke.cpp)
+    target_link_libraries(lofibox_desktop_security_completion_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_desktop_security_completion_smoke COMMAND lofibox_desktop_security_completion_smoke)
+
+    add_executable(lofibox_final_surface_pages_smoke tests/final_surface_pages_smoke.cpp)
+    target_link_libraries(lofibox_final_surface_pages_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_final_surface_pages_smoke COMMAND lofibox_final_surface_pages_smoke)
 
     add_executable(lofibox_main_menu_visual_smoke tests/main_menu_visual_smoke.cpp)
     target_link_libraries(lofibox_main_menu_visual_smoke PRIVATE lofibox_zero_host_runtime)

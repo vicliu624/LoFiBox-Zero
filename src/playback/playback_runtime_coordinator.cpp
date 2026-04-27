@@ -24,6 +24,12 @@ bool PlaybackRuntimeCoordinator::startBackend(const std::filesystem::path& path,
     return session.audio_active;
 }
 
+bool PlaybackRuntimeCoordinator::startBackendUri(const std::string& uri, PlaybackSession& session)
+{
+    session.audio_active = audio_pipeline_.startUri(uri, 0.0);
+    return session.audio_active;
+}
+
 void PlaybackRuntimeCoordinator::pause(PlaybackSession& session) noexcept
 {
     if (session.status == PlaybackStatus::Playing) {
@@ -62,9 +68,29 @@ void PlaybackRuntimeCoordinator::tick(
     const PlayIndexCallback& play_index)
 {
     clock_.advance(session, delta_seconds);
+    const auto duration = session.current_track_id
+        ? std::chrono::milliseconds{static_cast<int>((library_controller.findTrack(*session.current_track_id) ? library_controller.findTrack(*session.current_track_id)->duration_seconds : 0) * 1000)}
+        : std::chrono::milliseconds{0};
+    const PlaybackStabilitySample stability_sample{
+        std::chrono::milliseconds{static_cast<int>(session.elapsed_seconds * 1000.0)},
+        duration,
+        session.audio_active && session.elapsed_seconds < 0.25,
+        false,
+        false};
+    if (stability_policy_.shouldPrepareNext(stability_sample, transition_policy_)) {
+        session.visualization_pending = true;
+    }
     if (session.audio_active) {
         switch (audio_pipeline_.state()) {
         case AudioPlaybackState::Finished:
+            if (stability_policy_.suppressStartOrEndJitter(PlaybackStabilitySample{
+                    std::chrono::milliseconds{static_cast<int>(session.elapsed_seconds * 1000.0)},
+                    duration,
+                    false,
+                    true,
+                    false})) {
+                return;
+            }
             if (advanceAfterFinish(queue, session, play_index)) {
                 return;
             }

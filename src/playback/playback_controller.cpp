@@ -43,6 +43,23 @@ bool PlaybackController::startTrack(LibraryController& library_controller, int t
     return playQueueIndex(library_controller, queue_.active_index);
 }
 
+bool PlaybackController::startRemoteStream(const ResolvedRemoteStream& stream, std::string title, std::string source)
+{
+    queue_ = {};
+    session_.current_track_id.reset();
+    session_.current_stream_title = std::move(title);
+    session_.current_stream_source = std::move(source);
+    session_.current_stream_url_redacted = stream.diagnostics.resolved_url_redacted;
+    session_.current_stream_live = stream.diagnostics.live;
+    session_.status = PlaybackStatus::Playing;
+    runtime_.beginTrack(session_);
+    const bool started = runtime_.startBackendUri(stream.url, session_);
+    if (!started) {
+        session_.status = PlaybackStatus::Paused;
+    }
+    return started;
+}
+
 bool PlaybackController::playQueueIndex(LibraryController& library_controller, int queue_index)
 {
     if (queue_index < 0 || queue_index >= static_cast<int>(queue_.active_ids.size())) {
@@ -56,6 +73,10 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
 
     queue_.active_index = queue_index;
     session_.current_track_id = track->id;
+    session_.current_stream_title.clear();
+    session_.current_stream_source.clear();
+    session_.current_stream_url_redacted.clear();
+    session_.current_stream_live = false;
     session_.status = PlaybackStatus::Playing;
     runtime_.beginTrack(session_);
     refreshMetadata(library_controller, MetadataReadMode::LocalOnly);

@@ -191,3 +191,15 @@ The indexer may rebuild persisted index content from source media when required.
 - Full-text search ranking
 - Remote media-server library synchronization internals
 - Audio decode validation during scan
+
+## 14. Current Implementation Convergence
+
+As of 2026-04-27, library readiness is not only scan completion. The implemented governance baseline also includes:
+
+- incremental change classification for added, modified, removed, and unchanged media files
+- migration planning with explicit `from_version`, `to_version`, destructive/non-destructive status, and operation descriptions
+- smart playlist rules for recently added, recently played, most played, favorites, and never played views
+- local and remote unified search grouping with source labels and result explanations
+- duplicate and same-recording decisions based on MusicBrainz recording id, fingerprint, and conservative title/artist/duration fallback
+
+The scanner, store, browse pages, and playback history must use this governance layer for indexing decisions instead of deriving library truth from a visible list page.

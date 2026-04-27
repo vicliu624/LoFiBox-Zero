@@ -23,6 +23,10 @@ public:
     virtual EqState& eqState() noexcept = 0;
     virtual int& mainMenuIndex() noexcept = 0;
     virtual void closeHelpForCommand() noexcept = 0;
+    virtual bool handleSourceManagerConfirm(int selected) { (void)selected; return false; }
+    virtual bool handleRemoteBrowseConfirm(int selected) { (void)selected; return false; }
+    virtual bool handleStreamDetailConfirm() { return false; }
+    virtual bool handleSearchConfirm(int selected) { (void)selected; return false; }
 };
 
 void commandPushPage(AppCommandTarget& target, AppPage page);

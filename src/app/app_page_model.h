@@ -22,6 +22,7 @@ struct AppPageModelInput {
     bool network_connected{false};
     std::string metadata_display_name{};
     std::optional<std::vector<std::pair<std::string, std::string>>> source_manager_rows{};
+    std::optional<std::vector<std::pair<std::string, std::string>>> page_rows{};
 };
 
 struct AppPageModel {

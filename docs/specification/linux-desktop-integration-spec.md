@@ -83,3 +83,14 @@ Runtime data must follow:
 - state: `~/.local/state/lofibox/`
 
 User data must never be written into `/usr`, `/opt`, installation directories, or the current working directory.
+
+## 9. Current Implementation Convergence
+
+As of 2026-04-27, runtime desktop integration has an explicit state boundary:
+
+- desktop adapters report availability for MPRIS, D-Bus, media keys, and notifications
+- files and URLs opened by the desktop environment become `DesktopOpenRequest` inputs before entering the unified playback/source model
+- desktop commands are translated to app commands through `DesktopCommandAdapter`
+- UI pages must not talk directly to D-Bus, notification backends, MIME handlers, or media-key listeners
+
+Concrete backend adapters may evolve, but the handoff into the product must stay command/projection based.

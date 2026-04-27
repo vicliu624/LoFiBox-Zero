@@ -3,7 +3,9 @@
 #include "targets/cli_options.h"
 
 #include <ostream>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace lofibox::targets {
 
@@ -20,7 +22,7 @@ void printHelp(std::ostream& out)
     out << "LoFiBox " << kVersion << '\n'
         << '\n'
         << "Usage:\n"
-        << "  lofibox [options]\n"
+        << "  lofibox [options] [audio-file-or-url...]\n"
         << '\n'
         << "Options:\n"
         << "  --help        Show this help text and exit.\n"
@@ -48,6 +50,26 @@ bool handleCommonCliOptions(int argc, char** argv, std::ostream& out)
     }
 
     return false;
+}
+
+std::vector<std::string> positionalOpenUris(int argc, char** argv)
+{
+    std::vector<std::string> uris{};
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view current{argv[index]};
+        if (current == "--help" || current == "-h" || current == "--version") {
+            continue;
+        }
+        if ((current == "--fbdev" || current == "--input-dev") && (index + 1) < argc) {
+            ++index;
+            continue;
+        }
+        if (!current.empty() && current.front() == '-') {
+            continue;
+        }
+        uris.emplace_back(current);
+    }
+    return uris;
 }
 
 } // namespace lofibox::targets

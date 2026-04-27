@@ -261,3 +261,23 @@ The following are intentionally deferred from the current UI pages and `MUST NOT
 - it invents fake system state
 - it adds convenience actions that were never specified
 - it blurs the distinction between library browsing, playback, settings, and device adapter behavior
+
+## 20. Final Surface Baseline In Current Implementation
+
+As of 2026-04-27, the current small-screen page model includes these product surfaces:
+
+- Main Menu
+- Library/List browsing
+- Now Playing
+- Lyrics
+- EQ
+- Settings
+- Source Manager
+- Search
+- Queue / Up Next
+- Remote Browse
+- Server Diagnostics
+- Stream Detail
+- Playlist Editor
+
+Pages that are not yet pixel-specialized must still have a page identity, title, list classification where applicable, and page-specific `F1:HELP` ownership. They may reuse the shared compact list renderer, but they must not be represented as anonymous rows inside another page.

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 #include "app/runtime_services.h"
 
@@ -13,6 +14,7 @@ public:
     void setServices(RuntimeServices* services) noexcept;
 
     [[nodiscard]] bool startFile(const std::filesystem::path& path, double start_seconds);
+    [[nodiscard]] bool startUri(const std::string& uri, double start_seconds);
     void pause() noexcept;
     void resume() noexcept;
     void stop() noexcept;

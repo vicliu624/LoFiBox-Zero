@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "app/app_debug_snapshot.h"
@@ -20,7 +21,7 @@ class AppRuntimeContext;
 
 class LoFiBoxApp {
 public:
-    explicit LoFiBoxApp(std::vector<std::filesystem::path> media_roots = {}, ui::UiAssets assets = {}, RuntimeServices services = {});
+    explicit LoFiBoxApp(std::vector<std::filesystem::path> media_roots = {}, ui::UiAssets assets = {}, RuntimeServices services = {}, std::vector<std::string> startup_uris = {});
     ~LoFiBoxApp();
 
     void update();

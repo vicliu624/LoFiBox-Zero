@@ -21,6 +21,12 @@ enum class AppPage {
     Equalizer,
     Settings,
     SourceManager,
+    Search,
+    Queue,
+    RemoteBrowse,
+    ServerDiagnostics,
+    StreamDetail,
+    PlaylistEditor,
     About,
 };
 

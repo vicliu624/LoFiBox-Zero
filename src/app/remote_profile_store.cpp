@@ -3,6 +3,7 @@
 #include "app/remote_profile_store.h"
 
 #include <algorithm>
+#include <cctype>
 
 namespace lofibox::app {
 
@@ -13,6 +14,17 @@ std::string remoteServerKindToString(RemoteServerKind kind)
     case RemoteServerKind::OpenSubsonic: return "opensubsonic";
     case RemoteServerKind::Navidrome: return "navidrome";
     case RemoteServerKind::Emby: return "emby";
+    case RemoteServerKind::DirectUrl: return "direct-url";
+    case RemoteServerKind::InternetRadio: return "internet-radio";
+    case RemoteServerKind::PlaylistManifest: return "playlist-manifest";
+    case RemoteServerKind::Hls: return "hls";
+    case RemoteServerKind::Dash: return "dash";
+    case RemoteServerKind::Smb: return "smb";
+    case RemoteServerKind::Nfs: return "nfs";
+    case RemoteServerKind::WebDav: return "webdav";
+    case RemoteServerKind::Ftp: return "ftp";
+    case RemoteServerKind::Sftp: return "sftp";
+    case RemoteServerKind::DlnaUpnp: return "dlna-upnp";
     }
     return "jellyfin";
 }
@@ -31,6 +43,39 @@ RemoteServerKind remoteServerKindFromString(const std::string& value)
     }
     if (lower == "emby") {
         return RemoteServerKind::Emby;
+    }
+    if (lower == "direct-url" || lower == "url" || lower == "http" || lower == "https") {
+        return RemoteServerKind::DirectUrl;
+    }
+    if (lower == "internet-radio" || lower == "radio" || lower == "station") {
+        return RemoteServerKind::InternetRadio;
+    }
+    if (lower == "playlist-manifest" || lower == "playlist" || lower == "m3u" || lower == "pls" || lower == "xspf") {
+        return RemoteServerKind::PlaylistManifest;
+    }
+    if (lower == "hls") {
+        return RemoteServerKind::Hls;
+    }
+    if (lower == "dash") {
+        return RemoteServerKind::Dash;
+    }
+    if (lower == "smb") {
+        return RemoteServerKind::Smb;
+    }
+    if (lower == "nfs") {
+        return RemoteServerKind::Nfs;
+    }
+    if (lower == "webdav" || lower == "web-dav") {
+        return RemoteServerKind::WebDav;
+    }
+    if (lower == "ftp") {
+        return RemoteServerKind::Ftp;
+    }
+    if (lower == "sftp") {
+        return RemoteServerKind::Sftp;
+    }
+    if (lower == "dlna" || lower == "upnp" || lower == "dlna-upnp") {
+        return RemoteServerKind::DlnaUpnp;
     }
     return RemoteServerKind::Jellyfin;
 }

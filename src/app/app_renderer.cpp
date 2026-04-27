@@ -41,6 +41,15 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
             {"BACKSPACE", "BACK"},
             {"F2", "SEARCH"},
             {"F3", "SORT"},
+            {"F4", "EDIT PLAYLIST"},
+        };
+    case AppPage::NowPlaying:
+        return {
+            {"ENTER", "PLAY / PAUSE"},
+            {"LEFT", "PREVIOUS"},
+            {"RIGHT", "NEXT"},
+            {"L", "LYRICS"},
+            {"Q", "QUEUE"},
         };
     case AppPage::Boot:
     case AppPage::MusicIndex:
@@ -50,11 +59,21 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
     case AppPage::Composers:
     case AppPage::Compilations:
     case AppPage::Playlists:
-    case AppPage::NowPlaying:
     case AppPage::Lyrics:
     case AppPage::Equalizer:
     case AppPage::Settings:
     case AppPage::SourceManager:
+    case AppPage::Search:
+    case AppPage::Queue:
+    case AppPage::RemoteBrowse:
+    case AppPage::ServerDiagnostics:
+    case AppPage::StreamDetail:
+    case AppPage::PlaylistEditor:
+        return {
+            {"ENTER", "OPEN / PLAY"},
+            {"BACKSPACE", "BACK"},
+            {"F1", "HELP"},
+        };
     case AppPage::About:
         return {};
     }
@@ -164,6 +183,12 @@ void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
     case AppPage::PlaylistDetail:
     case AppPage::Settings:
     case AppPage::SourceManager:
+    case AppPage::Search:
+    case AppPage::Queue:
+    case AppPage::RemoteBrowse:
+    case AppPage::ServerDiagnostics:
+    case AppPage::StreamDetail:
+    case AppPage::PlaylistEditor:
         renderList(canvas, target);
         return;
     }

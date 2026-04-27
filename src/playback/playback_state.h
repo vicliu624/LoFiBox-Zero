@@ -6,6 +6,7 @@
 #include <array>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "app/audio_visualization.h"
@@ -29,6 +30,10 @@ struct QueueState {
 struct PlaybackSession {
     PlaybackStatus status{PlaybackStatus::Empty};
     std::optional<int> current_track_id{};
+    std::string current_stream_title{};
+    std::string current_stream_source{};
+    std::string current_stream_url_redacted{};
+    bool current_stream_live{false};
     bool shuffle_enabled{false};
     bool repeat_all{false};
     bool repeat_one{false};

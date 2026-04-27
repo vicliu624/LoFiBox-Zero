@@ -8,8 +8,8 @@
 
 namespace lofibox::app {
 
-LoFiBoxApp::LoFiBoxApp(std::vector<std::filesystem::path> media_roots, ui::UiAssets assets, RuntimeServices services)
-    : context_(std::make_unique<AppRuntimeContext>(std::move(media_roots), std::move(assets), std::move(services)))
+LoFiBoxApp::LoFiBoxApp(std::vector<std::filesystem::path> media_roots, ui::UiAssets assets, RuntimeServices services, std::vector<std::string> startup_uris)
+    : context_(std::make_unique<AppRuntimeContext>(std::move(media_roots), std::move(assets), std::move(services), std::move(startup_uris)))
 {}
 
 LoFiBoxApp::~LoFiBoxApp() = default;

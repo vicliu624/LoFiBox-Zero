@@ -33,6 +33,7 @@ public:
     [[nodiscard]] bool available() const override { return false; }
     [[nodiscard]] std::string displayName() const override { return "UNAVAILABLE"; }
     bool playFile(const std::filesystem::path&, double) override { return false; }
+    bool playUri(const std::string&, double) override { return false; }
     void stop() override {}
     [[nodiscard]] bool isPlaying() override { return false; }
     [[nodiscard]] bool isFinished() override { return false; }

@@ -29,6 +29,12 @@ std::string_view pageTitleDefault(AppPage page) noexcept
     case AppPage::Equalizer: return "EQUALIZER";
     case AppPage::Settings: return "SETTINGS";
     case AppPage::SourceManager: return "SOURCES";
+    case AppPage::Search: return "SEARCH";
+    case AppPage::Queue: return "UP NEXT";
+    case AppPage::RemoteBrowse: return "REMOTE";
+    case AppPage::ServerDiagnostics: return "SERVER";
+    case AppPage::StreamDetail: return "STREAM";
+    case AppPage::PlaylistEditor: return "PLAYLIST EDIT";
     case AppPage::About: return "ABOUT";
     }
     return "";
@@ -59,6 +65,12 @@ bool isBrowseListPage(AppPage page) noexcept
     case AppPage::Playlists:
     case AppPage::PlaylistDetail:
     case AppPage::SourceManager:
+    case AppPage::Search:
+    case AppPage::Queue:
+    case AppPage::RemoteBrowse:
+    case AppPage::ServerDiagnostics:
+    case AppPage::StreamDetail:
+    case AppPage::PlaylistEditor:
         return true;
     default:
         return false;
@@ -75,12 +87,34 @@ AppPageModel buildAppPageModel(const AppPageModelInput& input)
         model.rows = *input.library_rows;
         return model;
     }
+    if (input.page_rows) {
+        model.rows = *input.page_rows;
+        return model;
+    }
 
     if (input.page == AppPage::Settings) {
         model.rows = settingsRows(input);
     }
     if (input.page == AppPage::SourceManager && input.source_manager_rows) {
         model.rows = *input.source_manager_rows;
+    }
+    if (input.page == AppPage::Search) {
+        model.rows = {{"TYPE QUERY", "F2"}, {"LOCAL + REMOTE", "GROUPED"}, {"RESULT SOURCE", "VISIBLE"}};
+    }
+    if (input.page == AppPage::Queue) {
+        model.rows = {{"CURRENT QUEUE", "MIXED"}, {"LOCAL TRACKS", "OK"}, {"REMOTE TRACKS", "OK"}};
+    }
+    if (input.page == AppPage::RemoteBrowse) {
+        model.rows = {{"ARTISTS", "BROWSE"}, {"ALBUMS", "BROWSE"}, {"PLAYLISTS", "BROWSE"}, {"FOLDERS", "BROWSE"}, {"GENRES", "BROWSE"}, {"FAVORITES", "BROWSE"}};
+    }
+    if (input.page == AppPage::ServerDiagnostics) {
+        model.rows = {{"CONNECTION", input.network_connected ? "ONLINE" : "OFFLINE"}, {"TLS", "VERIFY"}, {"PERMISSIONS", "READ ONLY"}, {"TOKEN", "REDACTED"}};
+    }
+    if (input.page == AppPage::StreamDetail) {
+        model.rows = {{"SOURCE", "REMOTE"}, {"URL", "REDACTED"}, {"BUFFER", "VISIBLE"}, {"QUALITY", "AUTO"}, {"CODEC", "UNKNOWN"}};
+    }
+    if (input.page == AppPage::PlaylistEditor) {
+        model.rows = {{"ADD TRACK", "ENTER"}, {"REMOVE", "DEL"}, {"REORDER", "UP/DOWN"}, {"SAVE", "F2"}};
     }
 
     return model;

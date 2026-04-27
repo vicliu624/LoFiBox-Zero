@@ -17,6 +17,14 @@ bool AudioPipelineController::startFile(const std::filesystem::path& path, doubl
     return false;
 }
 
+bool AudioPipelineController::startUri(const std::string& uri, double start_seconds)
+{
+    if (auto* audio_backend = backend()) {
+        return audio_backend->playUri(uri, start_seconds);
+    }
+    return false;
+}
+
 void AudioPipelineController::pause() noexcept
 {
     if (auto* audio_backend = backend()) {

@@ -50,7 +50,21 @@ public:
             logRuntime(RuntimeLogLevel::Warn, "audio", "Playback unavailable for " + pathUtf8String(path));
             return false;
         }
+        return playArgument(pathUtf8String(path), start_seconds, "Started playback: ", "Failed playback: ");
+    }
 
+    bool playUri(const std::string& uri, double start_seconds) override
+    {
+        stop();
+        if (!executable_path_ || uri.empty()) {
+            logRuntime(RuntimeLogLevel::Warn, "audio", "Remote playback unavailable");
+            return false;
+        }
+        return playArgument(uri, start_seconds, "Started stream playback: ", "Failed stream playback: ");
+    }
+
+    bool playArgument(const std::string& input, double start_seconds, const std::string& ok_prefix, const std::string& fail_prefix)
+    {
         std::vector<std::string> args{
             "-nodisp",
             "-autoexit",
@@ -68,10 +82,9 @@ public:
             args.emplace_back(buffer);
         }
 
-        args.push_back(path.string());
-        args.back() = pathUtf8String(path);
+        args.push_back(input);
         const bool ok = spawnAudioProcess(process_, *executable_path_, args);
-        logRuntime(ok ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn, "audio", std::string(ok ? "Started playback: " : "Failed playback: ") + pathUtf8String(path));
+        logRuntime(ok ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn, "audio", std::string(ok ? ok_prefix : fail_prefix) + input);
         return ok;
     }
 

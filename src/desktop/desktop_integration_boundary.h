@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "app/input_actions.h"
 #include "app/library_model.h"
@@ -15,6 +16,8 @@ enum class DesktopCommand {
     Next,
     Previous,
     Stop,
+    OpenFiles,
+    OpenUrl,
 };
 
 struct DesktopNowPlayingProjection {
@@ -38,6 +41,18 @@ struct DesktopNotificationProjection {
     bool should_show{false};
 };
 
+struct DesktopOpenRequest {
+    std::vector<std::string> uris{};
+};
+
+struct DesktopRuntimeIntegrationState {
+    bool mpris_service_enabled{true};
+    bool dbus_available{false};
+    bool media_keys_available{false};
+    bool notifications_available{false};
+    DesktopOpenRequest pending_open_request{};
+};
+
 class DesktopCommandAdapter {
 public:
     [[nodiscard]] app::UserAction toUserAction(DesktopCommand command) const noexcept;
@@ -50,6 +65,10 @@ public:
 [[nodiscard]] DesktopNotificationProjection buildDesktopNotificationProjection(
     const app::PlaybackSession& session,
     const app::TrackRecord* track);
+[[nodiscard]] DesktopRuntimeIntegrationState buildDesktopRuntimeIntegrationState(
+    bool dbus_available,
+    bool media_keys_available,
+    bool notifications_available,
+    std::vector<std::string> uris = {});
 
 } // namespace lofibox::desktop
-

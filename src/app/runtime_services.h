@@ -105,6 +105,12 @@ public:
     [[nodiscard]] virtual bool available() const = 0;
     [[nodiscard]] virtual std::string displayName() const = 0;
     virtual bool playFile(const std::filesystem::path& path, double start_seconds) = 0;
+    virtual bool playUri(const std::string& uri, double start_seconds)
+    {
+        (void)uri;
+        (void)start_seconds;
+        return false;
+    }
     virtual void pause() {}
     virtual void resume() {}
     virtual void stop() = 0;

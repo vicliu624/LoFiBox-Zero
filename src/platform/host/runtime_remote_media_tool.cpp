@@ -11,6 +11,8 @@
 
 #include "platform/host/runtime_host_internal.h"
 #include "platform/host/runtime_logger.h"
+#include "remote/common/stream_source_model.h"
+#include "security/credential_policy.h"
 
 namespace fs = std::filesystem;
 
@@ -24,8 +26,71 @@ std::string toKindString(app::RemoteServerKind kind)
     case app::RemoteServerKind::OpenSubsonic: return "opensubsonic";
     case app::RemoteServerKind::Navidrome: return "opensubsonic";
     case app::RemoteServerKind::Emby: return "emby";
+    case app::RemoteServerKind::DirectUrl: return "direct-url";
+    case app::RemoteServerKind::InternetRadio: return "internet-radio";
+    case app::RemoteServerKind::PlaylistManifest: return "playlist-manifest";
+    case app::RemoteServerKind::Hls: return "hls";
+    case app::RemoteServerKind::Dash: return "dash";
+    case app::RemoteServerKind::Smb: return "smb";
+    case app::RemoteServerKind::Nfs: return "nfs";
+    case app::RemoteServerKind::WebDav: return "webdav";
+    case app::RemoteServerKind::Ftp: return "ftp";
+    case app::RemoteServerKind::Sftp: return "sftp";
+    case app::RemoteServerKind::DlnaUpnp: return "dlna-upnp";
     }
     return "jellyfin";
+}
+
+bool handledLocally(app::RemoteServerKind kind) noexcept
+{
+    switch (kind) {
+    case app::RemoteServerKind::DirectUrl:
+    case app::RemoteServerKind::InternetRadio:
+    case app::RemoteServerKind::PlaylistManifest:
+    case app::RemoteServerKind::Hls:
+    case app::RemoteServerKind::Dash:
+    case app::RemoteServerKind::Smb:
+    case app::RemoteServerKind::Nfs:
+    case app::RemoteServerKind::WebDav:
+    case app::RemoteServerKind::Ftp:
+    case app::RemoteServerKind::Sftp:
+    case app::RemoteServerKind::DlnaUpnp:
+        return true;
+    default:
+        return false;
+    }
+}
+
+app::StreamProtocol protocolFromDirectEntry(const ::lofibox::remote::DirectStreamEntry& entry) noexcept
+{
+    return entry.protocol;
+}
+
+bool isLiveKind(app::RemoteServerKind kind) noexcept
+{
+    return kind == app::RemoteServerKind::InternetRadio;
+}
+
+app::RemoteTrack localRemoteTrack(const app::RemoteServerProfile& profile)
+{
+    return app::RemoteTrack{
+        profile.base_url,
+        profile.name.empty() ? "REMOTE STREAM" : profile.name,
+        "",
+        profile.base_url,
+        "",
+        0};
+}
+
+app::RemoteCatalogNode localRemoteNode(const app::RemoteServerProfile& profile)
+{
+    return app::RemoteCatalogNode{
+        app::RemoteCatalogNodeKind::Tracks,
+        profile.base_url,
+        profile.name.empty() ? "REMOTE STREAM" : profile.name,
+        ::lofibox::security::SecretRedactor{}.redact(profile.base_url),
+        true,
+        false};
 }
 
 std::string remoteProfileJson(const app::RemoteServerProfile& profile)
@@ -98,6 +163,79 @@ std::vector<app::RemoteTrack> parseRemoteTracks(std::string_view json)
     return tracks;
 }
 
+app::RemoteCatalogNodeKind parseNodeKind(std::string_view value) noexcept
+{
+    if (value == "artists") return app::RemoteCatalogNodeKind::Artists;
+    if (value == "artist") return app::RemoteCatalogNodeKind::Artist;
+    if (value == "albums") return app::RemoteCatalogNodeKind::Albums;
+    if (value == "album") return app::RemoteCatalogNodeKind::Album;
+    if (value == "tracks") return app::RemoteCatalogNodeKind::Tracks;
+    if (value == "genres") return app::RemoteCatalogNodeKind::Genres;
+    if (value == "genre") return app::RemoteCatalogNodeKind::Genre;
+    if (value == "playlists") return app::RemoteCatalogNodeKind::Playlists;
+    if (value == "playlist") return app::RemoteCatalogNodeKind::Playlist;
+    if (value == "folders") return app::RemoteCatalogNodeKind::Folders;
+    if (value == "folder") return app::RemoteCatalogNodeKind::Folder;
+    if (value == "favorites") return app::RemoteCatalogNodeKind::Favorites;
+    if (value == "recently-added") return app::RemoteCatalogNodeKind::RecentlyAdded;
+    if (value == "recently-played") return app::RemoteCatalogNodeKind::RecentlyPlayed;
+    if (value == "stations") return app::RemoteCatalogNodeKind::Stations;
+    return app::RemoteCatalogNodeKind::Root;
+}
+
+std::string nodeKindJson(app::RemoteCatalogNodeKind kind)
+{
+    switch (kind) {
+    case app::RemoteCatalogNodeKind::Artists: return "artists";
+    case app::RemoteCatalogNodeKind::Artist: return "artist";
+    case app::RemoteCatalogNodeKind::Albums: return "albums";
+    case app::RemoteCatalogNodeKind::Album: return "album";
+    case app::RemoteCatalogNodeKind::Tracks: return "tracks";
+    case app::RemoteCatalogNodeKind::Genres: return "genres";
+    case app::RemoteCatalogNodeKind::Genre: return "genre";
+    case app::RemoteCatalogNodeKind::Playlists: return "playlists";
+    case app::RemoteCatalogNodeKind::Playlist: return "playlist";
+    case app::RemoteCatalogNodeKind::Folders: return "folders";
+    case app::RemoteCatalogNodeKind::Folder: return "folder";
+    case app::RemoteCatalogNodeKind::Favorites: return "favorites";
+    case app::RemoteCatalogNodeKind::RecentlyAdded: return "recently-added";
+    case app::RemoteCatalogNodeKind::RecentlyPlayed: return "recently-played";
+    case app::RemoteCatalogNodeKind::Stations: return "stations";
+    case app::RemoteCatalogNodeKind::Root: return "root";
+    }
+    return "root";
+}
+
+std::vector<app::RemoteCatalogNode> parseRemoteNodes(std::string_view json)
+{
+    std::vector<app::RemoteCatalogNode> nodes{};
+    std::size_t pos = json.find("\"nodes\":[");
+    if (pos == std::string_view::npos) {
+        return nodes;
+    }
+
+    pos = json.find('{', pos);
+    while (pos != std::string_view::npos) {
+        const auto end = json.find('}', pos);
+        if (end == std::string_view::npos) {
+            break;
+        }
+        const auto block = json.substr(pos, end - pos + 1);
+        app::RemoteCatalogNode node{};
+        if (const auto value = extractJsonString(block, "\"kind\":\"")) node.kind = parseNodeKind(*value);
+        if (const auto value = extractJsonString(block, "\"id\":\"")) node.id = *value;
+        if (const auto value = extractJsonString(block, "\"title\":\"")) node.title = *value;
+        if (const auto value = extractJsonString(block, "\"subtitle\":\"")) node.subtitle = *value;
+        node.playable = parseJsonBool(block, "\"playable\":").value_or(false);
+        node.browsable = parseJsonBool(block, "\"browsable\":").value_or(true);
+        if (!node.id.empty() || !node.title.empty()) {
+            nodes.push_back(node);
+        }
+        pos = json.find('{', end + 1);
+    }
+    return nodes;
+}
+
 std::optional<app::ResolvedRemoteStream> parseResolvedStream(std::string_view json)
 {
     app::ResolvedRemoteStream stream{};
@@ -107,6 +245,23 @@ std::optional<app::ResolvedRemoteStream> parseResolvedStream(std::string_view js
         return std::nullopt;
     }
     stream.seekable = parseJsonBool(json, "\"seekable\":").value_or(true);
+    return stream;
+}
+
+app::ResolvedRemoteStream localResolvedStream(const app::RemoteServerProfile& profile, const app::RemoteTrack& track)
+{
+    const auto entry = ::lofibox::remote::StreamSourceClassifier::classify(track.id.empty() ? profile.base_url : track.id);
+    app::ResolvedRemoteStream stream{};
+    stream.url = entry.uri.empty() ? profile.base_url : entry.uri;
+    stream.seekable = !isLiveKind(profile.kind);
+    stream.quality_preference = app::StreamQualityPreference::Auto;
+    stream.diagnostics.source_name = profile.name.empty() ? toKindString(profile.kind) : profile.name;
+    stream.diagnostics.resolved_url_redacted = ::lofibox::security::SecretRedactor{}.redact(stream.url);
+    stream.diagnostics.protocol = protocolFromDirectEntry(entry);
+    stream.diagnostics.live = isLiveKind(profile.kind);
+    stream.diagnostics.seekable = stream.seekable;
+    stream.diagnostics.connected = !stream.url.empty();
+    stream.diagnostics.connection_status = stream.diagnostics.connected ? "READY" : "MISSING URL";
     return stream;
 }
 
@@ -124,6 +279,9 @@ bool RemoteMediaToolClient::available() const
 
 app::RemoteSourceSession RemoteMediaToolClient::probe(const app::RemoteServerProfile& profile) const
 {
+    if (handledLocally(profile.kind)) {
+        return app::RemoteSourceSession{!profile.base_url.empty(), profile.name, "", "", profile.base_url.empty() ? "MISSING_URL" : "OK"};
+    }
     if (!available()) {
         logRuntime(RuntimeLogLevel::Warn, "remote", "Remote source provider unavailable");
         return {};
@@ -144,6 +302,14 @@ std::vector<app::RemoteTrack> RemoteMediaToolClient::searchTracks(
     std::string_view query,
     int limit) const
 {
+    if (handledLocally(profile.kind)) {
+        auto track = localRemoteTrack(profile);
+        const auto query_text = std::string(query);
+        if (query_text.empty() || track.title.find(query_text) != std::string::npos || track.id.find(query_text) != std::string::npos) {
+            return {track};
+        }
+        return {};
+    }
     if (!available()) {
         logRuntime(RuntimeLogLevel::Warn, "remote", "Remote catalog provider unavailable");
         return {};
@@ -167,6 +333,9 @@ std::vector<app::RemoteTrack> RemoteMediaToolClient::recentTracks(
     const app::RemoteSourceSession& session,
     int limit) const
 {
+    if (handledLocally(profile.kind)) {
+        return profile.base_url.empty() ? std::vector<app::RemoteTrack>{} : std::vector<app::RemoteTrack>{localRemoteTrack(profile)};
+    }
     if (!available()) {
         logRuntime(RuntimeLogLevel::Warn, "remote", "Remote catalog provider unavailable");
         return {};
@@ -189,6 +358,9 @@ std::vector<app::RemoteTrack> RemoteMediaToolClient::libraryTracks(
     const app::RemoteSourceSession& session,
     int limit) const
 {
+    if (handledLocally(profile.kind)) {
+        return profile.base_url.empty() ? std::vector<app::RemoteTrack>{} : std::vector<app::RemoteTrack>{localRemoteTrack(profile)};
+    }
     if (!available()) {
         logRuntime(RuntimeLogLevel::Warn, "remote", "Remote catalog provider unavailable");
         return {};
@@ -206,11 +378,43 @@ std::vector<app::RemoteTrack> RemoteMediaToolClient::libraryTracks(
     return {};
 }
 
+std::vector<app::RemoteCatalogNode> RemoteMediaToolClient::browse(
+    const app::RemoteServerProfile& profile,
+    const app::RemoteSourceSession& session,
+    const app::RemoteCatalogNode& parent,
+    int limit) const
+{
+    if (handledLocally(profile.kind)) {
+        return profile.base_url.empty() ? std::vector<app::RemoteCatalogNode>{} : std::vector<app::RemoteCatalogNode>{localRemoteNode(profile)};
+    }
+    if (!available()) {
+        logRuntime(RuntimeLogLevel::Warn, "remote", "Remote catalog provider unavailable");
+        return {};
+    }
+    std::ostringstream payload;
+    payload << "{\"action\":\"browse\",\"profile\":" << remoteProfileJson(profile)
+            << ",\"session\":" << remoteSessionJson(session)
+            << ",\"parent\":{\"kind\":\"" << nodeKindJson(parent.kind)
+            << "\",\"id\":\"" << jsonEscape(parent.id)
+            << "\",\"title\":\"" << jsonEscape(parent.title)
+            << "\"},\"limit\":" << limit << "}";
+    if (const auto json = callRemoteMediaTool(*python_path_, payload.str())) {
+        auto nodes = parseRemoteNodes(*json);
+        logRuntime(RuntimeLogLevel::Info, "remote", "Browse " + profile.name + " returned " + std::to_string(nodes.size()) + " nodes");
+        return nodes;
+    }
+    logRuntime(RuntimeLogLevel::Warn, "remote", "Browse failed for " + profile.name);
+    return {};
+}
+
 std::optional<app::ResolvedRemoteStream> RemoteMediaToolClient::resolveTrack(
     const app::RemoteServerProfile& profile,
     const app::RemoteSourceSession& session,
     const app::RemoteTrack& track) const
 {
+    if (handledLocally(profile.kind)) {
+        return localResolvedStream(profile, track);
+    }
     if (!available()) {
         logRuntime(RuntimeLogLevel::Warn, "remote", "Remote stream resolver unavailable");
         return std::nullopt;
@@ -227,6 +431,17 @@ std::optional<app::ResolvedRemoteStream> RemoteMediaToolClient::resolveTrack(
             << "}}";
     if (const auto json = callRemoteMediaTool(*python_path_, payload.str())) {
         auto resolved = parseResolvedStream(*json);
+        if (resolved) {
+            const auto entry = ::lofibox::remote::StreamSourceClassifier::classify(resolved->url);
+            resolved->quality_preference = app::StreamQualityPreference::Auto;
+            resolved->diagnostics.source_name = profile.name.empty() ? toKindString(profile.kind) : profile.name;
+            resolved->diagnostics.resolved_url_redacted = ::lofibox::security::SecretRedactor{}.redact(resolved->url);
+            resolved->diagnostics.protocol = protocolFromDirectEntry(entry);
+            resolved->diagnostics.live = false;
+            resolved->diagnostics.seekable = resolved->seekable;
+            resolved->diagnostics.connected = true;
+            resolved->diagnostics.connection_status = "READY";
+        }
         logRuntime(resolved ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn, "remote", std::string("Resolve ") + profile.name + " track " + track.id + (resolved ? " succeeded" : " failed"));
         return resolved;
     }

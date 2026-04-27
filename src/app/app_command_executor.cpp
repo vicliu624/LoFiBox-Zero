@@ -183,6 +183,34 @@ void commandConfirmListPage(AppCommandTarget& target)
         return;
     }
 
+    if (page == AppPage::SourceManager) {
+        if (!target.handleSourceManagerConfirm(selected)) {
+            commandPushPage(target, selected == 0 ? AppPage::MusicIndex : AppPage::ServerDiagnostics);
+        }
+        return;
+    }
+
+    if (page == AppPage::RemoteBrowse && selected >= 0) {
+        if (!target.handleRemoteBrowseConfirm(selected)) {
+            commandPushPage(target, AppPage::StreamDetail);
+        }
+        return;
+    }
+
+    if (page == AppPage::StreamDetail) {
+        if (target.handleStreamDetailConfirm()) {
+            commandPushPage(target, AppPage::NowPlaying);
+        }
+        return;
+    }
+
+    if (page == AppPage::Search) {
+        if (target.handleSearchConfirm(selected)) {
+            commandPushPage(target, AppPage::NowPlaying);
+        }
+        return;
+    }
+
     if (page == AppPage::Settings && selected == kSettingsAboutIndex) {
         commandPushPage(target, AppPage::About);
     }

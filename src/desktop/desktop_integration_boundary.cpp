@@ -2,6 +2,8 @@
 
 #include "desktop/desktop_integration_boundary.h"
 
+#include <utility>
+
 namespace lofibox::desktop {
 
 app::UserAction DesktopCommandAdapter::toUserAction(DesktopCommand command) const noexcept
@@ -11,6 +13,9 @@ app::UserAction DesktopCommandAdapter::toUserAction(DesktopCommand command) cons
     case DesktopCommand::Next: return app::UserAction::NextTrack;
     case DesktopCommand::Previous: return app::UserAction::Left;
     case DesktopCommand::Stop: return app::UserAction::Back;
+    case DesktopCommand::OpenFiles:
+    case DesktopCommand::OpenUrl:
+        return app::UserAction::Confirm;
     }
     return app::UserAction::None;
 }
@@ -55,6 +60,20 @@ DesktopNotificationProjection buildDesktopNotificationProjection(
     projection.body = track->artist.empty() ? track->album : track->artist;
     projection.should_show = true;
     return projection;
+}
+
+DesktopRuntimeIntegrationState buildDesktopRuntimeIntegrationState(
+    bool dbus_available,
+    bool media_keys_available,
+    bool notifications_available,
+    std::vector<std::string> uris)
+{
+    DesktopRuntimeIntegrationState state{};
+    state.dbus_available = dbus_available;
+    state.media_keys_available = media_keys_available;
+    state.notifications_available = notifications_available;
+    state.pending_open_request.uris = std::move(uris);
+    return state;
 }
 
 } // namespace lofibox::desktop

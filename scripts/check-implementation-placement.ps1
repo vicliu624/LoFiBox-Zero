@@ -66,6 +66,13 @@ Assert-PathExists "src/audio/output/host_audio_playback_backend.cpp" "Host audio
 Assert-PathExists "src/cache/cache_manager.cpp" "Cache/offline implementation must live under src/cache."
 Assert-PathExists "src/cache/cache_manager.h" "Cache/offline boundary must live under src/cache."
 
+Assert-PathExists "src/remote/common/remote_catalog_model.cpp" "Remote catalog model must live under src/remote/common."
+Assert-PathExists "src/remote/common/stream_source_model.cpp" "Stream source classifier must live under src/remote/common."
+Assert-PathExists "src/playback/streaming_playback_policy.cpp" "Streaming playback policy must live under src/playback."
+Assert-PathExists "src/playback/playback_stability_policy.cpp" "Playback stability policy must live under src/playback."
+Assert-PathExists "src/library/library_governance.cpp" "Library governance must live under src/library."
+Assert-PathExists "src/metadata/metadata_governance.cpp" "Metadata governance must live under src/metadata."
+
 Assert-PathExists "src/playlist/playlist_parser.cpp" "Playlist parser implementation must live under src/playlist."
 Assert-PathExists "src/plugins/plugin_manifest.cpp" "Plugin manifest implementation must live under src/plugins."
 

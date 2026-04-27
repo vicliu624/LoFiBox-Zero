@@ -210,3 +210,15 @@ If imports encounter unresolved or non-portable `credential_ref` values, the imp
 - Choosing a specific operating-system keychain
 - UI copy for auth prompts
 - Implementing provider-specific OAuth or similar flows in this document
+
+## 11. Current Implementation Convergence
+
+As of 2026-04-27, credentials are governed as lifecycle records rather than raw server fields:
+
+- persisted source/server profiles must reference a credential record rather than embedding a password, token, API key, or cookie
+- credential lifecycle state includes valid, expired, revoked, and missing states
+- source permissions distinguish read-only and writable capabilities so UI actions can reflect provider authority
+- diagnostics and status strings must be safe for display and must not reveal secret values
+- TLS verification remains enabled by default; certificate exceptions are explicit source policy, not implicit retry behavior
+
+The current compiled boundary is keyring-facing. Platform adapters such as Secret Service/libsecret must attach behind this boundary rather than changing source, UI, or playback models.
