@@ -27,7 +27,7 @@ public:
     [[nodiscard]] bool available() const override { return false; }
     [[nodiscard]] std::string displayName() const override { return "BUILT-IN"; }
     [[nodiscard]] std::optional<core::Canvas> read(const std::filesystem::path&, ArtworkReadMode = ArtworkReadMode::AllowOnline) const override { return std::nullopt; }
-    [[nodiscard]] std::optional<core::Canvas> readRemoteIdentity(std::string_view, const std::filesystem::path&, ArtworkReadMode = ArtworkReadMode::AllowOnline) const override { return std::nullopt; }
+    [[nodiscard]] std::optional<core::Canvas> readRemoteIdentity(std::string_view, const std::filesystem::path&, ArtworkReadMode = ArtworkReadMode::AllowOnline, std::string_view = {}) const override { return std::nullopt; }
 };
 
 class NullAudioPlaybackBackend final : public AudioPlaybackBackend {

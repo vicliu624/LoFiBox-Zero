@@ -154,6 +154,9 @@ bool networkInput(std::string_view input) noexcept
     return input.find("://") != std::string_view::npos;
 }
 
+constexpr std::chrono::seconds kNetworkPlaybackUiStartDelay{24};
+constexpr std::chrono::seconds kNetworkAnalyzerWarmupLimit{5};
+
 app::AudioVisualizationFrame spectrumFrameFromPcmWindow(const std::vector<float>& samples)
 {
     constexpr double kPi = 3.14159265358979323846;
@@ -422,13 +425,14 @@ public:
         const std::string& ok_prefix,
         const std::string& fail_prefix)
     {
+        const bool input_is_network = networkInput(playback_input);
         std::vector<std::string> args{
             "-nodisp",
             "-autoexit",
             "-loglevel",
             "warning",
             "-nostats"};
-        if (networkInput(playback_input)) {
+        if (input_is_network) {
             args.emplace_back("-fflags");
             args.emplace_back("nobuffer");
             args.emplace_back("-flags");
@@ -452,10 +456,15 @@ public:
         args.push_back(playback_input);
         const bool ok = spawnAudioProcess(process_, executable_.path, args);
         paused_ = false;
-        playback_started_confirmed_ = ok && analyzer_executable_.path.empty();
+        network_playback_ = ok && input_is_network;
+        analyzer_started_ = false;
+        pending_analyzer_input_ = ok ? analyzer_input : std::string{};
+        pending_analyzer_start_seconds_ = start_seconds;
+        playback_started_confirmed_ = ok && analyzer_executable_.path.empty() && !network_playback_;
         process_started_ = ok ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        if (ok) {
+        if (ok && !network_playback_) {
             analyzer_.start(analyzer_executable_, analyzer_input, start_seconds);
+            analyzer_started_ = !analyzer_executable_.path.empty();
         } else {
             analyzer_.stop();
         }
@@ -497,6 +506,10 @@ public:
         analyzer_.stop();
         paused_ = false;
         playback_started_confirmed_ = false;
+        network_playback_ = false;
+        analyzer_started_ = false;
+        pending_analyzer_input_.clear();
+        pending_analyzer_start_seconds_ = 0.0;
         process_started_ = {};
     }
 
@@ -523,12 +536,30 @@ public:
         if (!audioProcessRunning(process_)) {
             return app::AudioPlaybackState::Idle;
         }
-        if (!playback_started_confirmed_ && !analyzer_executable_.path.empty()) {
-            if (analyzer_.currentFrame().available) {
-                playback_started_confirmed_ = true;
-            } else if (process_started_ != std::chrono::steady_clock::time_point{}
-                && std::chrono::steady_clock::now() - process_started_ < std::chrono::seconds{45}) {
-                return app::AudioPlaybackState::Starting;
+        if (!playback_started_confirmed_) {
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsed = process_started_ == std::chrono::steady_clock::time_point{}
+                ? std::chrono::steady_clock::duration::zero()
+                : now - process_started_;
+            if (network_playback_) {
+                if (elapsed < kNetworkPlaybackUiStartDelay) {
+                    return app::AudioPlaybackState::Starting;
+                }
+                startAnalyzerIfNeeded();
+                if (analyzer_executable_.path.empty()
+                    || analyzer_.currentFrame().available
+                    || elapsed >= kNetworkPlaybackUiStartDelay + kNetworkAnalyzerWarmupLimit) {
+                    playback_started_confirmed_ = true;
+                } else {
+                    return app::AudioPlaybackState::Starting;
+                }
+            } else if (!analyzer_executable_.path.empty()) {
+                if (analyzer_.currentFrame().available) {
+                    playback_started_confirmed_ = true;
+                } else if (process_started_ != std::chrono::steady_clock::time_point{}
+                    && elapsed < std::chrono::seconds{45}) {
+                    return app::AudioPlaybackState::Starting;
+                }
             }
         }
         return app::AudioPlaybackState::Playing;
@@ -540,12 +571,25 @@ public:
     }
 
 private:
+    void startAnalyzerIfNeeded()
+    {
+        if (analyzer_started_ || analyzer_executable_.path.empty() || pending_analyzer_input_.empty()) {
+            return;
+        }
+        analyzer_.start(analyzer_executable_, pending_analyzer_input_, pending_analyzer_start_seconds_);
+        analyzer_started_ = true;
+    }
+
     AudioExecutable executable_{};
     AudioExecutable analyzer_executable_{};
     RunningProcess process_{};
     RealtimePcmSpectrumAnalyzer analyzer_{};
     std::chrono::steady_clock::time_point process_started_{};
+    std::string pending_analyzer_input_{};
+    double pending_analyzer_start_seconds_{0.0};
     bool playback_started_confirmed_{false};
+    bool network_playback_{false};
+    bool analyzer_started_{false};
     bool paused_{false};
 };
 

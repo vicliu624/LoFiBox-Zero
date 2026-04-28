@@ -83,6 +83,12 @@ constexpr int kRemoteProfileRowTest = 10;
 constexpr int kRemoteProfileRowSave = 11;
 constexpr int kUnifiedRemoteLibraryTrackLimit = 10000;
 
+enum class RemoteProfileCredentialMode {
+    None,
+    Optional,
+    Required,
+};
+
 std::string remoteKindDisplayName(RemoteServerKind kind)
 {
     const auto manifest = remote::remoteProviderManifest(kind);
@@ -114,15 +120,34 @@ std::string remoteProfileLabel(const RemoteServerProfile& profile)
     return defaultRemoteProfileName(profile.kind);
 }
 
-bool remoteProfileNeedsSecret(RemoteServerKind kind) noexcept
+RemoteProfileCredentialMode remoteProfileCredentialMode(RemoteServerKind kind) noexcept
 {
-    return kind == RemoteServerKind::Jellyfin
-        || kind == RemoteServerKind::OpenSubsonic
-        || kind == RemoteServerKind::Navidrome
-        || kind == RemoteServerKind::Emby
-        || kind == RemoteServerKind::WebDav
-        || kind == RemoteServerKind::Ftp
-        || kind == RemoteServerKind::Sftp;
+    switch (kind) {
+    case RemoteServerKind::Jellyfin:
+    case RemoteServerKind::OpenSubsonic:
+    case RemoteServerKind::Navidrome:
+    case RemoteServerKind::Emby:
+        return RemoteProfileCredentialMode::Required;
+    case RemoteServerKind::PlaylistManifest:
+    case RemoteServerKind::WebDav:
+    case RemoteServerKind::Ftp:
+    case RemoteServerKind::Sftp:
+        return RemoteProfileCredentialMode::Optional;
+    case RemoteServerKind::DirectUrl:
+    case RemoteServerKind::InternetRadio:
+    case RemoteServerKind::Hls:
+    case RemoteServerKind::Dash:
+    case RemoteServerKind::Smb:
+    case RemoteServerKind::Nfs:
+    case RemoteServerKind::DlnaUpnp:
+        return RemoteProfileCredentialMode::None;
+    }
+    return RemoteProfileCredentialMode::None;
+}
+
+bool remoteProfileSupportsCredentials(RemoteServerKind kind) noexcept
+{
+    return remoteProfileCredentialMode(kind) != RemoteProfileCredentialMode::None;
 }
 
 std::string remoteProfileReadiness(const RemoteServerProfile& profile)
@@ -130,16 +155,42 @@ std::string remoteProfileReadiness(const RemoteServerProfile& profile)
     if (profile.base_url.empty()) {
         return "NEEDS URL";
     }
-    if (remoteProfileNeedsSecret(profile.kind) && profile.username.empty()) {
+    if (remoteProfileCredentialMode(profile.kind) != RemoteProfileCredentialMode::Required) {
+        return "READY";
+    }
+    if (profile.username.empty()) {
         return "NEEDS USER";
     }
-    if (remoteProfileNeedsSecret(profile.kind)
-        && profile.password.empty()
+    if (profile.password.empty()
         && profile.api_token.empty()
         && profile.credential_ref.id.empty()) {
         return "NEEDS SECRET";
     }
     return "READY";
+}
+
+std::string remoteCredentialValueLabel(RemoteServerKind kind, std::string_view value)
+{
+    const auto mode = remoteProfileCredentialMode(kind);
+    if (mode == RemoteProfileCredentialMode::None) {
+        return "N/A";
+    }
+    if (value.empty() && mode == RemoteProfileCredentialMode::Optional) {
+        return "OPTIONAL";
+    }
+    return value.empty() ? "EMPTY" : "SET";
+}
+
+std::string remoteUsernameLabel(const RemoteServerProfile& profile)
+{
+    const auto mode = remoteProfileCredentialMode(profile.kind);
+    if (mode == RemoteProfileCredentialMode::None) {
+        return "N/A";
+    }
+    if (profile.username.empty()) {
+        return mode == RemoteProfileCredentialMode::Optional ? "OPTIONAL" : "MISSING";
+    }
+    return profile.username;
 }
 
 std::string permissionLabel(RemoteServerKind kind)
@@ -940,7 +991,12 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::remoteSetupR
 {
     std::vector<std::pair<std::string, std::string>> rows{};
     for (const auto& manifest : remote::RemoteSourceRegistry{}.manifests()) {
-        rows.emplace_back(manifest.display_name, permissionLabel(manifest.kind));
+        const auto profile = std::find_if(state_.remote_profiles.begin(), state_.remote_profiles.end(), [&manifest](const RemoteServerProfile& candidate) {
+            return candidate.kind == manifest.kind;
+        });
+        rows.emplace_back(
+            manifest.display_name,
+            profile == state_.remote_profiles.end() ? std::string{"ADD"} : remoteProfileReadiness(*profile));
     }
     return rows;
 }
@@ -964,9 +1020,9 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::remoteProfil
         {"TYPE", remoteKindDisplayName(profile->kind)},
         {"LABEL", profile->name.empty() ? "MISSING" : profile->name},
         {"ADDRESS", profile->base_url.empty() ? "MISSING" : profile->base_url},
-        {"USER", profile->username.empty() ? "MISSING" : profile->username},
-        {"PASSWORD", hiddenSecretLabel(profile->password)},
-        {"API TOKEN", hiddenSecretLabel(profile->api_token)},
+        {"USER", remoteUsernameLabel(*profile)},
+        {"PASSWORD", remoteCredentialValueLabel(profile->kind, profile->password)},
+        {"API TOKEN", remoteCredentialValueLabel(profile->kind, profile->api_token)},
         {"TLS VERIFY", profile->tls_policy.verify_peer ? "ON" : "OFF"},
         {"SELF SIGNED", profile->tls_policy.allow_self_signed ? "ALLOW" : "BLOCK"},
         {"PERMISSION", permissionLabel(profile->kind)},
@@ -1022,6 +1078,10 @@ void AppRuntimeContext::ensureSelectedProfileCredentialRef(RemoteServerProfile& 
     if (profile.id.empty()) {
         profile.id = defaultRemoteProfileId(profile.kind, state_.remote_profiles.size());
     }
+    if (!remoteProfileSupportsCredentials(profile.kind)) {
+        profile.credential_ref.id.clear();
+        return;
+    }
     if (profile.credential_ref.id.empty()) {
         profile.credential_ref.id = "credential/" + profile.id;
     }
@@ -1039,6 +1099,7 @@ bool AppRuntimeContext::persistRemoteProfiles()
 
 void AppRuntimeContext::openRemoteSetup()
 {
+    state_.remote_profiles = services_.remote.remote_profile_store->loadProfiles();
     state_.remote_profile_status.clear();
     state_.navigation.list_selection.selected = 0;
     state_.navigation.list_selection.scroll = 0;

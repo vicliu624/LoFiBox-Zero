@@ -19,6 +19,7 @@
 ## 4. Data Dependencies
 
 - `RemoteSourceRegistry` provider manifests
+- persisted `RemoteProfileStore` source profiles
 - current selected row
 
 ## 5. State Enumeration
@@ -34,7 +35,18 @@ Profile fields such as address, username, password, token, TLS, permissions, and
 - page title
 - one row per supported remote source kind
 - row label from the provider manifest display name
-- compact capability or permission summary in the secondary column
+- compact profile readiness in the secondary column when a profile of that kind already exists
+- `ADD` in the secondary column when no profile of that kind exists
+
+The page must refresh persisted source profiles when it is entered so a deployed or externally provisioned source profile becomes visible without rebuilding the app. Remote source kind support and concrete source profile configuration are separate facts: a provider kind may be supported even when no source profile has been configured yet.
+
+On the profile settings page, credential fields must reflect the selected source kind:
+
+- server sources that require authentication show missing credentials as missing setup
+- sources with optional authentication show empty credential fields as `OPTIONAL`
+- sources that do not use credentials show credential fields as `N/A`
+
+Credential-free or optionally authenticated source profiles must not look broken solely because username, password, or token fields are empty.
 
 ## 7. Event Contract
 

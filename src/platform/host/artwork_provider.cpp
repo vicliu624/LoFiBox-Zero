@@ -15,6 +15,7 @@
 #include <vector>
 #include <cstdint>
 #include "platform/host/png_canvas_loader.h"
+#include "platform/host/runtime_enrichment_client_helpers.h"
 #include "platform/host/runtime_enrichment_clients.h"
 #include "platform/host/runtime_logger.h"
 
@@ -23,6 +24,12 @@ namespace fs = std::filesystem;
 namespace lofibox::platform::host {
 namespace {
 using namespace runtime_detail;
+
+std::optional<fs::path> resolveCurlExecutable()
+{
+    return resolveExecutablePath("CURL_PATH", "curl");
+}
+
 class FfmpegArtworkProvider final : public app::ArtworkProvider {
 public:
     explicit FfmpegArtworkProvider(
@@ -32,6 +39,7 @@ public:
         : cache_(std::move(cache))
         , connectivity_(std::move(connectivity))
         , tag_writer_(std::move(tag_writer))
+        , curl_path_(resolveCurlExecutable())
         , media_roots_(configuredMediaRoots())
     {
     }
@@ -139,7 +147,8 @@ public:
     [[nodiscard]] std::optional<core::Canvas> readRemoteIdentity(
         std::string_view stable_cache_key,
         const fs::path& lookup_path,
-        app::ArtworkReadMode mode = app::ArtworkReadMode::AllowOnline) const override
+        app::ArtworkReadMode mode = app::ArtworkReadMode::AllowOnline,
+        std::string_view remote_artwork_url = {}) const override
     {
         if (!cache_ || stable_cache_key.empty()) {
             return std::nullopt;
@@ -159,14 +168,24 @@ public:
         }
         ec.clear();
         const bool allow_online_artwork = mode == app::ArtworkReadMode::AllowOnline;
+        const bool can_try_remote_artwork = allow_online_artwork
+            && !remote_artwork_url.empty()
+            && connectivity_
+            && connectivity_->connected();
         const bool can_try_online_artwork = allow_online_artwork
             && (!entry.release_mbid.empty() || !entry.release_group_mbid.empty())
             && !entry.online_artwork_attempted
             && online_artwork_.available()
             && connectivity_
             && connectivity_->connected();
-        if (fs::exists(missing_marker, ec) && !ec && !can_try_online_artwork) {
+        if (fs::exists(missing_marker, ec) && !ec && !can_try_remote_artwork && !can_try_online_artwork) {
             return std::nullopt;
+        }
+        if (can_try_remote_artwork
+            && downloadUrlToPngFile(curl_path_, extractor_, std::string{remote_artwork_url}, cache_path)) {
+            fs::remove(missing_marker, ec);
+            logRuntime(RuntimeLogLevel::Info, "artwork", "Remote provider artwork hit for " + pathUtf8String(lookup_path));
+            return loadPngCanvas(cache_path);
         }
         if (can_try_online_artwork) {
             bool online_hit = false;
@@ -328,6 +347,7 @@ private:
     std::shared_ptr<SharedRuntimeCache> cache_{};
     std::shared_ptr<app::ConnectivityProvider> connectivity_{};
     std::shared_ptr<app::TagWriter> tag_writer_{};
+    std::optional<fs::path> curl_path_{};
     FfmpegArtworkExtractor extractor_{};
     CoverArtArchiveClient online_artwork_{};
     std::vector<fs::path> media_roots_{};

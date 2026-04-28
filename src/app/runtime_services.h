@@ -102,9 +102,11 @@ public:
     [[nodiscard]] virtual std::optional<core::Canvas> readRemoteIdentity(
         std::string_view stable_cache_key,
         const std::filesystem::path& lookup_path,
-        ArtworkReadMode mode = ArtworkReadMode::AllowOnline) const
+        ArtworkReadMode mode = ArtworkReadMode::AllowOnline,
+        std::string_view remote_artwork_url = {}) const
     {
         (void)stable_cache_key;
+        (void)remote_artwork_url;
         return read(lookup_path, mode);
     }
 };

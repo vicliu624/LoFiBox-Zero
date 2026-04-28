@@ -118,7 +118,8 @@ void PlaybackEnrichmentCoordinator::requestRemote(
             result.artwork = services_snapshot.metadata.artwork_provider->readRemoteIdentity(
                 stable_cache_key,
                 lookup_path,
-                ArtworkReadMode::AllowOnline);
+                ArtworkReadMode::AllowOnline,
+                remote_track.artwork_url);
         }
 
         std::lock_guard lock(mutex_);

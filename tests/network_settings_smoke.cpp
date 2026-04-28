@@ -1,9 +1,43 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <iostream>
+#include <memory>
+#include <vector>
 
 #include "app/app_runtime_context.h"
 #include "app/input_event.h"
+#include "app/remote_profile_store.h"
+#include "app/runtime_services.h"
+
+namespace {
+
+class ReloadingRemoteProfileStore final : public lofibox::app::RemoteProfileStore {
+public:
+    std::vector<lofibox::app::RemoteServerProfile> loadProfiles() const override
+    {
+        ++load_count;
+        if (load_count == 1) {
+            return {};
+        }
+
+        lofibox::app::RemoteServerProfile profile{};
+        profile.kind = lofibox::app::RemoteServerKind::DirectUrl;
+        profile.id = "direct-lab";
+        profile.name = "Direct URL Lab";
+        profile.base_url = "http://192.168.50.48:18080/media/direct/track.mp3";
+        profile.tls_policy.verify_peer = true;
+        return {profile};
+    }
+
+    bool saveProfiles(const std::vector<lofibox::app::RemoteServerProfile>&) const override
+    {
+        return true;
+    }
+
+    mutable int load_count{0};
+};
+
+} // namespace
 
 int main()
 {
@@ -90,6 +124,34 @@ int main()
         || remote_rows[7].first != "TLS VERIFY") {
         std::cerr << "Expected Settings remote media surface to expose address, user, credential, and TLS fields.\n";
         return 1;
+    }
+
+    {
+        lofibox::app::RuntimeServices services{};
+        services.remote.remote_profile_store = std::make_shared<ReloadingRemoteProfileStore>();
+        lofibox::app::AppRuntimeContext configured_app({}, {}, services);
+
+        configured_app.update();
+        configured_app.update();
+        configured_app.openSettingsPage();
+        configured_app.handleSettingsRemoteConfirm(0);
+
+        const auto configured_setup_rows = configured_app.pageModel().rows;
+        if (configured_setup_rows.size() < 5U || configured_setup_rows[4].first != "Direct URL" || configured_setup_rows[4].second != "READY") {
+            std::cerr << "Expected Remote Setup to reload persisted profiles and show configured direct URL readiness.\n";
+            return 1;
+        }
+
+        configured_app.handleRemoteSetupConfirm(4);
+        const auto direct_rows = configured_app.pageModel().rows;
+        if (direct_rows.size() < 7U
+            || direct_rows[3].second != "http://192.168.50.48:18080/media/direct/track.mp3"
+            || direct_rows[4].second != "N/A"
+            || direct_rows[5].second != "N/A"
+            || direct_rows[6].second != "N/A") {
+            std::cerr << "Expected credential-free source settings to show the persisted URL and non-applicable credential rows.\n";
+            return 1;
+        }
     }
 
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Backspace, "BACK", '\0'});
