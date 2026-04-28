@@ -40,6 +40,11 @@ PlaybackSession& PlaybackController::mutableSession() noexcept
     return session_;
 }
 
+const QueueState& PlaybackController::queue() const noexcept
+{
+    return queue_;
+}
+
 void PlaybackController::update(double delta_seconds, LibraryController& library_controller)
 {
     enrichment_.applyPending(library_controller, session_);

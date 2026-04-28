@@ -7,6 +7,8 @@
 #include "app/app_state.h"
 #include "app/navigation_state.h"
 #include "application/app_service_registry.h"
+#include "runtime/runtime_command.h"
+#include "runtime/runtime_result.h"
 
 namespace lofibox::app {
 
@@ -21,9 +23,16 @@ public:
     virtual EqState& eqState() noexcept = 0;
     virtual int& mainMenuIndex() noexcept = 0;
     virtual void closeHelpForCommand() noexcept = 0;
+    [[nodiscard]] virtual ::lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command);
     [[nodiscard]] virtual bool startLibraryTrack(int track_id)
     {
-        return appServices().playbackCommands().startTrack(track_id);
+        ::lofibox::runtime::RuntimeCommandPayload payload{};
+        payload.track_id = track_id;
+        auto result = submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+            ::lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack,
+            payload,
+            ::lofibox::runtime::CommandOrigin::Gui});
+        return result.applied;
     }
     virtual bool handleSettingsRemoteConfirm(int selected) { (void)selected; return false; }
     virtual bool handleRemoteSetupConfirm(int selected) { (void)selected; return false; }

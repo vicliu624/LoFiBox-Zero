@@ -4,13 +4,10 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <cctype>
 #include <cstddef>
-#include <string>
-#include <string_view>
 
-#include "audio/dsp/dsp_chain.h"
+#include "runtime/runtime_command_bus.h"
+#include "runtime/runtime_session_facade.h"
 
 namespace lofibox::app {
 namespace {
@@ -23,19 +20,8 @@ constexpr std::array<AppPage, 6> kMainMenuPages{
     AppPage::Equalizer,
     AppPage::Settings,
 };
-constexpr int kEqMinGainDb = -12;
-constexpr int kEqMaxGainDb = 12;
 constexpr int kSettingsRemoteSetupIndex = 5;
 constexpr int kSettingsAboutIndex = 6;
-
-std::string upperAscii(std::string_view text)
-{
-    std::string result{text};
-    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::toupper(ch));
-    });
-    return result;
-}
 
 void clampListSelection(AppCommandTarget& target)
 {
@@ -44,6 +30,13 @@ void clampListSelection(AppCommandTarget& target)
 }
 
 } // namespace
+
+::lofibox::runtime::RuntimeCommandResult AppCommandTarget::submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command)
+{
+    ::lofibox::runtime::RuntimeSessionFacade session{appServices(), eqState()};
+    ::lofibox::runtime::RuntimeCommandBus bus{session};
+    return bus.dispatch(command);
+}
 
 void commandPushPage(AppCommandTarget& target, AppPage page)
 {
@@ -59,41 +52,71 @@ void commandPopPage(AppCommandTarget& target)
 
 void commandPlayFromMenu(AppCommandTarget& target)
 {
-    (void)target.appServices().playbackCommands().playFirstAvailable();
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackPlay,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandPausePlayback(AppCommandTarget& target)
 {
-    target.appServices().playbackCommands().pause();
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackPause,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandStepTrack(AppCommandTarget& target, int delta)
 {
-    target.appServices().queueCommands().step(delta);
+    ::lofibox::runtime::RuntimeCommandPayload payload{};
+    payload.queue_delta = delta;
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::QueueStep,
+        payload,
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandCycleMainMenuPlaybackMode(AppCommandTarget& target)
 {
-    target.appServices().playbackCommands().cycleMainMenuPlaybackMode();
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackCycleMainMenuMode,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandToggleRepeatAll(AppCommandTarget& target)
 {
-    auto playback = target.appServices().playbackCommands();
-    const bool enabled = !playback.session().repeat_all;
-    playback.setRepeatAll(enabled);
+    const bool enabled = !target.appServices().playbackStatus().session().repeat_all;
+    ::lofibox::runtime::RuntimeCommandPayload payload{};
+    payload.enabled = enabled;
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll,
+        payload,
+        ::lofibox::runtime::CommandOrigin::Gui});
     if (!enabled) {
-        playback.setRepeatOne(false);
+        payload.enabled = false;
+        (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+            ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatOne,
+            payload,
+            ::lofibox::runtime::CommandOrigin::Gui});
     }
 }
 
 void commandToggleRepeatOne(AppCommandTarget& target)
 {
-    auto playback = target.appServices().playbackCommands();
-    const bool enabled = !playback.session().repeat_one;
-    playback.setRepeatOne(enabled);
+    const bool enabled = !target.appServices().playbackStatus().session().repeat_one;
+    ::lofibox::runtime::RuntimeCommandPayload payload{};
+    payload.enabled = enabled;
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatOne,
+        payload,
+        ::lofibox::runtime::CommandOrigin::Gui});
     if (!enabled) {
-        playback.setRepeatAll(false);
+        payload.enabled = false;
+        (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+            ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll,
+            payload,
+            ::lofibox::runtime::CommandOrigin::Gui});
     }
 }
 
@@ -122,17 +145,26 @@ void commandConfirmMainMenu(AppCommandTarget& target)
 
 void commandToggleShuffle(AppCommandTarget& target)
 {
-    target.appServices().playbackCommands().toggleShuffle();
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackToggleShuffle,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandCycleRepeatMode(AppCommandTarget& target)
 {
-    target.appServices().playbackCommands().cycleRepeatMode();
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackCycleRepeat,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandTogglePlayPause(AppCommandTarget& target)
 {
-    target.appServices().playbackCommands().togglePlayPause();
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackToggle,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandMoveEqualizerSelection(AppCommandTarget& target, int delta)
@@ -143,36 +175,23 @@ void commandMoveEqualizerSelection(AppCommandTarget& target, int delta)
 
 void commandAdjustSelectedEqualizerBand(AppCommandTarget& target, int delta)
 {
-    auto& eq = target.eqState();
-    auto& band = eq.bands[static_cast<std::size_t>(eq.selected_band)];
-    band = std::clamp(band + delta, kEqMinGainDb, kEqMaxGainDb);
-    eq.preset_name = "CUSTOM";
+    ::lofibox::runtime::RuntimeCommandPayload payload{};
+    payload.eq_band_index = target.eqState().selected_band;
+    payload.eq_gain_delta = delta;
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::EqAdjustBand,
+        payload,
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandCycleEqualizerPreset(AppCommandTarget& target, int delta)
 {
-    auto presets = audio::dsp::builtinEqPresets();
-    if (presets.empty()) {
-        return;
-    }
-
-    auto& eq = target.eqState();
-    int current = -1;
-    const auto current_name = upperAscii(eq.preset_name);
-    for (int index = 0; index < static_cast<int>(presets.size()); ++index) {
-        if (upperAscii(presets[static_cast<std::size_t>(index)].name) == current_name) {
-            current = index;
-            break;
-        }
-    }
-
-    const int count = static_cast<int>(presets.size());
-    const int next = ((current + delta) % count + count) % count;
-    const auto& preset = presets[static_cast<std::size_t>(next)];
-    for (std::size_t index = 0; index < eq.bands.size() && index < preset.bands.size(); ++index) {
-        eq.bands[index] = std::clamp(static_cast<int>(std::round(preset.bands[index].gain_db)), kEqMinGainDb, kEqMaxGainDb);
-    }
-    eq.preset_name = upperAscii(preset.name);
+    ::lofibox::runtime::RuntimeCommandPayload payload{};
+    payload.preset_delta = delta;
+    (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::EqCyclePreset,
+        payload,
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandCycleSongSortModeAndClamp(AppCommandTarget& target)

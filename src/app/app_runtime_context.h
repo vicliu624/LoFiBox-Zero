@@ -17,6 +17,8 @@
 #include "app/app_runtime_state.h"
 #include "app/runtime_services.h"
 #include "core/canvas.h"
+#include "runtime/runtime_command_bus.h"
+#include "runtime/runtime_session_facade.h"
 #include "ui/ui_models.h"
 
 namespace lofibox::app {
@@ -40,6 +42,7 @@ public:
     void refreshRuntimeStatusIfDue() override;
     [[nodiscard]] AppPage currentPage() const noexcept override;
     [[nodiscard]] ::lofibox::application::AppServiceRegistry appServices() noexcept override;
+    [[nodiscard]] ::lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command) override;
     NavigationState& navigationState() noexcept override;
     EqState& eqState() noexcept override;
     int& mainMenuIndex() noexcept override;
@@ -132,8 +135,9 @@ private:
     [[nodiscard]] RemoteServerProfile* selectedMutableRemoteProfile() noexcept;
     [[nodiscard]] RemoteTrack remoteTrackFromLibraryTrack(const RemoteServerProfile& profile, const TrackRecord& track) const;
     [[nodiscard]] bool startRemoteLibraryTrack(const TrackRecord& track);
+    [[nodiscard]] bool startSelectedRemoteStream();
+    [[nodiscard]] ::lofibox::runtime::RemoteSessionSnapshot remoteSessionSnapshot() const;
     void refreshSearchResults();
-    void applyEqualizerStateToPlayback();
     [[nodiscard]] ::lofibox::application::SourceProfileCommandService sourceProfileService() const noexcept;
     [[nodiscard]] ::lofibox::application::RemoteBrowseQueryService remoteBrowseService() const noexcept;
     void openRemoteProfile(std::size_t profile_index);
@@ -147,6 +151,8 @@ private:
     AppRuntimeState state_{};
     AppControllerSet controllers_{};
     RuntimeServices services_{};
+    ::lofibox::runtime::RuntimeSessionFacade runtime_session_;
+    ::lofibox::runtime::RuntimeCommandBus runtime_bus_;
 };
 
 } // namespace lofibox::app

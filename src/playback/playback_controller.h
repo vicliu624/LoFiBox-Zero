@@ -24,6 +24,7 @@ public:
 
     [[nodiscard]] const PlaybackSession& session() const noexcept;
     [[nodiscard]] PlaybackSession& mutableSession() noexcept;
+    [[nodiscard]] const QueueState& queue() const noexcept;
 
     void update(double delta_seconds, LibraryController& library_controller);
     void update(double delta_seconds, LibraryController& library_controller, const RemoteTrackStarter& remote_starter);

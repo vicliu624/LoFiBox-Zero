@@ -25,9 +25,11 @@ For integrated product facts, use `integrated-product-core-spec.md`.
 For shared app-state contracts, use `lofibox-zero-app-state-spec.md`.
 For persistence domains, use `lofibox-zero-persistence-spec.md`.
 For desktop event handoff, use `linux-desktop-integration-spec.md`.
+For live runtime commands and snapshots, use `runtime-command-session-architecture-spec.md`.
 For testing gates, use `testing-ci-spec.md`.
 
-This document defines the missing application command/query boundary that sits between runtime shells and product domains.
+This document defines the application command/query boundary that sits between runtime shells and product domains.
+It does not define the live runtime command bus; live playback, active queue, active EQ, active remote session, and live settings are governed by `runtime-command-session-architecture-spec.md`.
 
 ## 3. Scope
 
@@ -121,7 +123,7 @@ argv -> DirectCliDispatcher -> AppServiceHost/AppServiceRegistry -> ApplicationS
 Future runtime CLI commands must become:
 
 ```text
-argv -> CliDispatcher -> RuntimeCommandClient -> running RuntimeCommandServer -> ApplicationService
+argv -> CliDispatcher -> RuntimeCommandClient -> running RuntimeCommandServer -> RuntimeCommandBus -> RuntimeSessionFacade
 ```
 
 The desktop integration path should become:
@@ -355,6 +357,7 @@ Examples:
 Runtime commands must use a `RuntimeCommandClient` and `RuntimeCommandServer` design before full CLI playback control is implemented.
 They must not start a second independent app runtime to control playback.
 They must not mutate persisted state behind the running app's back to simulate live state changes.
+The transport-neutral runtime command/query/result/snapshot contract must exist before an IPC transport is added.
 
 ### 7.3 Ambiguous Commands
 
@@ -529,6 +532,7 @@ Checks must not force empty aspirational directories.
 - Do not expose controllers as the stable external command boundary.
 - Do not create a `src/cli` command tree that directly calls runtime providers.
 - Do not add a runtime IPC system until direct versus runtime command semantics are explicitly selected for the command family being implemented.
+- Do not add a runtime IPC system until the transport-neutral runtime command/session contract in `runtime-command-session-architecture-spec.md` is implemented and tested in process.
 - If a future requirement changes what is direct versus runtime, update this specification before changing command code.
 
 ## 14. 2026-04-28 Remote / Credential / Direct CLI Boundary Regression

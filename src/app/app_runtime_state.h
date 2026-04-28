@@ -34,6 +34,7 @@ struct AppRuntimeState {
     std::vector<RemoteServerProfile> remote_profiles{};
     std::optional<RemoteServerKind> selected_remote_kind{};
     std::optional<std::size_t> selected_remote_profile_index{};
+    std::optional<RemoteServerProfile> selected_transient_remote_profile{};
     RemoteSourceSession selected_remote_session{};
     RemoteCatalogNode selected_remote_parent{};
     std::vector<RemoteCatalogNode> remote_browse_nodes{};

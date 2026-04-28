@@ -43,4 +43,17 @@ PlaybackStatusSnapshot PlaybackStatusQueryService::snapshot() const
     return result;
 }
 
+QueueStatusSnapshot PlaybackStatusQueryService::queueSnapshot() const
+{
+    const auto& session_value = playback_.session();
+    const auto& queue = playback_.queue();
+    QueueStatusSnapshot result{};
+    result.active_ids = queue.active_ids;
+    result.active_index = queue.active_index;
+    result.shuffle_enabled = session_value.shuffle_enabled;
+    result.repeat_all = session_value.repeat_all;
+    result.repeat_one = session_value.repeat_one;
+    return result;
+}
+
 } // namespace lofibox::application

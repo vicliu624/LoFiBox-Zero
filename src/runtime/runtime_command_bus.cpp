@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "runtime/runtime_command_bus.h"
+
+namespace lofibox::runtime {
+
+RuntimeCommandBus::RuntimeCommandBus(RuntimeSessionFacade& session) noexcept
+    : commands_(session),
+      queries_(session)
+{
+}
+
+RuntimeCommandResult RuntimeCommandBus::dispatch(const RuntimeCommand& command)
+{
+    return commands_.dispatch(command);
+}
+
+RuntimeSnapshot RuntimeCommandBus::query(const RuntimeQuery& query) const
+{
+    return queries_.query(query, commands_.version());
+}
+
+RuntimeSnapshot RuntimeCommandBus::snapshot() const
+{
+    return query(RuntimeQuery{RuntimeQueryKind::FullSnapshot});
+}
+
+std::uint64_t RuntimeCommandBus::version() const noexcept
+{
+    return commands_.version();
+}
+
+} // namespace lofibox::runtime

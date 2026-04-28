@@ -130,3 +130,16 @@ This update records specification and implementation convergence for the next bo
 - The direct CLI intentionally does not implement live playback, active queue, now-playing, seek, previous/next, pause/resume, or active EQ control. Those remain runtime-command work and still require a future runtime command client/server before external command consumers may affect live runtime state.
 - Architecture and implementation-placement gates now cover `src/application/remote_browse_query_service.*`, `credential_command_service.*`, `cache_command_service.*`, `runtime_diagnostic_service.*`, and `src/cli/direct_cli.*`.
 - The current arm64 Debian package was built and installed over the existing same-version package on `vicliu@192.168.50.92`; package-time CTest passed 60/60, `dpkg -i` replaced `lofibox (0.1.0-1) over (0.1.0-1)`, the installed `/usr/bin/lofibox` hash matched the package build artifact, GUI startup stayed alive until the timeout killed it, and installed direct CLI checks passed for source list, cache status, doctor, local library status/query, isolated source/credential/cache writes, and probe of every configured remote source.
+
+## 2026-04-29 Runtime Command And Session Architecture Update
+
+This update records specification and implementation convergence for the first live-runtime boundary pass:
+
+- `runtime-command-session-architecture-spec.md` now defines runtime CLI as one future entry point into a transport-neutral runtime command/query bus, not as a CLI module that may borrow GUI runtime methods.
+- The architecture now distinguishes durable application services from live runtime session truth. Live playback, active queue, active EQ, active remote session, and immediately effective runtime settings belong behind the runtime command/session boundary.
+- GUI page interpretation remains GUI-owned, but GUI actions that mutate live playback, queue, or EQ must submit runtime commands. Page-local state such as selected rows and the selected EQ band remains projection/input state rather than runtime truth.
+- `src/runtime` now contains the first in-process runtime command bus, command dispatcher, query dispatcher, session facade, result contract, and structured playback/queue/EQ/remote-session snapshots.
+- GUI playback transport, queue stepping, playback mode toggles, local/remote library track start, stream-detail start, desktop-open URL start, and active EQ mutations now route through runtime commands inside the running instance.
+- `lofibox_runtime_command_bus_smoke` covers start-track, queue-step, EQ mutation, EQ preset cycling, structured remote-session snapshot projection, runtime versioning, and rejection of transport-neutral commands not implemented in the first scope. `lofibox_desktop_open_runtime_command_smoke` covers desktop-open URL playback through runtime command handling.
+- Architecture and implementation-placement gates now require `src/runtime` ownership and prevent runtime code from depending on `AppRuntimeContext`, UI pages, targets, platform transports, or CLI adapters.
+- Runtime IPC and external runtime CLI remain not implemented in this status entry. The required first step is an in-process runtime command/query contract, dispatcher, facade, and structured snapshots.

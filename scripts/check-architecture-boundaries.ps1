@@ -39,10 +39,15 @@ $violations = [System.Collections.Generic.List[string]]::new()
 Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-SourceFile $_ } | ForEach-Object {
     $repoPath = Convert-ToRepoPath $_.FullName
     $lines = Get-Content -LiteralPath $_.FullName
+    $currentFunction = ""
 
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index]
         $lineNumber = $index + 1
+
+        if ($repoPath -eq "src/app/app_runtime_context.cpp" -and $line -match 'AppRuntimeContext::([A-Za-z0-9_]+)\s*\(') {
+            $currentFunction = $Matches[1]
+        }
 
         if ($repoPath.StartsWith("src/ui/", [System.StringComparison]::Ordinal) -and $line -match '\bapp::') {
             Add-Violation $violations $repoPath $lineNumber "app::" "UI code must use UI projection types and must not reference app namespace types"
@@ -69,6 +74,18 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         if ($repoPath.StartsWith("src/application/", [System.StringComparison]::Ordinal)) {
             if ($line -match '\bAppRuntimeContext\b|ui::|pages::') {
                 Add-Violation $violations $repoPath $lineNumber "application service boundary" "Application command/query services must not depend on GUI runtime context or UI pages"
+            }
+        }
+
+        if ($repoPath -eq "src/app/app_runtime_context.cpp") {
+            if ($line -match 'playbackCommands\(\)\.startRemoteStream\s*\(' -and $currentFunction -ne "startSelectedRemoteStream") {
+                Add-Violation $violations $repoPath $lineNumber "runtime command bus bypass" "Remote stream playback from GUI/desktop/search/stream-detail flows must submit a RuntimeCommand; direct startRemoteStream is only allowed inside the runtime facade callback"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/runtime/", [System.StringComparison]::Ordinal)) {
+            if ($line -match '\bAppRuntimeContext\b|ui::|pages::|argv|argc') {
+                Add-Violation $violations $repoPath $lineNumber "runtime command boundary" "Runtime command/session code must stay transport-neutral and must not depend on GUI runtime context, UI pages, or CLI argv parsing"
             }
         }
 
@@ -196,9 +213,15 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath.StartsWith("src/runtime/", [System.StringComparison]::Ordinal)) {
+            if (Test-AnyPrefix $include @("platform/", "targets/", "ui/", "app/app_runtime_context.h", "cli/")) {
+                Add-Violation $violations $repoPath $lineNumber $include "runtime command/session code must not include platform transports, targets, UI, AppRuntimeContext, or CLI adapters"
+            }
+        }
+
         if ($repoPath.StartsWith("src/cli/", [System.StringComparison]::Ordinal)) {
-            if (Test-AnyPrefix $include @("platform/", "targets/", "ui/", "app/app_runtime_context.h", "playback/playback_controller.h")) {
-                Add-Violation $violations $repoPath $lineNumber $include "direct CLI parsing/formatting must depend on application services, not concrete platform adapters, targets, GUI runtime, UI, or playback internals"
+            if (Test-AnyPrefix $include @("platform/", "targets/", "ui/", "app/app_runtime_context.h", "playback/playback_controller.h", "runtime/")) {
+                Add-Violation $violations $repoPath $lineNumber $include "direct CLI parsing/formatting must depend on application services, not concrete platform adapters, targets, GUI runtime, UI, playback internals, or live runtime internals"
             }
         }
 

@@ -13,7 +13,6 @@
 #include "app/media_search_service.h"
 #include "app/source_manager_projection.h"
 #include "app/text_input_utils.h"
-#include "audio/dsp/dsp_chain.h"
 #include "remote/common/remote_source_registry.h"
 #include "remote/common/stream_source_model.h"
 
@@ -97,27 +96,6 @@ std::string searchItemKey(const MediaItem& item)
     return item.id;
 }
 
-audio::dsp::DspChainProfile dspProfileFromEqState(const EqState& state)
-{
-    auto eq = audio::dsp::tenBandFlatEqProfile();
-    eq.id = "current-ui";
-    eq.name = state.preset_name.empty() ? std::string{"CUSTOM"} : state.preset_name;
-    bool has_gain = false;
-    for (std::size_t index = 0; index < eq.bands.size() && index < state.bands.size(); ++index) {
-        eq.bands[index].gain_db = static_cast<double>(state.bands[index]);
-        has_gain = has_gain || state.bands[index] != 0;
-    }
-    eq.enabled = has_gain;
-    eq.limiter_enabled = true;
-    eq.limiter_ceiling_db = -1.0;
-
-    audio::dsp::DspChainProfile profile{};
-    profile.active_profile_id = eq.id;
-    profile.eq = std::move(eq);
-    profile.limiter.enabled = true;
-    profile.limiter.ceiling_db = -1.0;
-    return profile;
-}
 }
 
 AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_roots,
@@ -125,7 +103,9 @@ AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_ro
                                      RuntimeServices services,
                                      std::vector<std::string> startup_uris)
     : state_{},
-      services_(withNullRuntimeServices(std::move(services)))
+      services_(withNullRuntimeServices(std::move(services))),
+      runtime_session_{::lofibox::application::AppServiceRegistry{controllers_, services_}, state_.eq},
+      runtime_bus_{runtime_session_}
 {
     state_.media_roots = std::move(media_roots);
     state_.pending_open_uris = std::move(startup_uris);
@@ -139,7 +119,17 @@ AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_ro
     state_.ui_assets = std::move(assets);
     state_.remote_profiles = sourceProfileService().loadProfiles();
     controllers_.bindServices(services_);
-    applyEqualizerStateToPlayback();
+    runtime_session_.setRemoteTrackStarter([this](int track_id) {
+        const auto* track = controllers_.library.findTrack(track_id);
+        return track != nullptr && startRemoteLibraryTrack(*track);
+    });
+    runtime_session_.setActiveRemoteStreamStarter([this]() {
+        return startSelectedRemoteStream();
+    });
+    runtime_session_.setRemoteSessionSnapshotProvider([this]() {
+        return remoteSessionSnapshot();
+    });
+    runtime_session_.resetEq();
     refreshRuntimeStatus(true);
 }
 
@@ -237,6 +227,7 @@ void AppRuntimeContext::handlePendingOpenRequests()
         profile.base_url = uri;
         state_.selected_remote_kind = profile.kind;
         state_.selected_remote_profile_index.reset();
+        state_.selected_transient_remote_profile = profile;
         state_.selected_remote_session = sourceProfileService().probe(profile, state_.remote_profiles.size()).session;
         RemoteTrack track{uri, "DESKTOP STREAM", "", "", "", 0};
         track.source_id = profile.id;
@@ -250,7 +241,10 @@ void AppRuntimeContext::handlePendingOpenRequests()
             false};
         remoteBrowseService().rememberTrackFacts(profile, track);
         state_.selected_remote_stream = remoteBrowseService().resolve(profile, state_.selected_remote_session, track).stream;
-        if (state_.selected_remote_stream && appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, "DESKTOP")) {
+        if (state_.selected_remote_stream && submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+                ::lofibox::runtime::RuntimeCommandKind::RemoteStartActiveStream,
+                {},
+                ::lofibox::runtime::CommandOrigin::Desktop}).applied) {
             state_.navigation.replaceStack({AppPage::MainMenu, AppPage::NowPlaying});
         }
         state_.pending_open_processed = true;
@@ -266,7 +260,7 @@ void AppRuntimeContext::handlePendingOpenRequests()
     for (const auto& track : controllers_.library.model().tracks) {
         const auto track_absolute = std::filesystem::absolute(track.path, ec);
         if ((!ec && track_absolute == absolute) || track.path == requested) {
-            if (appServices().playbackCommands().startTrack(track.id)) {
+            if (startLibraryTrack(track.id)) {
                 state_.navigation.replaceStack({AppPage::MainMenu, AppPage::NowPlaying});
             }
             state_.pending_open_processed = true;
@@ -289,6 +283,11 @@ NavigationState& AppRuntimeContext::navigationState() noexcept
 ::lofibox::application::AppServiceRegistry AppRuntimeContext::appServices() noexcept
 {
     return ::lofibox::application::AppServiceRegistry{controllers_, services_};
+}
+
+::lofibox::runtime::RuntimeCommandResult AppRuntimeContext::submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command)
+{
+    return runtime_bus_.dispatch(command);
 }
 
 ::lofibox::application::SourceProfileCommandService AppRuntimeContext::sourceProfileService() const noexcept
@@ -461,23 +460,28 @@ bool AppRuntimeContext::helpOpen() const noexcept
 
 void AppRuntimeContext::playFromMenu()
 {
-    (void)appServices().playbackCommands().playFirstAvailable([this](int track_id) {
-        const auto* track = controllers_.library.findTrack(track_id);
-        return track != nullptr && startRemoteLibraryTrack(*track);
-    });
+    (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackPlay,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void AppRuntimeContext::pausePlayback()
 {
-    appServices().playbackCommands().pause();
+    (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackPause,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void AppRuntimeContext::stepTrack(int delta)
 {
-    appServices().queueCommands().step(delta, [this](int track_id) {
-        const auto* track = controllers_.library.findTrack(track_id);
-        return track != nullptr && startRemoteLibraryTrack(*track);
-    });
+    ::lofibox::runtime::RuntimeCommandPayload payload{};
+    payload.queue_delta = delta;
+    (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::QueueStep,
+        payload,
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void AppRuntimeContext::cycleMainMenuPlaybackMode()
@@ -590,32 +594,37 @@ void AppRuntimeContext::confirmMainMenu()
 
 bool AppRuntimeContext::startLibraryTrack(int track_id)
 {
-    const auto* track = controllers_.library.findTrack(track_id);
-    if (track == nullptr) {
-        return false;
-    }
-    if (!track->remote) {
-        return appServices().playbackCommands().startTrack(track_id);
-    }
-    return appServices().playbackCommands().startTrack(track_id, [this](int remote_track_id) {
-        const auto* remote_track = controllers_.library.findTrack(remote_track_id);
-        return remote_track != nullptr && startRemoteLibraryTrack(*remote_track);
-    });
+    ::lofibox::runtime::RuntimeCommandPayload payload{};
+    payload.track_id = track_id;
+    const auto result = submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack,
+        payload,
+        ::lofibox::runtime::CommandOrigin::Gui});
+    return result.applied;
 }
 
 void AppRuntimeContext::toggleShuffle()
 {
-    commandToggleShuffle(*this);
+    (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackToggleShuffle,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void AppRuntimeContext::cycleRepeatMode()
 {
-    commandCycleRepeatMode(*this);
+    (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackCycleRepeat,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void AppRuntimeContext::togglePlayPause()
 {
-    commandTogglePlayPause(*this);
+    (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::PlaybackToggle,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void AppRuntimeContext::moveEqualizerSelection(int delta)
@@ -626,13 +635,11 @@ void AppRuntimeContext::moveEqualizerSelection(int delta)
 void AppRuntimeContext::adjustSelectedEqualizerBand(int delta)
 {
     commandAdjustSelectedEqualizerBand(*this, delta);
-    applyEqualizerStateToPlayback();
 }
 
 void AppRuntimeContext::cycleEqualizerPreset(int delta)
 {
     commandCycleEqualizerPreset(*this, delta);
-    applyEqualizerStateToPlayback();
 }
 
 void AppRuntimeContext::cycleSongSortModeAndClamp()
@@ -741,7 +748,7 @@ std::optional<std::string> AppRuntimeContext::remoteBrowseTitleOverride() const
 std::optional<RemoteServerProfile> AppRuntimeContext::selectedRemoteProfile() const
 {
     if (!state_.selected_remote_profile_index || *state_.selected_remote_profile_index >= state_.remote_profiles.size()) {
-        return std::nullopt;
+        return state_.selected_transient_remote_profile;
     }
     return state_.remote_profiles[*state_.selected_remote_profile_index];
 }
@@ -795,19 +802,21 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::streamDetail
 
 std::vector<std::pair<std::string, std::string>> AppRuntimeContext::queueRows() const
 {
-    const auto& playback = controllers_.playback.session();
+    const auto runtime_snapshot = runtime_bus_.snapshot();
+    const auto& playback = runtime_snapshot.playback;
+    const auto& queue = runtime_snapshot.queue;
     std::vector<std::pair<std::string, std::string>> rows{};
     if (playback.current_track_id) {
         if (const auto* track = controllers_.library.findTrack(*playback.current_track_id)) {
             rows.emplace_back(track->title, track->remote && !track->source_label.empty() ? track->source_label : "LOCAL");
         }
-    } else if (!playback.current_stream_title.empty()) {
-        rows.emplace_back(playback.current_stream_title, playback.current_stream_live ? "LIVE" : (playback.current_stream_source.empty() ? "STREAM" : playback.current_stream_source));
+    } else if (!playback.title.empty()) {
+        rows.emplace_back(playback.title, playback.source_label.empty() ? "STREAM" : playback.source_label);
     }
     if (rows.empty()) {
         rows.emplace_back("QUEUE EMPTY", "IDLE");
     }
-    rows.emplace_back("MODE", playback.shuffle_enabled ? "SHUFFLE" : (playback.repeat_one ? "REPEAT ONE" : (playback.repeat_all ? "REPEAT ALL" : "ORDER")));
+    rows.emplace_back("MODE", queue.shuffle_enabled ? "SHUFFLE" : (queue.repeat_one ? "REPEAT ONE" : (queue.repeat_all ? "REPEAT ALL" : "ORDER")));
     return rows;
 }
 
@@ -896,6 +905,7 @@ void AppRuntimeContext::openRemoteProfile(std::size_t profile_index)
         return;
     }
     state_.selected_remote_profile_index = profile_index;
+    state_.selected_transient_remote_profile.reset();
     state_.selected_remote_kind = state_.remote_profiles[profile_index].kind;
     loadRemoteRoot();
 }
@@ -923,6 +933,7 @@ bool AppRuntimeContext::persistRemoteProfiles()
 void AppRuntimeContext::openRemoteSetup()
 {
     state_.remote_profiles = sourceProfileService().loadProfiles();
+    state_.selected_transient_remote_profile.reset();
     state_.remote_profile_status.clear();
     state_.navigation.list_selection.selected = 0;
     state_.navigation.list_selection.scroll = 0;
@@ -936,6 +947,7 @@ void AppRuntimeContext::openRemoteProfileSettings(std::size_t profile_index, int
         return;
     }
     state_.selected_remote_profile_index = profile_index;
+    state_.selected_transient_remote_profile.reset();
     state_.selected_remote_kind = state_.remote_profiles[profile_index].kind;
     state_.remote_profile_status = sourceProfileService().readiness(state_.remote_profiles[profile_index]);
     state_.navigation.list_selection.selected = std::max(0, focus_row);
@@ -1188,9 +1200,11 @@ bool AppRuntimeContext::handleStreamDetailConfirm()
     if (!state_.selected_remote_stream) {
         return false;
     }
-    const auto track = state_.selected_remote_node ? remoteBrowseService().trackFromNode(*profile, *state_.selected_remote_node) : RemoteTrack{};
-    const auto source = sourceProfileService().profileLabel(*profile);
-    return state_.selected_remote_stream ? appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, source) : false;
+    const auto result = submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::RemoteStartActiveStream,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
+    return result.applied;
 }
 
 bool AppRuntimeContext::handleSearchConfirm(int selected)
@@ -1256,9 +1270,11 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
         track.lyrics_synced,
         track.lyrics_source,
         track.fingerprint};
-    return state_.selected_remote_stream
-        ? appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, sourceProfileService().profileLabel(*profile_it))
-        : false;
+    const auto result = submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+        ::lofibox::runtime::RuntimeCommandKind::RemoteStartActiveStream,
+        {},
+        ::lofibox::runtime::CommandOrigin::Gui});
+    return result.applied;
 }
 
 RemoteTrack AppRuntimeContext::remoteTrackFromLibraryTrack(const RemoteServerProfile& profile, const TrackRecord& track) const
@@ -1368,6 +1384,54 @@ bool AppRuntimeContext::startRemoteLibraryTrack(const TrackRecord& track)
         sourceProfileService().keepsLocalFacts(profile_it->kind));
 }
 
+bool AppRuntimeContext::startSelectedRemoteStream()
+{
+    const auto profile = selectedRemoteProfile();
+    if (!profile || !state_.selected_remote_stream) {
+        return false;
+    }
+
+    const auto track = state_.selected_remote_node
+        ? remoteBrowseService().trackFromNode(*profile, *state_.selected_remote_node)
+        : RemoteTrack{};
+    return appServices().playbackCommands().startRemoteStream(
+        *state_.selected_remote_stream,
+        track,
+        sourceProfileService().profileLabel(*profile));
+}
+
+::lofibox::runtime::RemoteSessionSnapshot AppRuntimeContext::remoteSessionSnapshot() const
+{
+    ::lofibox::runtime::RemoteSessionSnapshot snapshot{};
+    const auto profile = selectedRemoteProfile();
+    if (profile) {
+        snapshot.profile_id = profile->id;
+        snapshot.source_label = sourceProfileService().profileLabel(*profile);
+        snapshot.connection_status = state_.selected_remote_session.available ? "ONLINE" : "UNAVAILABLE";
+    }
+    if (!state_.selected_remote_session.message.empty() && !state_.selected_remote_session.available) {
+        snapshot.connection_status = state_.selected_remote_session.message;
+    }
+    if (state_.selected_remote_stream) {
+        const auto& diagnostics = state_.selected_remote_stream->diagnostics;
+        snapshot.stream_resolved = true;
+        snapshot.redacted_url = diagnostics.resolved_url_redacted;
+        snapshot.buffer_state = diagnostics.connected ? "READY" : "UNCONFIRMED";
+        snapshot.recovery_action = diagnostics.connected ? "NONE" : "RECONNECT";
+        snapshot.bitrate_kbps = diagnostics.bitrate_kbps;
+        snapshot.codec = diagnostics.codec;
+        snapshot.live = diagnostics.live;
+        snapshot.seekable = state_.selected_remote_stream->seekable && diagnostics.seekable;
+        if (!diagnostics.connection_status.empty()) {
+            snapshot.connection_status = diagnostics.connection_status;
+        }
+        if (!diagnostics.source_name.empty()) {
+            snapshot.source_label = diagnostics.source_name;
+        }
+    }
+    return snapshot;
+}
+
 void AppRuntimeContext::refreshSearchResults()
 {
     state_.search_results.clear();
@@ -1409,11 +1473,6 @@ void AppRuntimeContext::refreshSearchResults()
             remember_item(mediaItemFromRemoteTrack(profile, track));
         }
     }
-}
-
-void AppRuntimeContext::applyEqualizerStateToPlayback()
-{
-    appServices().playbackCommands().setDspProfile(dspProfileFromEqState(state_.eq));
 }
 
 void AppRuntimeContext::appendSearchText(std::string_view text)

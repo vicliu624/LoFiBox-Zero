@@ -14,6 +14,8 @@ Unit tests should cover:
 - core state machine
 - playback queue
 - application command/query services returning structured command results without depending on GUI page selection state
+- runtime command/query contract behavior for accepted/applied result semantics, correlation ids, versioning, and invalid command rejection
+- runtime snapshots for playback, active queue, active EQ, and active remote session before GUI row or terminal projection
 - remote browse query service behavior for root browsing, child browsing, search, stream resolution, degraded facts, directory cache reuse, and local read-only remote fact caching
 - credential command service behavior for secret status, set, delete, safe redaction assumptions, and separation from source-profile field editing
 - cache and runtime diagnostic command services returning structured facts before terminal or UI projection
@@ -29,6 +31,9 @@ Unit tests should cover:
 Integration tests should cover:
 
 - GUI command routing translating page events into application commands without duplicating product behavior
+- GUI live playback, queue, and EQ actions submitting runtime commands instead of directly mutating live runtime truth
+- desktop-open URL playback submitting runtime commands instead of directly starting remote streams from GUI runtime code
+- in-process runtime command dispatcher behavior for playback transport, queue stepping, EQ mutation, snapshot queries, and serialization/version increments
 - direct command service behavior for library/source/credential/cache/diagnostic domains under isolated XDG test roots
 - first-stage direct CLI parsing/formatting for source list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor
 - runtime command client/server behavior before live playback or active queue control is exposed to external command consumers
@@ -88,7 +93,9 @@ Tests must not:
 - access the external internet
 - depend on a real user input-method configuration
 - simulate product commands by driving GUI-only selected-row or field-editor internals when an application command service is the intended boundary
+- simulate live runtime commands by driving GUI-only page state when the runtime command bus is the intended boundary
 - test remote diagnostics or stream detail by asserting only rendered row text when structured application query facts are available
+- test playback, queue, EQ, or active remote-session truth by asserting only rendered row text when runtime snapshots are available
 - mutate live playback or active queue from a second process without an explicit runtime command path
 
 Tests must support CI and Debian autopkgtest environments.

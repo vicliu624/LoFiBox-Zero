@@ -60,6 +60,11 @@ add_library(lofibox_zero_core STATIC
     src/application/remote_browse_query_service.cpp
     src/application/runtime_diagnostic_service.cpp
     src/application/source_profile_command_service.cpp
+    src/runtime/runtime_command_bus.cpp
+    src/runtime/runtime_command_dispatcher.cpp
+    src/runtime/runtime_query_dispatcher.cpp
+    src/runtime/runtime_result.cpp
+    src/runtime/runtime_session_facade.cpp
     src/app/library_controller.cpp
     src/app/library_navigation_service.cpp
     src/app/library_repository.cpp
@@ -311,6 +316,14 @@ if(BUILD_TESTING)
     add_executable(lofibox_application_command_boundary_smoke tests/application_command_boundary_smoke.cpp)
     target_link_libraries(lofibox_application_command_boundary_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_application_command_boundary_smoke COMMAND lofibox_application_command_boundary_smoke)
+
+    add_executable(lofibox_runtime_command_bus_smoke tests/runtime_command_bus_smoke.cpp)
+    target_link_libraries(lofibox_runtime_command_bus_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_command_bus_smoke COMMAND lofibox_runtime_command_bus_smoke)
+
+    add_executable(lofibox_desktop_open_runtime_command_smoke tests/desktop_open_runtime_command_smoke.cpp)
+    target_link_libraries(lofibox_desktop_open_runtime_command_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_desktop_open_runtime_command_smoke COMMAND lofibox_desktop_open_runtime_command_smoke)
 
     add_executable(lofibox_remote_browse_query_service_smoke tests/remote_browse_query_service_smoke.cpp)
     target_link_libraries(lofibox_remote_browse_query_service_smoke PRIVATE lofibox_zero_core)

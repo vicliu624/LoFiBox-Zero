@@ -75,6 +75,13 @@ Assert-PathExists "src/application/credential_command_service.cpp" "Credential c
 Assert-PathExists "src/application/cache_command_service.cpp" "Cache command service must live under src/application."
 Assert-PathExists "src/application/runtime_diagnostic_service.cpp" "Runtime diagnostic service must live under src/application."
 Assert-PathExists "src/cli/direct_cli.cpp" "Direct CLI dispatcher must live under src/cli."
+Assert-PathExists "src/runtime/runtime_command.h" "Runtime command contract must live under src/runtime."
+Assert-PathExists "src/runtime/runtime_result.cpp" "Runtime command result implementation must live under src/runtime."
+Assert-PathExists "src/runtime/runtime_snapshot.h" "Runtime snapshot contract must live under src/runtime."
+Assert-PathExists "src/runtime/runtime_session_facade.cpp" "Runtime session facade must live under src/runtime."
+Assert-PathExists "src/runtime/runtime_command_dispatcher.cpp" "Runtime command dispatcher must live under src/runtime."
+Assert-PathExists "src/runtime/runtime_query_dispatcher.cpp" "Runtime query dispatcher must live under src/runtime."
+Assert-PathExists "src/runtime/runtime_command_bus.cpp" "Runtime command bus must live under src/runtime."
 
 Assert-PathExists "src/audio/decoder/audio_decoder_contract.h" "Audio decoder boundary must live under src/audio/decoder."
 Assert-PathExists "src/audio/output/audio_output_contract.h" "Audio output boundary must live under src/audio/output."

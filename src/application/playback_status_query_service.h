@@ -4,6 +4,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "app/library_model.h"
 #include "playback/playback_state.h"
@@ -27,12 +28,21 @@ struct PlaybackStatusSnapshot {
     bool repeat_one{false};
 };
 
+struct QueueStatusSnapshot {
+    std::vector<int> active_ids{};
+    int active_index{-1};
+    bool shuffle_enabled{false};
+    bool repeat_all{false};
+    bool repeat_one{false};
+};
+
 class PlaybackStatusQueryService {
 public:
     PlaybackStatusQueryService(const app::PlaybackController& playback, const app::LibraryController& library) noexcept;
 
     [[nodiscard]] const app::PlaybackSession& session() const noexcept;
     [[nodiscard]] PlaybackStatusSnapshot snapshot() const;
+    [[nodiscard]] QueueStatusSnapshot queueSnapshot() const;
 
 private:
     const app::PlaybackController& playback_;

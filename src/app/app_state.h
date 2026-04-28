@@ -33,6 +33,7 @@ struct EqState {
     std::array<int, 10> bands{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     int selected_band{0};
     std::string preset_name{"FLAT"};
+    bool enabled{false};
 };
 
 } // namespace lofibox::app
