@@ -381,5 +381,7 @@ As of 2026-04-27, the DSP baseline is a chain/profile domain rather than an EQ-p
 - Preset governance includes built-in presets, user presets, import/export, duplication, rename, delete, and overwrite semantics.
 - Device/content bindings map output devices and content categories to DSP profile ids without making the UI page own that decision.
 - Playback stability policy owns gapless/crossfade preparation, transition lead time, and start/end jitter suppression as playback-chain behavior rather than visual behavior.
+- The active compact EQ page state is converted into the playback `DspChainProfile`; slider and preset changes hot-update the running PCM DSP engine and must not restart the track.
+- For the Debian host target, local and remote playback converge through a realtime PCM path: media is decoded to PCM, processed by the active `DspChain`, and then handed to the Linux output sink.
 
 Future rendering pages may expose simple, advanced, or professional controls, but they must not redefine the DSP domain.

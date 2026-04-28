@@ -762,6 +762,148 @@ void resumePipeProcess(RunningPipeProcess& process)
     kill(process.pid, SIGCONT);
 }
 
+bool spawnInputProcess(RunningInputProcess& process, const fs::path& executable, const std::vector<std::string>& args)
+{
+    int pipe_fds[2]{-1, -1};
+    if (pipe(pipe_fds) != 0) {
+        return false;
+    }
+
+    const pid_t child = fork();
+    if (child < 0) {
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        return false;
+    }
+
+    if (child == 0) {
+        bindChildToParentDeath();
+        setsid();
+        dup2(pipe_fds[0], STDIN_FILENO);
+        const int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+
+        std::vector<std::string> owned_args{};
+        owned_args.reserve(args.size() + 1);
+        owned_args.push_back(executable.filename().string());
+        owned_args.insert(owned_args.end(), args.begin(), args.end());
+
+        std::vector<char*> argv{};
+        argv.reserve(owned_args.size() + 1);
+        for (auto& arg : owned_args) {
+            argv.push_back(arg.data());
+        }
+        argv.push_back(nullptr);
+        execv(executable.string().c_str(), argv.data());
+        _exit(127);
+    }
+
+    close(pipe_fds[0]);
+    process.pid = child;
+    process.write_fd = pipe_fds[1];
+    process.active = true;
+    return true;
+}
+
+int writeInputProcess(RunningInputProcess& process, const char* buffer, int max_bytes)
+{
+    static const bool sigpipe_ignored = [] {
+        std::signal(SIGPIPE, SIG_IGN);
+        return true;
+    }();
+    (void)sigpipe_ignored;
+    if (!process.active || process.write_fd < 0 || buffer == nullptr || max_bytes <= 0) {
+        return 0;
+    }
+    while (true) {
+        const ssize_t bytes = write(process.write_fd, buffer, static_cast<std::size_t>(max_bytes));
+        if (bytes < 0 && errno == EINTR) {
+            continue;
+        }
+        if (bytes < 0 && (errno == EPIPE || errno == EBADF)) {
+            return 0;
+        }
+        return bytes > 0 ? static_cast<int>(bytes) : 0;
+    }
+}
+
+void closeInputProcess(RunningInputProcess& process)
+{
+    if (process.write_fd >= 0) {
+        close(process.write_fd);
+        process.write_fd = -1;
+    }
+}
+
+void stopInputProcess(RunningInputProcess& process)
+{
+    closeInputProcess(process);
+    if (!process.active) {
+        return;
+    }
+    if (process.pid > 0) {
+        terminateChildProcess(process.pid);
+        process.pid = -1;
+    }
+    process.active = false;
+}
+
+void pauseInputProcess(RunningInputProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return;
+    }
+    kill(-process.pid, SIGSTOP);
+    kill(process.pid, SIGSTOP);
+}
+
+void resumeInputProcess(RunningInputProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return;
+    }
+    kill(-process.pid, SIGCONT);
+    kill(process.pid, SIGCONT);
+}
+
+bool inputProcessRunning(RunningInputProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return false;
+    }
+    int status = 0;
+    const pid_t result = waitpid(process.pid, &status, WNOHANG);
+    if (result == 0) {
+        return true;
+    }
+    process.pid = -1;
+    process.active = false;
+    closeInputProcess(process);
+    return false;
+}
+
+bool inputProcessFinished(RunningInputProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return false;
+    }
+    int status = 0;
+    const pid_t result = waitpid(process.pid, &status, WNOHANG);
+    if (result == 0) {
+        return false;
+    }
+    process.pid = -1;
+    process.active = false;
+    closeInputProcess(process);
+    return true;
+}
+
 bool probeConnectivity()
 {
     std::ifstream route_file("/proc/net/route");

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "app/app_page.h"
+#include "app/media_item.h"
 #include "app/remote_media_services.h"
 #include "app/app_state.h"
 #include "app/navigation_state.h"
@@ -42,6 +43,9 @@ struct AppRuntimeState {
     std::string remote_profile_edit_buffer{};
     std::string remote_profile_status{};
     std::string search_query{};
+    std::string search_results_query{};
+    std::vector<MediaItem> search_results{};
+    std::vector<std::string> search_degraded_sources{};
     clock::time_point last_update{clock::now()};
     clock::time_point last_status_refresh{};
     clock::time_point now_playing_confirm_blocked_until{};

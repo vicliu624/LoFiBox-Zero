@@ -75,7 +75,10 @@ UserAction mapInput(const InputEvent& event)
     case InputKey::Next:
         return UserAction::NextTrack;
     case InputKey::Character:
-        return mapCharacterAction(event.text);
+        if (const auto ch = singleAsciiText(event)) {
+            return mapCharacterAction(*ch);
+        }
+        return UserAction::None;
     default:
         return UserAction::None;
     }

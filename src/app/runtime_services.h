@@ -16,6 +16,10 @@
 #include "cache/cache_manager.h"
 #include "core/canvas.h"
 
+namespace lofibox::audio::dsp {
+struct DspChainProfile;
+}
+
 namespace lofibox::app {
 
 struct TrackMetadata {
@@ -136,6 +140,7 @@ public:
     virtual void pause() {}
     virtual void resume() {}
     virtual void stop() = 0;
+    virtual void setDspProfile(const ::lofibox::audio::dsp::DspChainProfile& profile) { (void)profile; }
     [[nodiscard]] virtual bool isPlaying() = 0;
     [[nodiscard]] virtual bool isFinished() = 0;
     [[nodiscard]] virtual AudioPlaybackState state()

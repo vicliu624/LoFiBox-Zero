@@ -12,6 +12,7 @@ void AudioPipelineController::bind(app::RuntimeServices* services) noexcept
 bool AudioPipelineController::startFile(const std::filesystem::path& path, double start_seconds)
 {
     if (auto* audio_backend = backend()) {
+        audio_backend->setDspProfile(dsp_chain_.profile());
         return audio_backend->playFile(path, start_seconds);
     }
     return false;
@@ -20,6 +21,7 @@ bool AudioPipelineController::startFile(const std::filesystem::path& path, doubl
 bool AudioPipelineController::startUri(const std::string& uri, double start_seconds)
 {
     if (auto* audio_backend = backend()) {
+        audio_backend->setDspProfile(dsp_chain_.profile());
         return audio_backend->playUri(uri, start_seconds);
     }
     return false;
@@ -65,6 +67,9 @@ app::AudioVisualizationFrame AudioPipelineController::visualizationFrame() const
 void AudioPipelineController::setDspProfile(dsp::DspChainProfile profile)
 {
     dsp_chain_.setProfile(profile);
+    if (auto* audio_backend = backend()) {
+        audio_backend->setDspProfile(dsp_chain_.profile());
+    }
 }
 
 const dsp::DspChainProfile& AudioPipelineController::dspProfile() const noexcept

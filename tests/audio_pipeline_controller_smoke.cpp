@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "audio/audio_pipeline_controller.h"
+#include "audio/dsp/dsp_chain.h"
 
 #include <cassert>
 #include <filesystem>
@@ -23,6 +24,11 @@ public:
     void pause() override { state_value = lofibox::app::AudioPlaybackState::Paused; }
     void resume() override { state_value = lofibox::app::AudioPlaybackState::Playing; }
     void stop() override { state_value = lofibox::app::AudioPlaybackState::Finished; }
+    void setDspProfile(const lofibox::audio::dsp::DspChainProfile& profile) override
+    {
+        dsp_profile_updates += 1;
+        last_eq_enabled = profile.eq.enabled;
+    }
     [[nodiscard]] bool isPlaying() override { return state_value == lofibox::app::AudioPlaybackState::Playing; }
     [[nodiscard]] bool isFinished() override { return state_value == lofibox::app::AudioPlaybackState::Finished; }
     [[nodiscard]] lofibox::app::AudioPlaybackState state() override { return state_value; }
@@ -35,6 +41,8 @@ public:
     }
 
     bool started{false};
+    int dsp_profile_updates{0};
+    bool last_eq_enabled{false};
     double last_start_seconds{0.0};
     lofibox::app::AudioPlaybackState state_value{lofibox::app::AudioPlaybackState::Idle};
 };
@@ -50,8 +58,15 @@ int main()
     lofibox::audio::AudioPipelineController pipeline{};
     pipeline.bind(&services);
 
+    auto profile = lofibox::audio::dsp::DspChainProfile{};
+    profile.eq.enabled = true;
+    pipeline.setDspProfile(profile);
+    assert(backend->dsp_profile_updates == 1);
+    assert(backend->last_eq_enabled);
+
     assert(pipeline.startFile("song.mp3", 12.5));
     assert(backend->started);
+    assert(backend->dsp_profile_updates == 2);
     assert(backend->last_start_seconds == 12.5);
     assert(pipeline.state() == lofibox::app::AudioPlaybackState::Playing);
 

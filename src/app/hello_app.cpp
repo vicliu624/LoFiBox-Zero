@@ -55,11 +55,13 @@ void HelloApp::handleInput(const InputEvent& event) noexcept
 
     switch (event.key) {
     case InputKey::Character:
-        if (event.text != '\0') {
-            if (typed_text_.size() >= 26) {
-                typed_text_.erase(0, 1);
+        if (!event.text.empty()) {
+            for (const char ch : event.text) {
+                if (typed_text_.size() >= 26) {
+                    typed_text_.erase(0, 1);
+                }
+                typed_text_.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
             }
-            typed_text_.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(event.text))));
             status_text_ = "TEXT INPUT CAPTURED";
         }
         break;

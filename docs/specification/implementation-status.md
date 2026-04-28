@@ -78,11 +78,22 @@ This update records implementation, not just domain modeling:
 
 ## 2026-04-28 Search And Text Input Specification Update
 
-This update records specification convergence before the next implementation pass:
+This update records specification and implementation convergence:
 
 - Search is a current first-class small-screen page, not a deferred feature.
 - Editable text is now governed by `lofibox-zero-text-input-spec.md`.
 - Search query truth is committed UTF-8 app state; input-method preedit remains transient projection and must not mutate query truth.
 - Debian/Linux CJK input belongs to the user's system/session input-method stack and enters LoFiBox through committed UTF-8 text events.
 - The X11 desktop-widget target must integrate with system input methods; framebuffer/evdev remains a direct Linux-key input adapter unless a separate device input-method design is specified.
-- Current implementation still needs to converge from character/ASCII-oriented input plumbing to committed UTF-8 text events, Unicode-safe backspace, and tested non-ASCII Search matching before CJK search is product-grade.
+- Current implementation now routes committed UTF-8 text events through app input, applies Unicode-safe append/backspace behavior, and keeps ASCII shortcuts from consuming non-ASCII Search text.
+- Search now snapshots local plus configured ready remote results, preserves exact non-ASCII query matching, groups results by source, and starts local or remote playback from the selected result.
+
+## 2026-04-28 EQ/Search Runtime Convergence Update
+
+This update records implementation convergence after the EQ/Search runtime pass:
+
+- EQ page state now updates the active playback `DspChainProfile`; changes are hot-applied to the running playback backend instead of requiring a track restart.
+- The Debian host audio path now decodes local and remote media to realtime PCM, processes it through the active DSP chain, and hands the processed frames to the Linux output sink.
+- On Debian targets with `aplay`, the realtime PCM sink uses ALSA with a small explicit buffer before falling back to other helpers, reducing the old `ffplay`-buffered UI/audio skew.
+- Playback progress and spectrum advance only after the realtime output path confirms that processed PCM has entered the platform playback sink.
+- The real-audio smoke path on `vicliu@192.168.50.92` was verified with `/usr/bin/aplay`, and installed-app remote playback from Library -> Songs was observed using `realtime PCM DSP -> /usr/bin/aplay`.

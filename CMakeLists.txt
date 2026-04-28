@@ -39,6 +39,7 @@ add_library(lofibox_zero_core STATIC
     src/audio/decoder/audio_decoder_contract.cpp
         src/audio/output/audio_output_contract.cpp
     src/audio/dsp/dsp_chain.cpp
+    src/audio/dsp/realtime_dsp_engine.cpp
     src/app/input_actions.cpp
     src/app/app_command_executor.cpp
     src/app/app_lifecycle.cpp
@@ -69,6 +70,7 @@ add_library(lofibox_zero_core STATIC
     src/app/remote_profile_store.cpp
     src/app/settings_projection_builder.cpp
     src/app/source_manager_projection.cpp
+    src/app/text_input_utils.cpp
     src/ui/pages/about_page.cpp
     src/ui/pages/equalizer_page.cpp
     src/ui/pages/list_page.cpp
@@ -299,6 +301,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_app_input_router_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_app_input_router_smoke COMMAND lofibox_app_input_router_smoke)
 
+    add_executable(lofibox_text_input_utils_smoke tests/text_input_utils_smoke.cpp)
+    target_link_libraries(lofibox_text_input_utils_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_text_input_utils_smoke COMMAND lofibox_text_input_utils_smoke)
+
     add_executable(lofibox_app_lifecycle_smoke tests/app_lifecycle_smoke.cpp)
     target_link_libraries(lofibox_app_lifecycle_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_app_lifecycle_smoke COMMAND lofibox_app_lifecycle_smoke)
@@ -347,6 +353,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_audio_child_lifecycle_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_audio_child_lifecycle_smoke COMMAND lofibox_audio_child_lifecycle_smoke)
 
+    add_executable(lofibox_host_audio_realtime_dsp_smoke tests/host_audio_realtime_dsp_smoke.cpp)
+    target_link_libraries(lofibox_host_audio_realtime_dsp_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_host_audio_realtime_dsp_smoke COMMAND lofibox_host_audio_realtime_dsp_smoke)
+
     add_executable(lofibox_equalizer_smoke tests/equalizer_smoke.cpp)
     target_link_libraries(lofibox_equalizer_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_equalizer_smoke COMMAND lofibox_equalizer_smoke)
@@ -354,6 +364,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_dsp_chain_smoke tests/dsp_chain_smoke.cpp)
     target_link_libraries(lofibox_dsp_chain_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_dsp_chain_smoke COMMAND lofibox_dsp_chain_smoke)
+
+    add_executable(lofibox_realtime_dsp_engine_smoke tests/realtime_dsp_engine_smoke.cpp)
+    target_link_libraries(lofibox_realtime_dsp_engine_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_realtime_dsp_engine_smoke COMMAND lofibox_realtime_dsp_engine_smoke)
 
     add_executable(lofibox_dsp_profile_manager_smoke tests/dsp_profile_manager_smoke.cpp)
     target_link_libraries(lofibox_dsp_profile_manager_smoke PRIVATE lofibox_zero_core)

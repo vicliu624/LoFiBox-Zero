@@ -3,10 +3,12 @@
 #include "platform/x11/x11_presenter.h"
 
 #include <algorithm>
+#include <clocale>
 #include <cstdlib>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <X11/Xlib.h>
@@ -61,6 +63,11 @@ namespace {
 {
     std::string label(1, ch);
     return app::makeCharacterInput(ch, label);
+}
+
+[[nodiscard]] app::InputEvent makeCommittedText(std::string text)
+{
+    return app::makeCommittedTextInput(std::move(text));
 }
 
 struct MotifWmHints {
@@ -132,11 +139,39 @@ void waitUntilMapped(Display* display, Window window)
     }
 }
 
-[[nodiscard]] std::vector<app::InputEvent> translateKey(Display* display, XKeyEvent& key_event)
+[[nodiscard]] std::vector<app::InputEvent> translateKey(XIC input_context, XKeyEvent& key_event)
 {
     KeySym keysym{};
-    char text_buffer[8]{};
-    const int text_length = XLookupString(&key_event, text_buffer, static_cast<int>(sizeof(text_buffer)), &keysym, nullptr);
+    Status status = 0;
+    std::vector<char> text_buffer(64);
+    int text_length = 0;
+    if (input_context != nullptr) {
+        text_length = Xutf8LookupString(
+            input_context,
+            &key_event,
+            text_buffer.data(),
+            static_cast<int>(text_buffer.size() - 1U),
+            &keysym,
+            &status);
+        if (status == XBufferOverflow && text_length > 0) {
+            text_buffer.assign(static_cast<std::size_t>(text_length) + 1U, '\0');
+            text_length = Xutf8LookupString(
+                input_context,
+                &key_event,
+                text_buffer.data(),
+                static_cast<int>(text_buffer.size() - 1U),
+                &keysym,
+                &status);
+        }
+    } else {
+        text_length = XLookupString(
+            &key_event,
+            text_buffer.data(),
+            static_cast<int>(text_buffer.size() - 1U),
+            &keysym,
+            nullptr);
+        status = text_length > 0 ? XLookupBoth : XLookupKeySym;
+    }
 
     switch (keysym) {
     case XK_BackSpace:
@@ -195,8 +230,11 @@ void waitUntilMapped(Display* display, Window window)
     if (text_length == 1 && static_cast<unsigned char>(text_buffer[0]) >= 0x20U && static_cast<unsigned char>(text_buffer[0]) <= 0x7EU) {
         return {makeChar(text_buffer[0])};
     }
+    if (text_length > 0 && (status == XLookupChars || status == XLookupBoth)) {
+        std::string committed{text_buffer.data(), static_cast<std::size_t>(text_length)};
+        return {makeCommittedText(std::move(committed))};
+    }
 
-    (void)display;
     return {};
 }
 
@@ -205,6 +243,10 @@ void waitUntilMapped(Display* display, Window window)
 struct X11Presenter::Impl {
     Impl()
     {
+        std::setlocale(LC_CTYPE, "");
+        if (XSupportsLocale() != 0) {
+            XSetLocaleModifiers("");
+        }
         display = XOpenDisplay(nullptr);
         if (display == nullptr) {
             throw std::runtime_error("XOpenDisplay failed");
@@ -244,11 +286,33 @@ struct X11Presenter::Impl {
             throw std::runtime_error("XCreateGC failed");
         }
 
+        input_method = XOpenIM(display, nullptr, nullptr, nullptr);
+        if (input_method != nullptr) {
+            input_context = XCreateIC(
+                input_method,
+                XNInputStyle,
+                XIMPreeditNothing | XIMStatusNothing,
+                XNClientWindow,
+                window,
+                XNFocusWindow,
+                window,
+                nullptr);
+            if (input_context != nullptr) {
+                XSetICFocus(input_context);
+            }
+        }
+
         XFlush(display);
     }
 
     ~Impl()
     {
+        if (input_context != nullptr) {
+            XDestroyIC(input_context);
+        }
+        if (input_method != nullptr) {
+            XCloseIM(input_method);
+        }
         if (gc != nullptr) {
             XFreeGC(display, gc);
         }
@@ -270,6 +334,8 @@ struct X11Presenter::Impl {
     int window_x{};
     int window_y{};
     GC gc{};
+    XIM input_method{};
+    XIC input_context{};
     bool running{true};
     bool fixed_device_surface{false};
     bool dragging{false};
@@ -295,15 +361,13 @@ bool X11Presenter::pump()
         if (event.type == DestroyNotify) {
             impl_->running = false;
         } else if (event.type == KeyPress) {
-            KeySym keysym{};
-            char text_buffer[8]{};
-            XLookupString(&event.xkey, text_buffer, static_cast<int>(sizeof(text_buffer)), &keysym, nullptr);
+            const KeySym keysym = XLookupKeysym(&event.xkey, 0);
             if (isSuperH(keysym, event.xkey.state)) {
                 XIconifyWindow(impl_->display, impl_->window, impl_->screen);
                 XFlush(impl_->display);
                 continue;
             }
-            auto translated = translateKey(impl_->display, event.xkey);
+            auto translated = translateKey(impl_->input_context, event.xkey);
             impl_->pending_inputs.insert(impl_->pending_inputs.end(), translated.begin(), translated.end());
         } else if (event.type == ButtonPress && event.xbutton.button == Button1 && !impl_->fixed_device_surface) {
             impl_->dragging = true;

@@ -12,7 +12,7 @@ namespace {
 std::string lower(std::string value)
 {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
+        return ch < 0x80U ? static_cast<char>(std::tolower(ch)) : static_cast<char>(ch);
     });
     return value;
 }

@@ -11,22 +11,26 @@ namespace {
 
 [[nodiscard]] bool isLyricsToggle(const InputEvent& event) noexcept
 {
-    return event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'L';
+    const auto ch = singleAsciiText(event);
+    return ch && std::toupper(static_cast<unsigned char>(*ch)) == 'L';
 }
 
 [[nodiscard]] bool isQueueToggle(const InputEvent& event) noexcept
 {
-    return event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'Q';
+    const auto ch = singleAsciiText(event);
+    return ch && std::toupper(static_cast<unsigned char>(*ch)) == 'Q';
 }
 
 [[nodiscard]] bool isSortShortcut(const InputEvent& event) noexcept
 {
-    return event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'T';
+    const auto ch = singleAsciiText(event);
+    return ch && std::toupper(static_cast<unsigned char>(*ch)) == 'T';
 }
 
 [[nodiscard]] bool isPlaylistEditShortcut(const InputEvent& event) noexcept
 {
-    return event.key == InputKey::Character && std::toupper(static_cast<unsigned char>(event.text)) == 'E';
+    const auto ch = singleAsciiText(event);
+    return ch && std::toupper(static_cast<unsigned char>(*ch)) == 'E';
 }
 
 [[nodiscard]] bool routeGlobalTransportShortcut(AppInputTarget& target, const InputEvent& event)
@@ -94,8 +98,8 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
     }
 
     if (page == AppPage::RemoteFieldEditor) {
-        if (event.key == InputKey::Character && event.text != '\0') {
-            target.appendRemoteProfileEditCharacter(event.text);
+        if (event.key == InputKey::Character && !event.text.empty()) {
+            target.appendRemoteProfileEditText(event.text);
         } else if (event.key == InputKey::Backspace) {
             target.backspaceRemoteProfileEdit();
         } else if (event.key == InputKey::Enter) {
@@ -176,8 +180,8 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
     }
 
     if (page == AppPage::Search) {
-        if (event.key == InputKey::Character && event.text != '\0') {
-            target.appendSearchCharacter(event.text);
+        if (event.key == InputKey::Character && !event.text.empty()) {
+            target.appendSearchText(event.text);
             return;
         }
         if (event.key == InputKey::Backspace) {

@@ -20,6 +20,11 @@ void PlaybackController::setServices(RuntimeServices services)
     runtime_.setServices(&services_);
 }
 
+void PlaybackController::setDspProfile(::lofibox::audio::dsp::DspChainProfile profile)
+{
+    runtime_.setDspProfile(std::move(profile));
+}
+
 const PlaybackSession& PlaybackController::session() const noexcept
 {
     return session_;

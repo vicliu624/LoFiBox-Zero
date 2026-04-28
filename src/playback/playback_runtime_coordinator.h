@@ -19,6 +19,7 @@ public:
     using PlayIndexCallback = std::function<bool(int)>;
 
     void setServices(RuntimeServices* services) noexcept;
+    void setDspProfile(audio::dsp::DspChainProfile profile);
 
     void beginTrack(PlaybackSession& session) const noexcept;
     [[nodiscard]] bool startBackend(const std::filesystem::path& path, PlaybackSession& session);

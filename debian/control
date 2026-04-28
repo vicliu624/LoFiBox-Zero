@@ -20,6 +20,8 @@ Architecture: any
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+ alsa-utils,
+ ffmpeg,
  python3,
  python3-mutagen
 Recommends:

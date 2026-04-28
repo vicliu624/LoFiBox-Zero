@@ -236,7 +236,13 @@ When decoded PCM is handed to the platform output layer, the implementation must
 - keep the output stream paused while prebuffering so playback does not begin with an underrun
 - avoid destroying, pausing, resuming, or querying the output stream from multiple threads without a single ownership or locking rule
 - expose visualization data only after real audio output has started, not merely after decode has produced the first samples
+- advance the user-visible playback clock only after the output sink has confirmed that processed PCM is entering the platform playback path
 - drain queued audio at end-of-stream before declaring the backend finished
+
+The playback clock and spectrum are projections of audible playback.
+They must not use decoder start, remote stream resolution, metadata enrichment, analyzer startup, or a successful pipe write to an intermediate helper as the truth that sound has begun.
+If the implementation uses external Linux helpers, those helpers remain `AudioSink` adapters; they must not define a separate product playback model.
+On Debian targets, the implementation may prefer a lower-latency sink such as `aplay` over `ffplay` when decoded PCM is already owned by LoFiBox, because the product truth is `Decode -> DspChain -> AudioSink`, not the identity of the helper executable.
 
 The shared playback controller must consume backend completion as a discrete event.
 It must not poll and act on the same backend completion state multiple times in one UI update, because that can create start or end jitter when the audio thread, UI thread, and queue-advance logic cross at a track boundary.

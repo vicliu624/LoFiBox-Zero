@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <iostream>
+#include <string>
+#include <string_view>
 
 #include "app/app_input_router.h"
 
@@ -45,6 +47,8 @@ public:
     void moveSelection(int delta) override { list_delta += delta; }
     void moveSelectionPage(int delta_pages) override { page_delta += delta_pages; }
     void confirmListPage() override { ++confirm_list_calls; }
+    void appendSearchText(std::string_view text) override { search_text += text; }
+    void appendRemoteProfileEditText(std::string_view text) override { remote_edit_text += text; }
 
     lofibox::app::AppPage page{lofibox::app::AppPage::MainMenu};
     bool help_open{false};
@@ -79,6 +83,8 @@ public:
     int list_delta{0};
     int page_delta{0};
     int confirm_list_calls{0};
+    std::string search_text{};
+    std::string remote_edit_text{};
 };
 
 [[nodiscard]] lofibox::app::InputEvent key(lofibox::app::InputKey input_key)
@@ -148,6 +154,14 @@ int main()
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Enter));
     if (target.eq_selection_delta != 1 || target.eq_band_delta != 1 || target.eq_preset_delta != 1) {
         std::cerr << "Expected equalizer page controls to route.\n";
+        return 1;
+    }
+
+    target.page = lofibox::app::AppPage::Search;
+    const std::string committed_cjk = "\xE4\xB8\xAD\xE6\x96\x87";
+    lofibox::app::routeInput(target, lofibox::app::makeCommittedTextInput(committed_cjk, "IME"));
+    if (target.search_text != committed_cjk) {
+        std::cerr << "Expected Search page to receive committed UTF-8 text.\n";
         return 1;
     }
 

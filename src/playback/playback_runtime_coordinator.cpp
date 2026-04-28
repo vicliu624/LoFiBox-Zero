@@ -3,12 +3,18 @@
 #include "playback/playback_runtime_coordinator.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace lofibox::app {
 
 void PlaybackRuntimeCoordinator::setServices(RuntimeServices* services) noexcept
 {
     audio_pipeline_.bind(services);
+}
+
+void PlaybackRuntimeCoordinator::setDspProfile(audio::dsp::DspChainProfile profile)
+{
+    audio_pipeline_.setDspProfile(std::move(profile));
 }
 
 void PlaybackRuntimeCoordinator::beginTrack(PlaybackSession& session) const noexcept

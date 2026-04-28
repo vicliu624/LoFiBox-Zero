@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "app/app_command_executor.h"
@@ -102,9 +103,9 @@ public:
     bool handleRemoteBrowseConfirm(int selected) override;
     bool handleStreamDetailConfirm() override;
     bool handleSearchConfirm(int selected) override;
-    void appendSearchCharacter(char ch) override;
+    void appendSearchText(std::string_view text) override;
     void backspaceSearchQuery() override;
-    void appendRemoteProfileEditCharacter(char ch) override;
+    void appendRemoteProfileEditText(std::string_view text) override;
     void backspaceRemoteProfileEdit() override;
     void commitRemoteProfileEdit() override;
 
@@ -136,6 +137,8 @@ private:
     void rememberRemoteTrackFacts(const RemoteServerProfile& profile, const RemoteTrack& track) const;
     void rememberRemoteBrowse(const RemoteServerProfile& profile, const RemoteCatalogNode& parent, const std::vector<RemoteCatalogNode>& nodes) const;
     [[nodiscard]] std::vector<RemoteCatalogNode> cachedRemoteBrowse(const RemoteServerProfile& profile, const RemoteCatalogNode& parent) const;
+    void refreshSearchResults();
+    void applyEqualizerStateToPlayback();
     void openRemoteProfile(std::size_t profile_index);
     void loadRemoteRoot();
     void openRemoteSetup();

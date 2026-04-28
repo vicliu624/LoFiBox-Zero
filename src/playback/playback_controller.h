@@ -18,6 +18,7 @@ public:
     using RemoteTrackStarter = std::function<bool(int)>;
 
     void setServices(RuntimeServices services);
+    void setDspProfile(::lofibox::audio::dsp::DspChainProfile profile);
 
     [[nodiscard]] const PlaybackSession& session() const noexcept;
     [[nodiscard]] PlaybackSession& mutableSession() noexcept;

@@ -8,12 +8,15 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 
 #include "app/media_search_service.h"
 #include "app/remote_media_contract.h"
 #include "app/remote_profile_store.h"
 #include "app/source_manager_projection.h"
+#include "app/text_input_utils.h"
+#include "audio/dsp/dsp_chain.h"
 #include "cache/cache_manager.h"
 #include "remote/common/remote_catalog_model.h"
 #include "remote/common/remote_provider_contract.h"
@@ -246,6 +249,39 @@ RemoteTrack preferCachedRemoteTrackFacts(RemoteTrack current, const RemoteTrack&
     if (!cached.fingerprint.empty()) current.fingerprint = cached.fingerprint;
     return current;
 }
+
+std::string searchItemKey(const MediaItem& item)
+{
+    if (item.local_track_id) {
+        return "library:" + std::to_string(*item.local_track_id);
+    }
+    if (!item.remote_track_id.empty()) {
+        return "remote:" + item.source.source_id + ":" + item.remote_track_id;
+    }
+    return item.id;
+}
+
+audio::dsp::DspChainProfile dspProfileFromEqState(const EqState& state)
+{
+    auto eq = audio::dsp::tenBandFlatEqProfile();
+    eq.id = "current-ui";
+    eq.name = state.preset_name.empty() ? std::string{"CUSTOM"} : state.preset_name;
+    bool has_gain = false;
+    for (std::size_t index = 0; index < eq.bands.size() && index < state.bands.size(); ++index) {
+        eq.bands[index].gain_db = static_cast<double>(state.bands[index]);
+        has_gain = has_gain || state.bands[index] != 0;
+    }
+    eq.enabled = has_gain;
+    eq.limiter_enabled = true;
+    eq.limiter_ceiling_db = -1.0;
+
+    audio::dsp::DspChainProfile profile{};
+    profile.active_profile_id = eq.id;
+    profile.eq = std::move(eq);
+    profile.limiter.enabled = true;
+    profile.limiter.ceiling_db = -1.0;
+    return profile;
+}
 }
 
 AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_roots,
@@ -267,6 +303,7 @@ AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_ro
     state_.ui_assets = std::move(assets);
     state_.remote_profiles = services_.remote.remote_profile_store->loadProfiles();
     controllers_.bindServices(services_);
+    applyEqualizerStateToPlayback();
     refreshRuntimeStatus(true);
 }
 
@@ -639,6 +676,7 @@ void AppRuntimeContext::toggleRepeatOne()
 
 void AppRuntimeContext::openSearchPage()
 {
+    refreshSearchResults();
     commandPushPage(*this, AppPage::Search);
 }
 
@@ -765,11 +803,13 @@ void AppRuntimeContext::moveEqualizerSelection(int delta)
 void AppRuntimeContext::adjustSelectedEqualizerBand(int delta)
 {
     commandAdjustSelectedEqualizerBand(*this, delta);
+    applyEqualizerStateToPlayback();
 }
 
 void AppRuntimeContext::cycleEqualizerPreset(int delta)
 {
     commandCycleEqualizerPreset(*this, delta);
+    applyEqualizerStateToPlayback();
 }
 
 void AppRuntimeContext::cycleSongSortModeAndClamp()
@@ -974,16 +1014,12 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::searchRows()
         return rows;
     }
 
-    const auto local_result = MediaSearchService::searchLocal(controllers_.library.model(), state_.search_query, 4);
-    for (const auto& item : local_result.local_items) {
+    for (const auto& item : state_.search_results) {
         rows.emplace_back(item.title.empty() ? item.id : item.title, item.source.source_label.empty() ? "LOCAL" : item.source.source_label);
     }
 
-    if (const auto profile = selectedRemoteProfile(); profile && state_.selected_remote_session.available) {
-        const auto remote_tracks = services_.remote.remote_catalog_provider->searchTracks(*profile, state_.selected_remote_session, state_.search_query, 4);
-        for (const auto& track : remote_tracks) {
-            rows.emplace_back(track.title.empty() ? track.id : track.title, remoteProfileLabel(*profile));
-        }
+    for (const auto& degraded : state_.search_degraded_sources) {
+        rows.emplace_back(degraded, "TIMEOUT");
     }
 
     if (rows.size() == 1) {
@@ -1407,63 +1443,66 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
     if (selected <= 0 || state_.search_query.empty()) {
         return false;
     }
-    int cursor = 1;
-    const auto local_result = MediaSearchService::searchLocal(controllers_.library.model(), state_.search_query, 4);
-    for (const auto& item : local_result.local_items) {
-        if (cursor == selected) {
-            return item.local_track_id ? startLibraryTrack(*item.local_track_id) : false;
-        }
-        ++cursor;
+    if (state_.search_results_query != state_.search_query) {
+        refreshSearchResults();
     }
-
-    const auto profile = selectedRemoteProfile();
-    if (!profile || !state_.selected_remote_session.available) {
+    const auto result_index = selected - 1;
+    if (result_index < 0 || result_index >= static_cast<int>(state_.search_results.size())) {
         return false;
     }
-    const auto remote_tracks = services_.remote.remote_catalog_provider->searchTracks(*profile, state_.selected_remote_session, state_.search_query, 4);
-    for (const auto& track : remote_tracks) {
-        if (cursor == selected) {
-            RemoteCatalogNode candidate{};
-            candidate.kind = RemoteCatalogNodeKind::Tracks;
-            candidate.id = track.id;
-            candidate.title = track.title;
-            candidate.artist = track.artist;
-            candidate.album = track.album;
-            candidate.album_id = track.album_id;
-            candidate.duration_seconds = track.duration_seconds;
-            candidate.playable = true;
-            candidate.browsable = false;
-            const auto cached = cachedRemoteTrackFromNode(*profile, candidate);
-            const auto enriched_track = mergeRemoteTrackCache(track, cached);
-            rememberRemoteTrackFacts(*profile, enriched_track);
-            state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(*profile, state_.selected_remote_session, enriched_track);
-            RemoteCatalogNode selected_node{};
-            selected_node.kind = RemoteCatalogNodeKind::Tracks;
-            selected_node.id = enriched_track.id;
-            selected_node.title = enriched_track.title;
-            selected_node.subtitle = enriched_track.artist;
-            selected_node.playable = true;
-            selected_node.browsable = false;
-            selected_node.artist = enriched_track.artist;
-            selected_node.album = enriched_track.album;
-            selected_node.duration_seconds = enriched_track.duration_seconds;
-            selected_node.album_id = enriched_track.album_id;
-            selected_node.source_id = enriched_track.source_id;
-            selected_node.source_label = enriched_track.source_label;
-            selected_node.artwork_key = enriched_track.artwork_key;
-            selected_node.artwork_url = enriched_track.artwork_url;
-            selected_node.lyrics_plain = enriched_track.lyrics_plain;
-            selected_node.lyrics_synced = enriched_track.lyrics_synced;
-            selected_node.lyrics_source = enriched_track.lyrics_source;
-            selected_node.fingerprint = enriched_track.fingerprint;
-            state_.selected_remote_node = selected_node;
-            return state_.selected_remote_stream
-                ? controllers_.playback.startRemoteStream(*state_.selected_remote_stream, enriched_track, remoteProfileLabel(*profile))
-                : false;
-        }
-        ++cursor;
+    const auto& item = state_.search_results[static_cast<std::size_t>(result_index)];
+    if (item.local_track_id) {
+        return startLibraryTrack(*item.local_track_id);
     }
-    return false;
+
+    const auto profile_it = std::find_if(state_.remote_profiles.begin(), state_.remote_profiles.end(), [&item](const RemoteServerProfile& profile) {
+        return profile.id == item.source.source_id;
+    });
+    if (profile_it == state_.remote_profiles.end() || item.remote_track_id.empty()) {
+        return false;
+    }
+
+    const auto profile_index = static_cast<std::size_t>(std::distance(state_.remote_profiles.begin(), profile_it));
+    state_.selected_remote_profile_index = profile_index;
+    state_.selected_remote_kind = profile_it->kind;
+    ensureSelectedProfileCredentialRef(*profile_it);
+    state_.selected_remote_session = services_.remote.remote_source_provider->probe(*profile_it);
+    if (!state_.selected_remote_session.available) {
+        return false;
+    }
+
+    RemoteTrack track{};
+    track.id = item.remote_track_id;
+    track.title = item.title;
+    track.artist = item.artist;
+    track.album = item.album;
+    track.duration_seconds = item.duration_seconds;
+    track.source_id = profile_it->id;
+    track.source_label = item.source.source_label.empty() ? remoteProfileLabel(*profile_it) : item.source.source_label;
+    rememberRemoteTrackFacts(*profile_it, track);
+    state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(*profile_it, state_.selected_remote_session, track);
+    state_.selected_remote_node = RemoteCatalogNode{
+        RemoteCatalogNodeKind::Tracks,
+        track.id,
+        track.title,
+        track.artist,
+        true,
+        false,
+        track.artist,
+        track.album,
+        track.duration_seconds,
+        track.album_id,
+        track.source_id,
+        track.source_label,
+        track.artwork_key,
+        track.artwork_url,
+        track.lyrics_plain,
+        track.lyrics_synced,
+        track.lyrics_source,
+        track.fingerprint};
+    return state_.selected_remote_stream
+        ? controllers_.playback.startRemoteStream(*state_.selected_remote_stream, track, remoteProfileLabel(*profile_it))
+        : false;
 }
 
 RemoteTrack AppRuntimeContext::cachedRemoteTrackFromNode(const RemoteServerProfile& profile, const RemoteCatalogNode& node) const
@@ -1622,32 +1661,85 @@ std::vector<RemoteCatalogNode> AppRuntimeContext::cachedRemoteBrowse(const Remot
     return cached ? parseRemoteBrowseCachePayload(*cached) : std::vector<RemoteCatalogNode>{};
 }
 
-void AppRuntimeContext::appendSearchCharacter(char ch)
+void AppRuntimeContext::refreshSearchResults()
 {
-    if (state_.search_query.size() < 64) {
-        state_.search_query.push_back(ch);
+    state_.search_results.clear();
+    state_.search_degraded_sources.clear();
+    state_.search_results_query = state_.search_query;
+    if (state_.search_query.empty()) {
+        state_.navigation.list_selection.selected = 0;
+        state_.navigation.list_selection.scroll = 0;
+        return;
+    }
+
+    std::unordered_set<std::string> seen{};
+    const auto remember_item = [&](MediaItem item) {
+        if (state_.search_results.size() >= 12U) {
+            return;
+        }
+        const auto key = searchItemKey(item);
+        if (!seen.insert(key).second) {
+            return;
+        }
+        state_.search_results.push_back(std::move(item));
+    };
+
+    const auto local_result = MediaSearchService::searchLocal(controllers_.library.model(), state_.search_query, 8);
+    for (auto item : local_result.local_items) {
+        remember_item(std::move(item));
+    }
+
+    if (!services_.remote.remote_source_provider->available() || !services_.remote.remote_catalog_provider->available()) {
+        return;
+    }
+
+    for (auto& profile : state_.remote_profiles) {
+        if (state_.search_results.size() >= 12U || profile.base_url.empty() || remoteProfileReadiness(profile) != "READY") {
+            continue;
+        }
+        ensureSelectedProfileCredentialRef(profile);
+        const auto session = services_.remote.remote_source_provider->probe(profile);
+        if (!session.available) {
+            state_.search_degraded_sources.push_back(remoteProfileLabel(profile));
+            continue;
+        }
+        const auto remote_tracks = services_.remote.remote_catalog_provider->searchTracks(profile, session, state_.search_query, 4);
+        for (const auto& track : remote_tracks) {
+            remember_item(mediaItemFromRemoteTrack(profile, track));
+        }
+    }
+}
+
+void AppRuntimeContext::applyEqualizerStateToPlayback()
+{
+    controllers_.playback.setDspProfile(dspProfileFromEqState(state_.eq));
+}
+
+void AppRuntimeContext::appendSearchText(std::string_view text)
+{
+    if (appendUtf8Bounded(state_.search_query, text, 64U)) {
+        refreshSearchResults();
+        if (!state_.search_results.empty() && state_.navigation.list_selection.selected == 0) {
+            state_.navigation.list_selection.selected = 1;
+        }
     }
 }
 
 void AppRuntimeContext::backspaceSearchQuery()
 {
-    if (!state_.search_query.empty()) {
-        state_.search_query.pop_back();
+    if (popLastUtf8Codepoint(state_.search_query)) {
+        refreshSearchResults();
     }
 }
 
-void AppRuntimeContext::appendRemoteProfileEditCharacter(char ch)
+void AppRuntimeContext::appendRemoteProfileEditText(std::string_view text)
 {
-    if (state_.remote_profile_edit_buffer.size() < 256U) {
-        state_.remote_profile_edit_buffer.push_back(ch);
-    }
+    (void)appendUtf8Bounded(state_.remote_profile_edit_buffer, text, 256U);
 }
 
 void AppRuntimeContext::backspaceRemoteProfileEdit()
 {
-    if (!state_.remote_profile_edit_buffer.empty()) {
-        state_.remote_profile_edit_buffer.pop_back();
-    }
+    (void)popLastUtf8Codepoint(state_.remote_profile_edit_buffer);
 }
 
 void AppRuntimeContext::commitRemoteProfileEdit()

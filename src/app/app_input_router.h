@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <string_view>
+
 #include "app/app_page.h"
 #include "app/input_event.h"
 
@@ -48,9 +50,9 @@ public:
     virtual void moveSelection(int delta) = 0;
     virtual void moveSelectionPage(int delta_pages) = 0;
     virtual void confirmListPage() = 0;
-    virtual void appendSearchCharacter(char ch) { (void)ch; }
+    virtual void appendSearchText(std::string_view text) { (void)text; }
     virtual void backspaceSearchQuery() {}
-    virtual void appendRemoteProfileEditCharacter(char ch) { (void)ch; }
+    virtual void appendRemoteProfileEditText(std::string_view text) { (void)text; }
     virtual void backspaceRemoteProfileEdit() {}
     virtual void commitRemoteProfileEdit() {}
 };
