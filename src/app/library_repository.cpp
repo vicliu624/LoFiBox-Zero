@@ -2,7 +2,6 @@
 
 #include "app/library_repository.h"
 
-#include "app/library_query_service.h"
 #include "library/library_governance.h"
 #include "library/library_indexer.h"
 
@@ -56,12 +55,22 @@ void LibraryRepository::rescan(const std::vector<std::filesystem::path>& media_r
 
 const TrackRecord* LibraryRepository::findTrack(int id) const noexcept
 {
-    return LibraryQueryService::findTrack(library_, id);
+    for (const auto& track : library_.tracks) {
+        if (track.id == id) {
+            return &track;
+        }
+    }
+    return nullptr;
 }
 
 TrackRecord* LibraryRepository::findMutableTrack(int id) noexcept
 {
-    return LibraryQueryService::findMutableTrack(library_, id);
+    for (auto& track : library_.tracks) {
+        if (track.id == id) {
+            return &track;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace lofibox::app

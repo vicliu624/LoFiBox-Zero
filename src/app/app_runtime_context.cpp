@@ -3,7 +3,6 @@
 #include "app/app_runtime_context.h"
 
 #include <algorithm>
-#include <cctype>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -13,7 +12,6 @@
 
 #include "app/media_search_service.h"
 #include "app/remote_media_contract.h"
-#include "app/remote_profile_store.h"
 #include "app/source_manager_projection.h"
 #include "app/text_input_utils.h"
 #include "audio/dsp/dsp_chain.h"
@@ -85,135 +83,6 @@ constexpr int kRemoteProfileRowPermission = 9;
 constexpr int kRemoteProfileRowTest = 10;
 constexpr int kRemoteProfileRowSave = 11;
 constexpr int kUnifiedRemoteLibraryTrackLimit = 10000;
-
-enum class RemoteProfileCredentialMode {
-    None,
-    Optional,
-    Required,
-};
-
-std::string remoteKindDisplayName(RemoteServerKind kind)
-{
-    const auto manifest = remote::remoteProviderManifest(kind);
-    return manifest.display_name.empty() ? remoteServerKindToString(kind) : manifest.display_name;
-}
-
-std::string defaultRemoteProfileId(RemoteServerKind kind, std::size_t index)
-{
-    return remoteServerKindToString(kind) + "-" + std::to_string(static_cast<int>(index + 1U));
-}
-
-std::string defaultRemoteProfileName(RemoteServerKind kind)
-{
-    auto name = remoteKindDisplayName(kind);
-    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::toupper(ch));
-    });
-    return name;
-}
-
-std::string remoteProfileLabel(const RemoteServerProfile& profile)
-{
-    if (!profile.name.empty()) {
-        return profile.name;
-    }
-    if (!profile.base_url.empty()) {
-        return profile.base_url;
-    }
-    return defaultRemoteProfileName(profile.kind);
-}
-
-RemoteProfileCredentialMode remoteProfileCredentialMode(RemoteServerKind kind) noexcept
-{
-    switch (kind) {
-    case RemoteServerKind::Jellyfin:
-    case RemoteServerKind::OpenSubsonic:
-    case RemoteServerKind::Navidrome:
-    case RemoteServerKind::Emby:
-        return RemoteProfileCredentialMode::Required;
-    case RemoteServerKind::PlaylistManifest:
-    case RemoteServerKind::WebDav:
-    case RemoteServerKind::Ftp:
-    case RemoteServerKind::Sftp:
-        return RemoteProfileCredentialMode::Optional;
-    case RemoteServerKind::DirectUrl:
-    case RemoteServerKind::InternetRadio:
-    case RemoteServerKind::Hls:
-    case RemoteServerKind::Dash:
-    case RemoteServerKind::Smb:
-    case RemoteServerKind::Nfs:
-    case RemoteServerKind::DlnaUpnp:
-        return RemoteProfileCredentialMode::None;
-    }
-    return RemoteProfileCredentialMode::None;
-}
-
-bool remoteProfileSupportsCredentials(RemoteServerKind kind) noexcept
-{
-    return remoteProfileCredentialMode(kind) != RemoteProfileCredentialMode::None;
-}
-
-std::string remoteProfileReadiness(const RemoteServerProfile& profile)
-{
-    if (profile.base_url.empty()) {
-        return "NEEDS URL";
-    }
-    if (remoteProfileCredentialMode(profile.kind) != RemoteProfileCredentialMode::Required) {
-        return "READY";
-    }
-    if (profile.username.empty()) {
-        return "NEEDS USER";
-    }
-    if (profile.password.empty()
-        && profile.api_token.empty()
-        && profile.credential_ref.id.empty()) {
-        return "NEEDS SECRET";
-    }
-    return "READY";
-}
-
-std::string remoteCredentialValueLabel(RemoteServerKind kind, std::string_view value)
-{
-    const auto mode = remoteProfileCredentialMode(kind);
-    if (mode == RemoteProfileCredentialMode::None) {
-        return "N/A";
-    }
-    if (value.empty() && mode == RemoteProfileCredentialMode::Optional) {
-        return "OPTIONAL";
-    }
-    return value.empty() ? "EMPTY" : "SET";
-}
-
-std::string remoteUsernameLabel(const RemoteServerProfile& profile)
-{
-    const auto mode = remoteProfileCredentialMode(profile.kind);
-    if (mode == RemoteProfileCredentialMode::None) {
-        return "N/A";
-    }
-    if (profile.username.empty()) {
-        return mode == RemoteProfileCredentialMode::Optional ? "OPTIONAL" : "MISSING";
-    }
-    return profile.username;
-}
-
-std::string permissionLabel(RemoteServerKind kind)
-{
-    const auto manifest = remote::remoteProviderManifest(kind);
-    if (remote::remoteProviderHasCapability(manifest, remote::RemoteProviderCapability::WritableMetadata)
-        || remote::remoteProviderHasCapability(manifest, remote::RemoteProviderCapability::WritableFavorites)) {
-        return "READ/WRITE";
-    }
-    return "READ ONLY";
-}
-
-bool remoteProfileKeepsLocalFacts(RemoteServerKind kind)
-{
-    const auto manifest = remote::remoteProviderManifest(kind);
-    const bool writable_metadata =
-        remote::remoteProviderHasCapability(manifest, remote::RemoteProviderCapability::WritableMetadata)
-        && !remote::remoteProviderHasCapability(manifest, remote::RemoteProviderCapability::ReadOnly);
-    return !writable_metadata;
-}
 
 std::string remoteEditFieldName(int field)
 {
@@ -301,7 +170,7 @@ AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_ro
         }
     }
     state_.ui_assets = std::move(assets);
-    state_.remote_profiles = services_.remote.remote_profile_store->loadProfiles();
+    state_.remote_profiles = sourceProfileService().loadProfiles();
     controllers_.bindServices(services_);
     applyEqualizerStateToPlayback();
     refreshRuntimeStatus(true);
@@ -401,7 +270,7 @@ void AppRuntimeContext::handlePendingOpenRequests()
         profile.base_url = uri;
         state_.selected_remote_kind = profile.kind;
         state_.selected_remote_profile_index.reset();
-        state_.selected_remote_session = services_.remote.remote_source_provider->probe(profile);
+        state_.selected_remote_session = sourceProfileService().probe(profile, state_.remote_profiles.size()).session;
         RemoteTrack track{uri, "DESKTOP STREAM", "", "", "", 0};
         track.source_id = profile.id;
         track.source_label = profile.name;
@@ -414,7 +283,7 @@ void AppRuntimeContext::handlePendingOpenRequests()
             false};
         rememberRemoteTrackFacts(profile, track);
         state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(profile, state_.selected_remote_session, track);
-        if (state_.selected_remote_stream && controllers_.playback.startRemoteStream(*state_.selected_remote_stream, track, "DESKTOP")) {
+        if (state_.selected_remote_stream && appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, "DESKTOP")) {
             state_.navigation.replaceStack({AppPage::MainMenu, AppPage::NowPlaying});
         }
         state_.pending_open_processed = true;
@@ -430,7 +299,7 @@ void AppRuntimeContext::handlePendingOpenRequests()
     for (const auto& track : controllers_.library.model().tracks) {
         const auto track_absolute = std::filesystem::absolute(track.path, ec);
         if ((!ec && track_absolute == absolute) || track.path == requested) {
-            if (controllers_.playback.startTrack(controllers_.library, track.id)) {
+            if (appServices().playbackCommands().startTrack(track.id)) {
                 state_.navigation.replaceStack({AppPage::MainMenu, AppPage::NowPlaying});
             }
             state_.pending_open_processed = true;
@@ -450,14 +319,14 @@ NavigationState& AppRuntimeContext::navigationState() noexcept
     return state_.navigation;
 }
 
-LibraryController& AppRuntimeContext::libraryController() noexcept
+::lofibox::application::AppServiceRegistry AppRuntimeContext::appServices() noexcept
 {
-    return controllers_.library;
+    return ::lofibox::application::AppServiceRegistry{controllers_, services_};
 }
 
-PlaybackController& AppRuntimeContext::playbackController() noexcept
+::lofibox::application::SourceProfileCommandService AppRuntimeContext::sourceProfileService() const noexcept
 {
-    return controllers_.playback;
+    return ::lofibox::application::SourceProfileCommandService{services_};
 }
 
 EqState& AppRuntimeContext::eqState() noexcept
@@ -502,12 +371,12 @@ LibraryIndexState AppRuntimeContext::libraryState() const noexcept
 
 void AppRuntimeContext::startLibraryLoading()
 {
-    controllers_.library.startLoading();
+    appServices().libraryMutations().startLoading();
 }
 
 void AppRuntimeContext::refreshLibrary()
 {
-    controllers_.library.refreshLibrary(state_.media_roots, *services_.metadata.metadata_provider);
+    appServices().libraryMutations().refreshLibrary(state_.media_roots, *services_.metadata.metadata_provider);
     refreshRemoteLibraryTracks();
 }
 
@@ -521,12 +390,12 @@ void AppRuntimeContext::refreshRemoteLibraryTracks()
         if (profile.base_url.empty()) {
             continue;
         }
-        if (remoteProfileReadiness(profile) != "READY") {
+        auto source_profiles = sourceProfileService();
+        if (source_profiles.readiness(profile) != "READY") {
             continue;
         }
 
-        ensureSelectedProfileCredentialRef(profile);
-        const auto session = services_.remote.remote_source_provider->probe(profile);
+        const auto session = source_profiles.probe(profile, state_.remote_profiles.size()).session;
         if (!session.available) {
             continue;
         }
@@ -537,7 +406,7 @@ void AppRuntimeContext::refreshRemoteLibraryTracks()
                 track.source_id = profile.id;
             }
             if (track.source_label.empty()) {
-                track.source_label = remoteProfileLabel(profile);
+                track.source_label = source_profiles.profileLabel(profile);
             }
             if (services_.cache.cache_manager && !track.id.empty()) {
                 const auto cached = services_.cache.cache_manager->getText(
@@ -550,7 +419,7 @@ void AppRuntimeContext::refreshRemoteLibraryTracks()
             rememberRemoteTrackFacts(profile, track);
         }
 
-        controllers_.library.mergeRemoteTracks(profile, tracks);
+        appServices().libraryMutations().mergeRemoteTracks(profile, tracks);
     }
 }
 
@@ -561,7 +430,7 @@ void AppRuntimeContext::showMainMenu()
 
 void AppRuntimeContext::updatePlayback(double delta_seconds)
 {
-    controllers_.playback.update(delta_seconds, controllers_.library, [this](int track_id) {
+    appServices().playbackCommands().update(delta_seconds, [this](int track_id) {
         const auto* track = controllers_.library.findTrack(track_id);
         return track != nullptr && startRemoteLibraryTrack(*track);
     });
@@ -643,17 +512,20 @@ bool AppRuntimeContext::helpOpen() const noexcept
 
 void AppRuntimeContext::playFromMenu()
 {
-    commandPlayFromMenu(*this);
+    (void)appServices().playbackCommands().playFirstAvailable([this](int track_id) {
+        const auto* track = controllers_.library.findTrack(track_id);
+        return track != nullptr && startRemoteLibraryTrack(*track);
+    });
 }
 
 void AppRuntimeContext::pausePlayback()
 {
-    commandPausePlayback(*this);
+    appServices().playbackCommands().pause();
 }
 
 void AppRuntimeContext::stepTrack(int delta)
 {
-    controllers_.playback.stepQueue(controllers_.library, delta, [this](int track_id) {
+    appServices().queueCommands().step(delta, [this](int track_id) {
         const auto* track = controllers_.library.findTrack(track_id);
         return track != nullptr && startRemoteLibraryTrack(*track);
     });
@@ -714,11 +586,11 @@ AppPageModel AppRuntimeContext::pageModel() const
         title_override = remoteBrowseTitleOverride();
     } else if (page == AppPage::RemoteProfileSettings) {
         if (const auto profile = selectedRemoteProfile()) {
-            title_override = remoteKindDisplayName(profile->kind);
+            title_override = sourceProfileService().kindDisplayName(profile->kind);
         }
     } else if (page == AppPage::ServerDiagnostics || page == AppPage::StreamDetail) {
         if (const auto profile = selectedRemoteProfile()) {
-            title_override = remoteProfileLabel(*profile);
+            title_override = sourceProfileService().profileLabel(*profile);
         }
     }
     return buildAppPageModel(AppPageModelInput{
@@ -774,10 +646,12 @@ bool AppRuntimeContext::startLibraryTrack(int track_id)
         return false;
     }
     if (!track->remote) {
-        return controllers_.playback.startTrack(controllers_.library, track_id);
+        return appServices().playbackCommands().startTrack(track_id);
     }
-    controllers_.playback.prepareQueueForTrack(controllers_.library, track_id);
-    return startRemoteLibraryTrack(*track);
+    return appServices().playbackCommands().startTrack(track_id, [this](int remote_track_id) {
+        const auto* remote_track = controllers_.library.findTrack(remote_track_id);
+        return remote_track != nullptr && startRemoteLibraryTrack(*remote_track);
+    });
 }
 
 void AppRuntimeContext::toggleShuffle()
@@ -858,7 +732,7 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::libraryIndex
                 ++track_count;
             }
         }
-        rows.emplace_back(remoteProfileLabel(profile), std::to_string(track_count));
+        rows.emplace_back(sourceProfileService().profileLabel(profile), std::to_string(track_count));
     }
     return rows;
 }
@@ -910,7 +784,7 @@ std::optional<std::string> AppRuntimeContext::remoteBrowseTitleOverride() const
         }
     }
     if (const auto profile = selectedRemoteProfile()) {
-        return remoteProfileLabel(*profile);
+        return sourceProfileService().profileLabel(*profile);
     }
     return std::nullopt;
 }
@@ -971,7 +845,7 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::streamDetail
     const auto decision = StreamingPlaybackPolicy{}.bufferDecision(buffer);
     const auto recovery = StreamingPlaybackPolicy{}.recoveryPlan(buffer, !diagnostics.connected);
     return {
-        {"SOURCE", diagnostics.source_name.empty() ? (profile ? remoteProfileLabel(*profile) : "REMOTE") : diagnostics.source_name},
+        {"SOURCE", diagnostics.source_name.empty() ? (profile ? sourceProfileService().profileLabel(*profile) : "REMOTE") : diagnostics.source_name},
         {"URL", diagnostics.resolved_url_redacted.empty() ? "REDACTED" : diagnostics.resolved_url_redacted},
         {"CONNECTION", diagnostics.connection_status.empty() ? (diagnostics.connected ? "READY" : "OFFLINE") : diagnostics.connection_status},
         {"BUFFER", bufferDecisionLabel(decision)},
@@ -1037,7 +911,7 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::remoteSetupR
         });
         rows.emplace_back(
             manifest.display_name,
-            profile == state_.remote_profiles.end() ? std::string{"ADD"} : remoteProfileReadiness(*profile));
+            profile == state_.remote_profiles.end() ? std::string{"ADD"} : sourceProfileService().readiness(*profile));
     }
     return rows;
 }
@@ -1057,17 +931,17 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::remoteProfil
     }
 
     return {
-        {"PROFILE", remoteProfileLabel(*profile)},
-        {"TYPE", remoteKindDisplayName(profile->kind)},
+        {"PROFILE", sourceProfileService().profileLabel(*profile)},
+        {"TYPE", sourceProfileService().kindDisplayName(profile->kind)},
         {"LABEL", profile->name.empty() ? "MISSING" : profile->name},
         {"ADDRESS", profile->base_url.empty() ? "MISSING" : profile->base_url},
-        {"USER", remoteUsernameLabel(*profile)},
-        {"PASSWORD", remoteCredentialValueLabel(profile->kind, profile->password)},
-        {"API TOKEN", remoteCredentialValueLabel(profile->kind, profile->api_token)},
+        {"USER", sourceProfileService().usernameLabel(*profile)},
+        {"PASSWORD", sourceProfileService().credentialValueLabel(profile->kind, profile->password)},
+        {"API TOKEN", sourceProfileService().credentialValueLabel(profile->kind, profile->api_token)},
         {"TLS VERIFY", profile->tls_policy.verify_peer ? "ON" : "OFF"},
         {"SELF SIGNED", profile->tls_policy.allow_self_signed ? "ALLOW" : "BLOCK"},
-        {"PERMISSION", permissionLabel(profile->kind)},
-        {"TEST", state_.remote_profile_status.empty() ? remoteProfileReadiness(*profile) : state_.remote_profile_status},
+        {"PERMISSION", sourceProfileService().permissionLabel(profile->kind)},
+        {"TEST", state_.remote_profile_status.empty() ? sourceProfileService().readiness(*profile) : state_.remote_profile_status},
         {"SAVE", "PROFILE"},
     };
 }
@@ -1091,7 +965,7 @@ void AppRuntimeContext::openRemoteProfile(std::size_t profile_index)
     }
     state_.selected_remote_profile_index = profile_index;
     state_.selected_remote_kind = state_.remote_profiles[profile_index].kind;
-    state_.selected_remote_session = services_.remote.remote_source_provider->probe(state_.remote_profiles[profile_index]);
+    state_.selected_remote_session = sourceProfileService().probe(state_.remote_profiles[profile_index], state_.remote_profiles.size()).session;
     loadRemoteRoot();
 }
 
@@ -1114,33 +988,16 @@ void AppRuntimeContext::loadRemoteRoot()
     }
 }
 
-void AppRuntimeContext::ensureSelectedProfileCredentialRef(RemoteServerProfile& profile)
-{
-    if (profile.id.empty()) {
-        profile.id = defaultRemoteProfileId(profile.kind, state_.remote_profiles.size());
-    }
-    if (!remoteProfileSupportsCredentials(profile.kind)) {
-        profile.credential_ref.id.clear();
-        return;
-    }
-    if (profile.credential_ref.id.empty()) {
-        profile.credential_ref.id = "credential/" + profile.id;
-    }
-}
-
 bool AppRuntimeContext::persistRemoteProfiles()
 {
-    for (auto& profile : state_.remote_profiles) {
-        ensureSelectedProfileCredentialRef(profile);
-    }
-    const bool saved = services_.remote.remote_profile_store->saveProfiles(state_.remote_profiles);
+    const bool saved = sourceProfileService().persistProfiles(state_.remote_profiles);
     state_.remote_profile_status = saved ? "SAVED" : "SAVE FAIL";
     return saved;
 }
 
 void AppRuntimeContext::openRemoteSetup()
 {
-    state_.remote_profiles = services_.remote.remote_profile_store->loadProfiles();
+    state_.remote_profiles = sourceProfileService().loadProfiles();
     state_.remote_profile_status.clear();
     state_.navigation.list_selection.selected = 0;
     state_.navigation.list_selection.scroll = 0;
@@ -1155,7 +1012,7 @@ void AppRuntimeContext::openRemoteProfileSettings(std::size_t profile_index, int
     }
     state_.selected_remote_profile_index = profile_index;
     state_.selected_remote_kind = state_.remote_profiles[profile_index].kind;
-    state_.remote_profile_status = remoteProfileReadiness(state_.remote_profiles[profile_index]);
+    state_.remote_profile_status = sourceProfileService().readiness(state_.remote_profiles[profile_index]);
     state_.navigation.list_selection.selected = std::max(0, focus_row);
     state_.navigation.list_selection.scroll = 0;
     commandPushPage(*this, AppPage::RemoteProfileSettings);
@@ -1163,13 +1020,7 @@ void AppRuntimeContext::openRemoteProfileSettings(std::size_t profile_index, int
 
 void AppRuntimeContext::openNewRemoteProfileSettings(RemoteServerKind kind)
 {
-    RemoteServerProfile profile{};
-    profile.kind = kind;
-    profile.id = defaultRemoteProfileId(kind, state_.remote_profiles.size());
-    profile.name = defaultRemoteProfileName(kind);
-    profile.tls_policy.verify_peer = true;
-    ensureSelectedProfileCredentialRef(profile);
-    state_.remote_profiles.push_back(std::move(profile));
+    state_.remote_profiles.push_back(sourceProfileService().createProfile(kind, state_.remote_profiles.size()));
     openRemoteProfileSettings(state_.remote_profiles.size() - 1U, kRemoteProfileRowKind);
 }
 
@@ -1220,11 +1071,8 @@ bool AppRuntimeContext::handleRemoteSetupConfirm(int selected)
     }
 
     const auto kind = manifests[static_cast<std::size_t>(selected)].kind;
-    const auto it = std::find_if(state_.remote_profiles.begin(), state_.remote_profiles.end(), [kind](const RemoteServerProfile& profile) {
-        return profile.kind == kind;
-    });
-    if (it != state_.remote_profiles.end()) {
-        openRemoteProfileSettings(static_cast<std::size_t>(std::distance(state_.remote_profiles.begin(), it)), kRemoteProfileRowAddress);
+    if (const auto index = sourceProfileService().findProfileByKind(state_.remote_profiles, kind)) {
+        openRemoteProfileSettings(*index, kRemoteProfileRowAddress);
     } else {
         openNewRemoteProfileSettings(kind);
     }
@@ -1264,11 +1112,8 @@ bool AppRuntimeContext::handleSourceManagerConfirm(int selected)
 
     if (selected == 1 || selected == 2) {
         const RemoteServerKind wanted = selected == 1 ? RemoteServerKind::DirectUrl : RemoteServerKind::InternetRadio;
-        const auto it = std::find_if(state_.remote_profiles.begin(), state_.remote_profiles.end(), [wanted](const RemoteServerProfile& profile) {
-            return profile.kind == wanted;
-        });
-        if (it != state_.remote_profiles.end()) {
-            openRemoteProfileSettings(static_cast<std::size_t>(std::distance(state_.remote_profiles.begin(), it)), kRemoteProfileRowAddress);
+        if (const auto index = sourceProfileService().findProfileByKind(state_.remote_profiles, wanted)) {
+            openRemoteProfileSettings(*index, kRemoteProfileRowAddress);
         } else {
             openNewRemoteProfileSettings(wanted);
         }
@@ -1310,31 +1155,25 @@ bool AppRuntimeContext::handleRemoteProfileSettingsConfirm(int selected)
         beginRemoteProfileFieldEdit(selected);
         return true;
     case kRemoteProfileRowTlsVerify:
-        profile->tls_policy.verify_peer = !profile->tls_policy.verify_peer;
-        if (profile->tls_policy.verify_peer) {
-            profile->tls_policy.allow_self_signed = false;
-        }
-        (void)persistRemoteProfiles();
+        state_.remote_profile_status = sourceProfileService().toggleTlsVerify(*profile, state_.remote_profiles) ? "SAVED" : "SAVE FAIL";
         return true;
     case kRemoteProfileRowSelfSigned:
-        profile->tls_policy.allow_self_signed = !profile->tls_policy.allow_self_signed;
-        if (profile->tls_policy.allow_self_signed) {
-            profile->tls_policy.verify_peer = false;
-        }
-        (void)persistRemoteProfiles();
+        state_.remote_profile_status = sourceProfileService().toggleSelfSigned(*profile, state_.remote_profiles) ? "SAVED" : "SAVE FAIL";
         return true;
     case kRemoteProfileRowPermission:
-        state_.remote_profile_status = permissionLabel(profile->kind);
+        state_.remote_profile_status = sourceProfileService().permissionLabel(profile->kind);
         return true;
     case kRemoteProfileRowTest:
-        state_.selected_remote_session = services_.remote.remote_source_provider->probe(*profile);
-        state_.remote_profile_status = state_.selected_remote_session.available ? "ONLINE" : "FAILED";
+        {
+            const auto result = sourceProfileService().probe(*profile, state_.remote_profiles.size());
+            state_.selected_remote_session = result.session;
+            state_.remote_profile_status = result.command.accepted ? "ONLINE" : "FAILED";
+        }
         return true;
     case kRemoteProfileRowSave:
         (void)persistRemoteProfiles();
         if (!profile->password.empty() || !profile->api_token.empty()) {
-            ensureSelectedProfileCredentialRef(*profile);
-            (void)services_.remote.remote_profile_store->saveCredentials(*profile);
+            (void)sourceProfileService().saveCredentials(*profile, state_.remote_profiles.size());
         }
         return true;
     default:
@@ -1373,7 +1212,7 @@ bool AppRuntimeContext::handleRemoteBrowseConfirm(int selected)
         if (visible_tracks.empty()) {
             visible_tracks.push_back(track);
         }
-        controllers_.library.mergeRemoteTracks(*profile, visible_tracks);
+        appServices().libraryMutations().mergeRemoteTracks(*profile, visible_tracks);
 
         std::vector<int> ids{};
         ids.reserve(visible_tracks.size());
@@ -1392,7 +1231,7 @@ bool AppRuntimeContext::handleRemoteBrowseConfirm(int selected)
             }
         }
         if (!ids.empty()) {
-            controllers_.library.setSongsContextTrackIds(
+            appServices().libraryMutations().setSongsContextTrackIds(
                 state_.selected_remote_parent.title.empty() ? std::string{"SONGS"} : state_.selected_remote_parent.title,
                 ids);
         }
@@ -1434,8 +1273,8 @@ bool AppRuntimeContext::handleStreamDetailConfirm()
         return false;
     }
     const auto track = state_.selected_remote_node ? cachedRemoteTrackFromNode(*profile, *state_.selected_remote_node) : RemoteTrack{};
-    const auto source = remoteProfileLabel(*profile);
-    return state_.selected_remote_stream ? controllers_.playback.startRemoteStream(*state_.selected_remote_stream, track, source) : false;
+    const auto source = sourceProfileService().profileLabel(*profile);
+    return state_.selected_remote_stream ? appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, source) : false;
 }
 
 bool AppRuntimeContext::handleSearchConfirm(int selected)
@@ -1465,8 +1304,7 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
     const auto profile_index = static_cast<std::size_t>(std::distance(state_.remote_profiles.begin(), profile_it));
     state_.selected_remote_profile_index = profile_index;
     state_.selected_remote_kind = profile_it->kind;
-    ensureSelectedProfileCredentialRef(*profile_it);
-    state_.selected_remote_session = services_.remote.remote_source_provider->probe(*profile_it);
+    state_.selected_remote_session = sourceProfileService().probe(*profile_it, state_.remote_profiles.size()).session;
     if (!state_.selected_remote_session.available) {
         return false;
     }
@@ -1478,7 +1316,7 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
     track.album = item.album;
     track.duration_seconds = item.duration_seconds;
     track.source_id = profile_it->id;
-    track.source_label = item.source.source_label.empty() ? remoteProfileLabel(*profile_it) : item.source.source_label;
+    track.source_label = item.source.source_label.empty() ? sourceProfileService().profileLabel(*profile_it) : item.source.source_label;
     rememberRemoteTrackFacts(*profile_it, track);
     state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(*profile_it, state_.selected_remote_session, track);
     state_.selected_remote_node = RemoteCatalogNode{
@@ -1501,7 +1339,7 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
         track.lyrics_source,
         track.fingerprint};
     return state_.selected_remote_stream
-        ? controllers_.playback.startRemoteStream(*state_.selected_remote_stream, track, remoteProfileLabel(*profile_it))
+        ? appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, sourceProfileService().profileLabel(*profile_it))
         : false;
 }
 
@@ -1512,7 +1350,7 @@ RemoteTrack AppRuntimeContext::cachedRemoteTrackFromNode(const RemoteServerProfi
         track.source_id = profile.id;
     }
     if (track.source_label.empty()) {
-        track.source_label = remoteProfileLabel(profile);
+        track.source_label = sourceProfileService().profileLabel(profile);
     }
     if (!services_.cache.cache_manager || node.id.empty()) {
         return track;
@@ -1533,7 +1371,7 @@ RemoteTrack AppRuntimeContext::remoteTrackFromLibraryTrack(const RemoteServerPro
     remote_track.duration_seconds = track.duration_seconds;
     remote_track.source_id = track.remote_profile_id.empty() ? profile.id : track.remote_profile_id;
     remote_track.source_label = track.source_label.empty()
-        ? remoteProfileLabel(profile)
+        ? sourceProfileService().profileLabel(profile)
         : track.source_label;
     remote_track.artwork_key = track.artwork_key;
     remote_track.artwork_url = track.artwork_url;
@@ -1569,14 +1407,14 @@ bool AppRuntimeContext::startRemoteLibraryTrack(const TrackRecord& track)
     const auto profile_index = static_cast<std::size_t>(std::distance(state_.remote_profiles.begin(), profile_it));
     state_.selected_remote_profile_index = profile_index;
     state_.selected_remote_kind = profile_it->kind;
-    state_.selected_remote_session = services_.remote.remote_source_provider->probe(*profile_it);
+    state_.selected_remote_session = sourceProfileService().probe(*profile_it, state_.remote_profiles.size()).session;
     if (!state_.selected_remote_session.available) {
         return false;
     }
 
     auto remote_track = remoteTrackFromLibraryTrack(*profile_it, track);
     if (remote_track.source_label.empty()) {
-        remote_track.source_label = remoteProfileLabel(*profile_it);
+        remote_track.source_label = sourceProfileService().profileLabel(*profile_it);
     }
     rememberRemoteTrackFacts(*profile_it, remote_track);
     state_.selected_remote_node = RemoteCatalogNode{
@@ -1606,14 +1444,14 @@ bool AppRuntimeContext::startRemoteLibraryTrack(const TrackRecord& track)
 
     const auto source = !remote_track.source_label.empty()
         ? remote_track.source_label
-        : remoteProfileLabel(*profile_it);
-    return controllers_.playback.startRemoteLibraryTrack(
+        : sourceProfileService().profileLabel(*profile_it);
+    return appServices().playbackCommands().startRemoteLibraryTrack(
         *state_.selected_remote_stream,
         *mutable_track,
         *profile_it,
         remote_track,
         source,
-        remoteProfileKeepsLocalFacts(profile_it->kind));
+        sourceProfileService().keepsLocalFacts(profile_it->kind));
 }
 
 void AppRuntimeContext::rememberRemoteTrackFacts(const RemoteServerProfile& profile, const RemoteTrack& track) const
@@ -1622,7 +1460,7 @@ void AppRuntimeContext::rememberRemoteTrackFacts(const RemoteServerProfile& prof
         return;
     }
 
-    if (!remoteProfileKeepsLocalFacts(profile.kind)) {
+    if (!sourceProfileService().keepsLocalFacts(profile.kind)) {
         return;
     }
 
@@ -1694,13 +1532,12 @@ void AppRuntimeContext::refreshSearchResults()
     }
 
     for (auto& profile : state_.remote_profiles) {
-        if (state_.search_results.size() >= 12U || profile.base_url.empty() || remoteProfileReadiness(profile) != "READY") {
+        if (state_.search_results.size() >= 12U || profile.base_url.empty() || sourceProfileService().readiness(profile) != "READY") {
             continue;
         }
-        ensureSelectedProfileCredentialRef(profile);
-        const auto session = services_.remote.remote_source_provider->probe(profile);
+        const auto session = sourceProfileService().probe(profile, state_.remote_profiles.size()).session;
         if (!session.available) {
-            state_.search_degraded_sources.push_back(remoteProfileLabel(profile));
+            state_.search_degraded_sources.push_back(sourceProfileService().profileLabel(profile));
             continue;
         }
         const auto remote_tracks = services_.remote.remote_catalog_provider->searchTracks(profile, session, state_.search_query, 4);
@@ -1712,7 +1549,7 @@ void AppRuntimeContext::refreshSearchResults()
 
 void AppRuntimeContext::applyEqualizerStateToPlayback()
 {
-    controllers_.playback.setDspProfile(dspProfileFromEqState(state_.eq));
+    appServices().playbackCommands().setDspProfile(dspProfileFromEqState(state_.eq));
 }
 
 void AppRuntimeContext::appendSearchText(std::string_view text)
@@ -1752,23 +1589,19 @@ void AppRuntimeContext::commitRemoteProfileEdit()
 
     switch (state_.remote_profile_edit_field) {
     case kRemoteProfileRowName:
-        profile->name = state_.remote_profile_edit_buffer;
+        (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::Label, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
         break;
     case kRemoteProfileRowAddress:
-        profile->base_url = state_.remote_profile_edit_buffer;
+        (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::Address, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
         break;
     case kRemoteProfileRowUsername:
-        profile->username = state_.remote_profile_edit_buffer;
+        (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::Username, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
         break;
     case kRemoteProfileRowPassword:
-        ensureSelectedProfileCredentialRef(*profile);
-        profile->password = state_.remote_profile_edit_buffer;
-        (void)services_.remote.remote_profile_store->saveCredentials(*profile);
+        (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::Password, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
         break;
     case kRemoteProfileRowToken:
-        ensureSelectedProfileCredentialRef(*profile);
-        profile->api_token = state_.remote_profile_edit_buffer;
-        (void)services_.remote.remote_profile_store->saveCredentials(*profile);
+        (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::ApiToken, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
         break;
     default:
         break;
@@ -1777,7 +1610,7 @@ void AppRuntimeContext::commitRemoteProfileEdit()
     state_.remote_profile_edit_field = -1;
     state_.remote_profile_edit_buffer.clear();
     (void)persistRemoteProfiles();
-    state_.remote_profile_status = remoteProfileReadiness(*profile);
+    state_.remote_profile_status = sourceProfileService().readiness(*profile);
     commandPopPage(*this);
 }
 

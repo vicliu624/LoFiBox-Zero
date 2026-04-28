@@ -9,9 +9,9 @@
 
 #include "app/library_scanner.h"
 #include "app/library_navigation_service.h"
-#include "app/library_open_action_resolver.h"
-#include "app/library_query_service.h"
 #include "app/remote_profile_store.h"
+#include "application/library_open_action_service.h"
+#include "application/library_query_service.h"
 
 namespace lofibox::app {
 namespace {
@@ -167,7 +167,7 @@ TrackRecord* LibraryController::findMutableTrack(int id) noexcept
 
 std::vector<int> LibraryController::allSongIdsSorted() const
 {
-    return LibraryQueryService::sortedTrackIds(repository_.model(), list_context_.song_sort_mode);
+    return ::lofibox::application::LibraryQueryService::sortedTrackIds(repository_.model(), list_context_.song_sort_mode);
 }
 
 std::vector<int> LibraryController::trackIdsForCurrentSongs() const
@@ -309,7 +309,7 @@ std::optional<std::vector<std::pair<std::string, std::string>>> LibraryControlle
 
 LibraryOpenResult LibraryController::openSelectedListItem(AppPage page, int selected)
 {
-    return LibraryOpenActionResolver::openSelectedListItem(*this, page, selected);
+    return ::lofibox::application::LibraryOpenActionService{*this}.openSelectedListItem(page, selected);
 }
 void LibraryController::setSongsContextAlbum(const AlbumRecord& album)
 {
@@ -337,17 +337,17 @@ void LibraryController::setSongsContextFiltered(SongsMode mode, std::string labe
 
 std::vector<AlbumRecord> LibraryController::visibleAlbums() const
 {
-    return LibraryQueryService::visibleAlbums(repository_.model(), list_context_.albums);
+    return ::lofibox::application::LibraryQueryService::visibleAlbums(repository_.model(), list_context_.albums);
 }
 
 std::vector<int> LibraryController::idsForGenre(const std::string& genre) const
 {
-    return LibraryQueryService::idsForGenre(repository_.model(), genre);
+    return ::lofibox::application::LibraryQueryService::idsForGenre(repository_.model(), genre);
 }
 
 std::vector<int> LibraryController::idsForComposer(const std::string& composer) const
 {
-    return LibraryQueryService::idsForComposer(repository_.model(), composer);
+    return ::lofibox::application::LibraryQueryService::idsForComposer(repository_.model(), composer);
 }
 
 } // namespace lofibox::app

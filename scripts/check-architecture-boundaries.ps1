@@ -60,6 +60,24 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath -eq "src/app/app_command_executor.cpp" -or $repoPath -eq "src/app/app_command_executor.h") {
+            if ($line -match 'libraryController\s*\(|playbackController\s*\(|#\s*include\s+"app/library_controller\.h"|#\s*include\s+"playback/playback_controller\.h"') {
+                Add-Violation $violations $repoPath $lineNumber "application command boundary" "GUI command routing must dispatch through AppServiceRegistry instead of exposing LibraryController or PlaybackController"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/application/", [System.StringComparison]::Ordinal)) {
+            if ($line -match '\bAppRuntimeContext\b|ui::|pages::') {
+                Add-Violation $violations $repoPath $lineNumber "application service boundary" "Application command/query services must not depend on GUI runtime context or UI pages"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/playback/", [System.StringComparison]::Ordinal)) {
+            if ($line -match '#\s*include\s+"application/') {
+                Add-Violation $violations $repoPath $lineNumber "playback internal boundary" "Playback internals must not depend on application command/query services"
+            }
+        }
+
         if ($repoPath -eq "src/app/playback_controller.cpp" -or $repoPath -eq "src/app/playback_controller.h") {
             if ($line -match '\bstd::thread\b|\bstd::mutex\b|pending_enrichment|enrichment_threads|requestEnrichment|applyPendingEnrichments|PlaybackSessionClock|PlaybackBackendController|PlaybackTransitionCoordinator|PlaybackCompletionPolicy|AudioPipeline|AudioPlaybackState|visualizationFrame\(') {
                 Add-Violation $violations $repoPath $lineNumber "playback core ownership" "PlaybackController must own playback commands and queue semantics only; enrichment, clock, backend, transition, completion policy, and audio pipeline responsibilities belong to dedicated integrated-core components"
@@ -163,6 +181,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         if ($repoPath.StartsWith("src/app/", [System.StringComparison]::Ordinal) -and -not $repoPath.Contains("_runner.")) {
             if (Test-AnyPrefix $include @("platform/host/", "platform/device/", "platform/x11/")) {
                 Add-Violation $violations $repoPath $lineNumber $include "shared app code must not include concrete platform adapters"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/application/", [System.StringComparison]::Ordinal)) {
+            if (Test-AnyPrefix $include @("platform/", "targets/", "ui/pages/")) {
+                Add-Violation $violations $repoPath $lineNumber $include "application command/query services must not include concrete platform adapters, targets, or UI pages"
             }
         }
 

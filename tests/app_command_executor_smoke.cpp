@@ -11,8 +11,9 @@ namespace {
 class FakeCommandTarget final : public lofibox::app::AppCommandTarget {
 public:
     FakeCommandTarget()
+        : services(lofibox::app::withNullRuntimeServices({}))
     {
-        playback.setServices(lofibox::app::withNullRuntimeServices({}));
+        controllers.bindServices(services);
     }
 
     [[nodiscard]] lofibox::app::AppPage currentPage() const noexcept override { return navigation.currentPage(); }
@@ -22,23 +23,22 @@ public:
         const auto page = currentPage();
         return lofibox::app::buildAppPageModel(lofibox::app::AppPageModelInput{
             page,
-            library.titleOverrideForPage(page),
-            library.rowsForPage(page),
+            controllers.library.titleOverrideForPage(page),
+            controllers.library.rowsForPage(page),
             settings,
             true,
             "BUILT-IN"});
     }
 
+    [[nodiscard]] lofibox::application::AppServiceRegistry appServices() noexcept override { return {controllers, services}; }
     lofibox::app::NavigationState& navigationState() noexcept override { return navigation; }
-    lofibox::app::LibraryController& libraryController() noexcept override { return library; }
-    lofibox::app::PlaybackController& playbackController() noexcept override { return playback; }
     lofibox::app::EqState& eqState() noexcept override { return eq; }
     int& mainMenuIndex() noexcept override { return menu_index; }
     void closeHelpForCommand() noexcept override { ++close_help_calls; }
 
     lofibox::app::NavigationState navigation{};
-    lofibox::app::LibraryController library{};
-    lofibox::app::PlaybackController playback{};
+    lofibox::app::RuntimeServices services{};
+    lofibox::app::AppControllerSet controllers{};
     lofibox::app::EqState eq{};
     lofibox::app::SettingsState settings{};
     int menu_index{0};
@@ -114,31 +114,31 @@ int main()
         return 1;
     }
 
-    auto& model = target.library.mutableModel();
+    auto& model = target.controllers.library.mutableModel();
     model.tracks.push_back(lofibox::app::TrackRecord{7, std::filesystem::path{"song.mp3"}, "Song", "Artist", "Album"});
-    target.library.setSongsContextAll();
+    target.controllers.library.setSongsContextAll();
     target.navigation.replaceStack({lofibox::app::AppPage::Songs});
     target.navigation.list_selection.selected = 0;
     lofibox::app::commandConfirmListPage(target);
-    if (target.currentPage() != lofibox::app::AppPage::NowPlaying || target.playback.session().current_track_id != 7) {
+    if (target.currentPage() != lofibox::app::AppPage::NowPlaying || target.controllers.playback.session().current_track_id != 7) {
         std::cerr << "Expected Songs confirm to start track and open Now Playing.\n";
         return 1;
     }
 
-    target.playback.mutableSession().shuffle_enabled = false;
-    target.playback.mutableSession().repeat_one = false;
+    target.controllers.playback.mutableSession().shuffle_enabled = false;
+    target.controllers.playback.mutableSession().repeat_one = false;
     lofibox::app::commandCycleMainMenuPlaybackMode(target);
-    if (!target.playback.session().shuffle_enabled) {
+    if (!target.controllers.playback.session().shuffle_enabled) {
         std::cerr << "Expected menu playback mode cycle to enable shuffle first.\n";
         return 1;
     }
     lofibox::app::commandCycleMainMenuPlaybackMode(target);
-    if (target.playback.session().shuffle_enabled || !target.playback.session().repeat_all || target.playback.session().repeat_one) {
+    if (target.controllers.playback.session().shuffle_enabled || !target.controllers.playback.session().repeat_all || target.controllers.playback.session().repeat_one) {
         std::cerr << "Expected menu playback mode cycle to move from shuffle to repeat-all.\n";
         return 1;
     }
     lofibox::app::commandCycleMainMenuPlaybackMode(target);
-    if (target.playback.session().shuffle_enabled || target.playback.session().repeat_all || !target.playback.session().repeat_one) {
+    if (target.controllers.playback.session().shuffle_enabled || target.controllers.playback.session().repeat_all || !target.controllers.playback.session().repeat_one) {
         std::cerr << "Expected menu playback mode cycle to move from repeat-all to repeat-one.\n";
         return 1;
     }

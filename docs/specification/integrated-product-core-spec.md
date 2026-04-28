@@ -23,6 +23,8 @@ This document is normative for the current C++ implementation.
 - `UiProjection`: page, widget, desktop, and device-facing render/control models derived from product facts.
 - `RuntimeShell`: Linux host, device profile, desktop, container, VNC, or PocketFrame shell. Runtime shells adapt input/output; they do not redefine product facts.
 - `RuntimeServiceProvider`: host-side construction of service groups before they enter the shared app as injected capabilities.
+- `ApplicationCommand`: an explicit product action requested by a product command consumer such as GUI routing, desktop integration, CLI, automation, or tests. Examples include play, pause, queue mutation, library scan, source-profile update, remote browse, metadata acceptance, EQ update, credential update, cache command, or diagnostic query.
+- `ApplicationQuery`: a structured product read requested by a product command consumer such as GUI routing, desktop integration, CLI, automation, or tests. Examples include playback status, library status, search results, source-profile list, remote catalog nodes, stream diagnostics, or runtime capability status.
 
 ## Mandatory Ownership
 
@@ -48,6 +50,7 @@ This document is normative for the current C++ implementation.
 - `RemoteProfileStore` owns persisted remote server profiles under XDG paths and stores credential references rather than secret values.
 - `CredentialStore`, `CredentialRef`, `SecretRedactor`, and `TlsPolicy` own secret and network security boundaries.
 - `RuntimeServiceProvider` owns host service group construction; the app consumes only the completed `RuntimeServices` registry.
+- `ApplicationCommandService` and `ApplicationQueryService` boundaries own product command/query semantics shared by GUI, desktop integration, future CLI, automation clients, and tests.
 - `AppProjectionBuilder` and page-specific projection builders own app-to-UI view-model assembly.
 - UI pages and widgets own layout and visual composition only.
 - Desktop integration owns event/notification adapters only and converts external events into product commands.
@@ -71,6 +74,9 @@ This document is normative for the current C++ implementation.
 - `LibraryController` must not own raw library fact storage when a repository boundary exists.
 - Runtime shells must not fork business logic for PocketFrame, Cardputer Zero, container, VNC, framebuffer, X11, or desktop widget targets.
 - Runtime service factories must not regain protocol, metadata, playback, cache, or remote implementation details.
+- `AppRuntimeContext` must not become the long-term public command API for external command consumers or tests.
+- GUI-adjacent, CLI, desktop, automation, and test adapters must not simulate page selection, confirmation, or text-editor flows to perform product commands.
+- Command clients must not bypass application services to call controllers, runtime providers, playback backends, remote providers, or UI pages directly.
 - Credentials, tokens, cookies, API keys, and auth headers must not be logged or stored as plain app state.
 - Remote profile persistence must not write passwords, tokens, cookies, or auth headers.
 
@@ -102,6 +108,8 @@ Every source must eventually define configuration, authentication, connection li
 - Library facts must survive UI navigation changes.
 - The Library entry surface must project both local library dimensions and reachable configured remote profiles. Selecting a remote profile from Library enters the same remote catalog browsing model used by Source Manager; it must not teach `LibraryController` to call remote providers.
 - Search and queue semantics must operate on `MediaItem` values so local and remote content can be mixed without teaching playback or UI about provider internals.
+- Product commands and queries must be expressible without knowing the current GUI page, selected row, focused field editor, or concrete runtime shell.
+- Live playback and active-queue mutations must be routed to the running product runtime once runtime command support exists; a second short-lived process must not silently fork playback truth.
 - Runtime paths must follow XDG and must not write user state into install directories.
 - Debian package validation must remain green after core boundary work.
 
@@ -119,6 +127,7 @@ Every source must eventually define configuration, authentication, connection li
 - `LibraryController` regains list-open branching, database, or remote provider ownership.
 - host runtime protocol clients collapse into monolithic helper files.
 - runtime service factory code directly constructs concrete metadata/playback/remote services instead of composing service providers.
+- CLI, desktop, automation, or test code calls `AppRuntimeContext` page methods or directly accesses controllers/providers instead of the application command/query boundary.
 
 ## Relation To Other Specifications
 
@@ -129,4 +138,5 @@ Every source must eventually define configuration, authentication, connection li
 - Track identity details remain in `lofibox-zero-track-identity-spec.md`.
 - Library indexing details remain in `lofibox-zero-library-indexing-spec.md`.
 - Credentials remain in `lofibox-zero-credential-spec.md`.
+- Application command/query boundaries remain in `application-command-boundary-spec.md`.
 - Debian and dependency governance remain in `debian-official-archive-spec.md` and `dependency-policy-spec.md`.

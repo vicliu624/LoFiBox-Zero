@@ -39,9 +39,8 @@ public:
     [[nodiscard]] bool bootAnimationComplete() const override;
     void refreshRuntimeStatusIfDue() override;
     [[nodiscard]] AppPage currentPage() const noexcept override;
+    [[nodiscard]] ::lofibox::application::AppServiceRegistry appServices() noexcept override;
     NavigationState& navigationState() noexcept override;
-    LibraryController& libraryController() noexcept override;
-    PlaybackController& playbackController() noexcept override;
     EqState& eqState() noexcept override;
     int& mainMenuIndex() noexcept override;
     void closeHelpForCommand() noexcept override;
@@ -139,13 +138,13 @@ private:
     [[nodiscard]] std::vector<RemoteCatalogNode> cachedRemoteBrowse(const RemoteServerProfile& profile, const RemoteCatalogNode& parent) const;
     void refreshSearchResults();
     void applyEqualizerStateToPlayback();
+    [[nodiscard]] ::lofibox::application::SourceProfileCommandService sourceProfileService() const noexcept;
     void openRemoteProfile(std::size_t profile_index);
     void loadRemoteRoot();
     void openRemoteSetup();
     void openRemoteProfileSettings(std::size_t profile_index, int focus_row = 0);
     void openNewRemoteProfileSettings(RemoteServerKind kind);
     [[nodiscard]] bool persistRemoteProfiles();
-    void ensureSelectedProfileCredentialRef(RemoteServerProfile& profile);
     void beginRemoteProfileFieldEdit(int field);
 
     AppRuntimeState state_{};

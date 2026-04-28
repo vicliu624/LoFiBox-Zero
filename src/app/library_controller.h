@@ -15,9 +15,11 @@
 #include "app/remote_media_services.h"
 #include "app/runtime_services.h"
 
-namespace lofibox::app {
+namespace lofibox::application {
+class LibraryOpenActionService;
+}
 
-class LibraryOpenActionResolver;
+namespace lofibox::app {
 
 struct LibraryOpenResult {
     enum class Kind {
@@ -58,7 +60,7 @@ public:
     [[nodiscard]] LibraryOpenResult openSelectedListItem(AppPage page, int selected);
 
 private:
-    friend class LibraryOpenActionResolver;
+    friend class ::lofibox::application::LibraryOpenActionService;
 
     void setSongsContextAlbum(const AlbumRecord& album);
     void setSongsContextFiltered(SongsMode mode, std::string label, std::vector<int> ids);

@@ -16,8 +16,10 @@ namespace lofibox::app {
 class PlaybackController {
 public:
     using RemoteTrackStarter = std::function<bool(int)>;
+    using PlaybackStartedRecorder = std::function<void(TrackRecord&)>;
 
     void setServices(RuntimeServices services);
+    void setPlaybackStartedRecorder(PlaybackStartedRecorder recorder);
     void setDspProfile(::lofibox::audio::dsp::DspChainProfile profile);
 
     [[nodiscard]] const PlaybackSession& session() const noexcept;
@@ -53,12 +55,14 @@ private:
     [[nodiscard]] bool playQueueIndex(LibraryController& library_controller, int queue_index, const RemoteTrackStarter& remote_starter);
     void refreshArtwork(const LibraryController& library_controller, ArtworkReadMode mode = ArtworkReadMode::AllowOnline);
     void refreshMetadata(LibraryController& library_controller, MetadataReadMode mode = MetadataReadMode::AllowOnline);
+    void recordPlaybackStarted(TrackRecord& track);
 
     QueueState queue_{};
     PlaybackSession session_{};
     RuntimeServices services_{};
     PlaybackEnrichmentCoordinator enrichment_{};
     PlaybackRuntimeCoordinator runtime_{};
+    PlaybackStartedRecorder playback_started_recorder_{};
 };
 
 } // namespace lofibox::app

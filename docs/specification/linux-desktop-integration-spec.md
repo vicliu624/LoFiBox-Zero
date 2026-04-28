@@ -60,6 +60,7 @@ The Linux desktop integration domain includes:
 
 Desktop integration must translate external desktop events into core player commands.
 It must not redefine core state or bypass playback, queue, or library boundaries.
+Those translated commands must converge through the application command/query boundary defined in `application-command-boundary-spec.md` rather than directly calling UI pages, controllers, playback backends, remote providers, or runtime provider internals.
 
 ## 6. Product Shell Constraint
 
@@ -118,3 +119,4 @@ As of 2026-04-27, runtime desktop integration has an explicit state boundary:
 - UI pages must not talk directly to D-Bus, notification backends, MIME handlers, or media-key listeners
 
 Concrete backend adapters may evolve, but the handoff into the product must stay command/projection based.
+As the application command boundary is introduced, desktop command adapters must use it as their product command target.

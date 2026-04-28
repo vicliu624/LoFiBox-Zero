@@ -48,11 +48,16 @@ add_library(lofibox_zero_core STATIC
     src/app/app_projection_builder.cpp
     src/app/app_renderer.cpp
     src/app/app_runtime_context.cpp
+    src/application/app_service_registry.cpp
+    src/application/library_mutation_service.cpp
+    src/application/library_open_action_service.cpp
+    src/application/library_query_service.cpp
+    src/application/playback_command_service.cpp
+    src/application/playback_status_query_service.cpp
+    src/application/queue_command_service.cpp
+    src/application/source_profile_command_service.cpp
     src/app/library_controller.cpp
     src/app/library_navigation_service.cpp
-    src/app/library_mutation_service.cpp
-    src/app/library_open_action_resolver.cpp
-    src/app/library_query_service.cpp
     src/app/library_repository.cpp
     src/app/library_scanner.cpp
     src/app/lofibox_app.cpp
@@ -296,6 +301,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_app_command_executor_smoke tests/app_command_executor_smoke.cpp)
     target_link_libraries(lofibox_app_command_executor_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_app_command_executor_smoke COMMAND lofibox_app_command_executor_smoke)
+
+    add_executable(lofibox_application_command_boundary_smoke tests/application_command_boundary_smoke.cpp)
+    target_link_libraries(lofibox_application_command_boundary_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_application_command_boundary_smoke COMMAND lofibox_application_command_boundary_smoke)
 
     add_executable(lofibox_app_input_router_smoke tests/app_input_router_smoke.cpp)
     target_link_libraries(lofibox_app_input_router_smoke PRIVATE lofibox_zero_core)

@@ -13,6 +13,7 @@ Unit tests should cover:
 
 - core state machine
 - playback queue
+- application command/query services returning structured command results without depending on GUI page selection state
 - playlist parsers
 - metadata parser behavior
 - EQ and biquad behavior
@@ -24,6 +25,9 @@ Unit tests should cover:
 
 Integration tests should cover:
 
+- GUI command routing translating page events into application commands without duplicating product behavior
+- direct command service behavior for library/source/credential/cache/diagnostic domains under isolated XDG test roots
+- runtime command client/server behavior before live playback or active queue control is exposed to external command consumers
 - local library scan
 - database migration
 - metadata cache
@@ -78,6 +82,8 @@ Tests must not:
 - pollute the user's `HOME`
 - access the external internet
 - depend on a real user input-method configuration
+- simulate product commands by driving GUI-only selected-row or field-editor internals when an application command service is the intended boundary
+- mutate live playback or active queue from a second process without an explicit runtime command path
 
 Tests must support CI and Debian autopkgtest environments.
 

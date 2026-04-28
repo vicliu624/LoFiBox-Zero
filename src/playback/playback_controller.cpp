@@ -3,12 +3,12 @@
 #include "playback/playback_controller.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <optional>
 #include <random>
 #include <utility>
 
-#include "app/library_mutation_service.h"
 #include "app/remote_media_contract.h"
 
 namespace lofibox::app {
@@ -18,6 +18,11 @@ void PlaybackController::setServices(RuntimeServices services)
     services_ = std::move(services);
     enrichment_.setServices(services_);
     runtime_.setServices(&services_);
+}
+
+void PlaybackController::setPlaybackStartedRecorder(PlaybackStartedRecorder recorder)
+{
+    playback_started_recorder_ = std::move(recorder);
 }
 
 void PlaybackController::setDspProfile(::lofibox::audio::dsp::DspChainProfile profile)
@@ -135,7 +140,7 @@ bool PlaybackController::startRemoteLibraryTrack(
     if (!started) {
         session_.status = PlaybackStatus::Paused;
     } else {
-        LibraryMutationService{}.recordPlaybackStarted(track);
+        recordPlaybackStarted(track);
         if (needs_remote_governance) {
             enrichment_.requestRemote(profile, remote_track, track.id, stream.url, cache_remote_facts);
         }
@@ -169,7 +174,7 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     refreshMetadata(library_controller, MetadataReadMode::LocalOnly);
     refreshArtwork(library_controller, ArtworkReadMode::LocalOnly);
     (void)runtime_.startBackend(track->path, session_);
-    LibraryMutationService{}.recordPlaybackStarted(*track);
+    recordPlaybackStarted(*track);
     enrichment_.request(*track);
     return true;
 }
@@ -319,6 +324,18 @@ void PlaybackController::refreshMetadata(LibraryController& library_controller, 
 
     const auto metadata = services_.metadata.metadata_provider->read(track->path, mode);
     PlaybackEnrichmentCoordinator::applyMetadataToTrack(*track, metadata);
+}
+
+void PlaybackController::recordPlaybackStarted(TrackRecord& track)
+{
+    if (playback_started_recorder_) {
+        playback_started_recorder_(track);
+        return;
+    }
+    ++track.play_count;
+    track.last_played = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+                            .count();
 }
 
 } // namespace lofibox::app

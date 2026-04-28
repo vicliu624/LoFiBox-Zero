@@ -2,7 +2,7 @@
 
 #include "app/library_navigation_service.h"
 
-#include "app/library_query_service.h"
+#include "application/library_query_service.h"
 
 namespace lofibox::app {
 namespace {
@@ -81,7 +81,7 @@ std::optional<std::vector<std::pair<std::string, std::string>>> LibraryNavigatio
         return rows;
     case AppPage::Songs:
         for (const int id : context.songs.track_ids) {
-            if (const auto* track = LibraryQueryService::findTrack(library, id)) rows.emplace_back(track->title, track->artist);
+            if (const auto* track = ::lofibox::application::LibraryQueryService::findTrack(library, id)) rows.emplace_back(track->title, track->artist);
         }
         return rows;
     case AppPage::Genres:
@@ -102,7 +102,7 @@ std::optional<std::vector<std::pair<std::string, std::string>>> LibraryNavigatio
         };
     case AppPage::PlaylistDetail:
         for (const int id : playlist_track_ids) {
-            if (const auto* track = LibraryQueryService::findTrack(library, id)) rows.emplace_back(track->title, track->artist);
+            if (const auto* track = ::lofibox::application::LibraryQueryService::findTrack(library, id)) rows.emplace_back(track->title, track->artist);
         }
         return rows;
     default:

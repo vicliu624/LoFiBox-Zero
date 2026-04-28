@@ -97,3 +97,21 @@ This update records implementation convergence after the EQ/Search runtime pass:
 - On Debian targets with `aplay`, the realtime PCM sink uses ALSA with a small explicit buffer before falling back to other helpers, reducing the old `ffplay`-buffered UI/audio skew.
 - Playback progress and spectrum advance only after the realtime output path confirms that processed PCM has entered the platform playback sink.
 - The real-audio smoke path on `vicliu@192.168.50.92` was verified with `/usr/bin/aplay`, and installed-app remote playback from Library -> Songs was observed using `realtime PCM DSP -> /usr/bin/aplay`.
+
+## 2026-04-28 Application Command Boundary Specification Update
+
+This update records specification and implementation convergence:
+
+- `application-command-boundary-spec.md` now defines an application command/query boundary for product evolvability, not for CLI alone.
+- The boundary separates product commands and queries from GUI page commands, selected-row confirmation, focused-field editing, and runtime-shell details.
+- GUI routing, desktop integration, future CLI, automation clients, and tests are all command consumers that must converge through application services instead of each inventing a route into controllers, `AppRuntimeContext`, UI pages, or runtime providers.
+- `AppRuntimeContext` remains the current GUI runtime composition shell under migration pressure; it is not the long-term public product command API.
+- `RuntimeServices` remains a grouped capability registry, not the product command/query service layer.
+- Direct versus runtime command ownership is now specified as a state-ownership distinction: durable configuration/library/cache/diagnostic work may be direct, while live playback, active queue, current output, and in-memory runtime truth must target the running runtime once external runtime commands exist.
+- `src/application` now contains real application services and registry code for playback commands, queue commands, playback status queries, library query/mutation/open actions, and source profile commands.
+- GUI command routing now dispatches through `AppServiceRegistry` instead of requiring command targets to expose `LibraryController` or `PlaybackController`.
+- `AppRuntimeContext` delegates source-profile create/update/persist/probe/readiness/credential-label behavior to `SourceProfileCommandService`, and delegates playback/library product commands through application services.
+- `PlaybackController` no longer depends on application services; it accepts a playback-started recorder callback and remains an internal playback/queue coordinator behind `PlaybackCommandService`.
+- `LibraryController` keeps GUI browse context and repository access while reusable query, mutation, and open-action services live under `src/application`.
+- Architecture and implementation-placement gates now enforce the new application boundary placement and reject controller exposure from GUI command routing.
+- No CLI feature is implemented by this status entry.

@@ -59,79 +59,41 @@ void commandPopPage(AppCommandTarget& target)
 
 void commandPlayFromMenu(AppCommandTarget& target)
 {
-    auto& playback_controller = target.playbackController();
-    auto& library_controller = target.libraryController();
-    const auto& session = playback_controller.session();
-    if (session.status == PlaybackStatus::Paused && (session.current_track_id || !session.current_stream_title.empty())) {
-        playback_controller.resume();
-        return;
-    }
-    if (session.status == PlaybackStatus::Playing) {
-        return;
-    }
-    if (session.current_track_id || !session.current_stream_title.empty()) {
-        playback_controller.resume();
-        return;
-    }
-
-    const auto ids = library_controller.allSongIdsSorted();
-    if (!ids.empty()) {
-        library_controller.setSongsContextAll();
-        (void)target.startLibraryTrack(ids.front());
-    }
+    (void)target.appServices().playbackCommands().playFirstAvailable();
 }
 
 void commandPausePlayback(AppCommandTarget& target)
 {
-    target.playbackController().pause();
+    target.appServices().playbackCommands().pause();
 }
 
 void commandStepTrack(AppCommandTarget& target, int delta)
 {
-    target.playbackController().stepQueue(target.libraryController(), delta);
+    target.appServices().queueCommands().step(delta);
 }
 
 void commandCycleMainMenuPlaybackMode(AppCommandTarget& target)
 {
-    auto& playback_controller = target.playbackController();
-    const auto& session = playback_controller.session();
-    if (session.shuffle_enabled) {
-        playback_controller.setShuffleEnabled(false);
-        playback_controller.setRepeatAll(true);
-        return;
-    }
-    if (session.repeat_all) {
-        playback_controller.setRepeatAll(false);
-        playback_controller.setRepeatOne(true);
-        return;
-    }
-    if (session.repeat_one) {
-        playback_controller.setRepeatOne(false);
-        playback_controller.setRepeatAll(false);
-        return;
-    }
-    playback_controller.setRepeatOne(false);
-    playback_controller.setRepeatAll(false);
-    playback_controller.setShuffleEnabled(true);
+    target.appServices().playbackCommands().cycleMainMenuPlaybackMode();
 }
 
 void commandToggleRepeatAll(AppCommandTarget& target)
 {
-    auto& playback_controller = target.playbackController();
-    const bool enabled = !playback_controller.session().repeat_all;
-    playback_controller.setRepeatAll(enabled);
+    auto playback = target.appServices().playbackCommands();
+    const bool enabled = !playback.session().repeat_all;
+    playback.setRepeatAll(enabled);
     if (!enabled) {
-        playback_controller.setRepeatOne(false);
+        playback.setRepeatOne(false);
     }
 }
 
 void commandToggleRepeatOne(AppCommandTarget& target)
 {
-    auto& playback_controller = target.playbackController();
-    const bool enabled = !playback_controller.session().repeat_one;
-    playback_controller.setRepeatOne(enabled);
+    auto playback = target.appServices().playbackCommands();
+    const bool enabled = !playback.session().repeat_one;
+    playback.setRepeatOne(enabled);
     if (!enabled) {
-        playback_controller.setRepeatAll(false);
+        playback.setRepeatAll(false);
     }
 }
 
@@ -153,24 +115,24 @@ void commandConfirmMainMenu(AppCommandTarget& target)
         return;
     }
     if (kMainMenuPages[static_cast<std::size_t>(index)] == AppPage::Songs) {
-        target.libraryController().setSongsContextAll();
+        target.appServices().libraryMutations().setSongsContextAll();
     }
     commandPushPage(target, kMainMenuPages[static_cast<std::size_t>(index)]);
 }
 
 void commandToggleShuffle(AppCommandTarget& target)
 {
-    target.playbackController().toggleShuffle();
+    target.appServices().playbackCommands().toggleShuffle();
 }
 
 void commandCycleRepeatMode(AppCommandTarget& target)
 {
-    target.playbackController().cycleRepeatMode();
+    target.appServices().playbackCommands().cycleRepeatMode();
 }
 
 void commandTogglePlayPause(AppCommandTarget& target)
 {
-    target.playbackController().togglePlayPause();
+    target.appServices().playbackCommands().togglePlayPause();
 }
 
 void commandMoveEqualizerSelection(AppCommandTarget& target, int delta)
@@ -215,7 +177,7 @@ void commandCycleEqualizerPreset(AppCommandTarget& target, int delta)
 
 void commandCycleSongSortModeAndClamp(AppCommandTarget& target)
 {
-    target.libraryController().cycleSongSortMode();
+    target.appServices().libraryMutations().cycleSongSortMode();
     clampListSelection(target);
 }
 
@@ -246,8 +208,7 @@ void commandConfirmListPage(AppCommandTarget& target)
 {
     const int selected = target.navigationState().list_selection.selected;
     const auto page = target.currentPage();
-    auto& library_controller = target.libraryController();
-    const auto library_result = library_controller.openSelectedListItem(page, selected);
+    const auto library_result = target.appServices().libraryOpenActions().openSelectedListItem(page, selected);
     switch (library_result.kind) {
     case LibraryOpenResult::Kind::PushPage:
         commandPushPage(target, library_result.page);
