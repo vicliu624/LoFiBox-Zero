@@ -21,6 +21,7 @@ The Cardputer Zero profile adapts that product shell to a stricter small-screen 
 
 For final product meaning, use `lofibox-zero-final-product-spec.md`.
 For architecture boundaries, use `project-architecture-spec.md`.
+For committed text, preedit, Unicode editing, and input-method boundaries, use `lofibox-zero-text-input-spec.md`.
 For page, layout, and visual rules, use:
 
 - `lofibox-zero-page-spec.md`
@@ -63,6 +64,10 @@ Linux input truth still comes from kernel input events such as `EV_KEY` and `KEY
 Printed key legends, product images, PocketFrame button labels, or validation-harness naming must not redefine key semantics.
 
 Profile input adapters may translate physical events into logical app commands, but that translation must stay inside the platform/device boundary.
+
+For editable text, the framebuffer/evdev profile may emit directly translatable committed text.
+It must not claim Debian desktop CJK IME support merely because the X11 desktop target supports system input methods.
+If this profile later needs CJK composition, that must be specified as a device input method, input proxy, or alternate shell before implementation.
 
 ## 6. Product Model Non-Fork Rule
 

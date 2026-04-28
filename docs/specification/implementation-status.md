@@ -75,3 +75,14 @@ This update records implementation, not just domain modeling:
 - Remote browse/search playback now carries remote title, artist, album, and duration into Now Playing/Lyrics projections, and read-only remote items can reuse accepted local metadata cache records keyed by stable source identity plus item id.
 - Host fingerprint provisioning is now executable outside the container: `scripts/ensure-host-fpcalc.ps1` detects `FPCALC_PATH` or `fpcalc`, can install Chromaprint through supported package managers, and was verified on this Windows host through winget.
 - Direct Linux desktop-widget builds are no longer implicit knowledge: `linux-x11-debug` configures the real X11 presentation target.
+
+## 2026-04-28 Search And Text Input Specification Update
+
+This update records specification convergence before the next implementation pass:
+
+- Search is a current first-class small-screen page, not a deferred feature.
+- Editable text is now governed by `lofibox-zero-text-input-spec.md`.
+- Search query truth is committed UTF-8 app state; input-method preedit remains transient projection and must not mutate query truth.
+- Debian/Linux CJK input belongs to the user's system/session input-method stack and enters LoFiBox through committed UTF-8 text events.
+- The X11 desktop-widget target must integrate with system input methods; framebuffer/evdev remains a direct Linux-key input adapter unless a separate device input-method design is specified.
+- Current implementation still needs to converge from character/ASCII-oriented input plumbing to committed UTF-8 text events, Unicode-safe backspace, and tested non-ASCII Search matching before CJK search is product-grade.

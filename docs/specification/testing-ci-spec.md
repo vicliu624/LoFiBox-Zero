@@ -17,6 +17,8 @@ Unit tests should cover:
 - metadata parser behavior
 - EQ and biquad behavior
 - XDG path resolver
+- Unicode-safe text editing for Search and other text-entry fields
+- invalid UTF-8 rejection or repair before committed text enters app state
 
 ## 3. Integration Tests
 
@@ -27,6 +29,20 @@ Integration tests should cover:
 - metadata cache
 - direct URL stream using a controlled local fixture server
 - mock playback through `NullAudioOutput`
+- local and remote search result grouping over normalized media items
+- Search matching and display with non-ASCII metadata fixtures
+
+## 3.1 Platform Input Adapter Tests
+
+Platform input tests should cover:
+
+- X11 committed UTF-8 text delivery from the text adapter where test infrastructure permits it
+- preedit data remaining transient and not mutating committed query state
+- framebuffer/evdev direct-key translation boundaries
+- framebuffer/evdev not being advertised as system CJK IME support
+
+These tests must use controlled adapters or fixtures.
+They must not require the CI environment to run a user's real input-method daemon.
 
 ## 4. Protocol Tests
 
@@ -61,6 +77,7 @@ Tests must not:
 - depend on real audio devices
 - pollute the user's `HOME`
 - access the external internet
+- depend on a real user input-method configuration
 
 Tests must support CI and Debian autopkgtest environments.
 

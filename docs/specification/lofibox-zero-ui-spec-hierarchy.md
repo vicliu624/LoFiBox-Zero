@@ -33,10 +33,11 @@ When writing UI code, use these specifications in this order:
 15. `lofibox-zero-track-identity-spec.md` for fingerprint-backed recording identity and enrichment authority
 16. `lofibox-zero-audio-dsp-spec.md` for EQ and DSP capability work
 17. `lofibox-zero-streaming-spec.md` for streaming-related capability work
-18. `lofibox-zero-page-spec.md`
-19. `lofibox-zero-layout-spec.md`
-20. `lofibox-zero-visual-design-spec.md`
-21. `legacy-lofibox-product-guidance.md`
+18. `lofibox-zero-text-input-spec.md` for committed text, preedit, Unicode editing, and system input-method boundaries
+19. `lofibox-zero-page-spec.md`
+20. `lofibox-zero-layout-spec.md`
+21. `lofibox-zero-visual-design-spec.md`
+22. `legacy-lofibox-product-guidance.md`
 
 They do not all answer the same question.
 
@@ -224,7 +225,25 @@ When writing streaming-related UI code, ask:
 
 If the streaming spec says a remote feature belongs behind a capability boundary, the UI must not flatten it into ad-hoc controls.
 
-### 3.12 `lofibox-zero-page-spec.md`
+### 3.12 `lofibox-zero-text-input-spec.md`
+
+This document controls:
+
+- what counts as committed text versus input-method composition
+- how editable text reaches shared app state
+- which Unicode guarantees text-entry pages must preserve
+- how X11 and framebuffer/evdev input targets differ
+- what belongs to the system input method rather than LoFiBox itself
+
+When writing Search, remote profile field, playlist-name, or future metadata-editing UI code, ask:
+
+- am I mutating app state with committed UTF-8 text or with in-progress preedit text?
+- does this behavior belong to the page, SearchState, a platform input adapter, or the user's Debian input-method framework?
+- am I accidentally claiming CJK IME support for framebuffer/evdev direct key input?
+
+If the text-input spec says a behavior belongs to the runtime shell or system IME, the page must not implement its own composition engine or ASCII-only shortcut.
+
+### 3.13 `lofibox-zero-page-spec.md`
 
 This document controls:
 
@@ -248,7 +267,7 @@ When writing UI code, ask:
 
 If a control or feature is not justified by the current UI index plus the page's dedicated file, it does not belong in the implementation yet.
 
-### 3.13 `lofibox-zero-layout-spec.md`
+### 3.14 `lofibox-zero-layout-spec.md`
 
 This document controls:
 
@@ -266,7 +285,7 @@ When writing UI code, ask:
 
 If the page spec tells you that a page needs a progress bar, the layout spec tells you where it goes.
 
-### 3.14 `lofibox-zero-visual-design-spec.md`
+### 3.15 `lofibox-zero-visual-design-spec.md`
 
 This document controls:
 
@@ -285,7 +304,7 @@ When writing UI code, ask:
 
 If the layout spec tells you where a list row goes, the visual design spec tells you how it should look.
 
-### 3.15 `legacy-lofibox-product-guidance.md`
+### 3.16 `legacy-lofibox-product-guidance.md`
 
 This document is the fallback product-intent source.
 
@@ -391,7 +410,15 @@ Example:
 
 - If a proposed control mixes connection management, auth state, and playback state into one convenience widget, split the responsibilities before implementing it.
 
-### 4.12 Current UI Scope Beats Styling Ideas
+### 4.12 Text Input Boundary Beats ASCII Convenience
+
+- `lofibox-zero-text-input-spec.md` beats page-local convenience on questions of committed text, preedit, Unicode-safe editing, and system input-method integration.
+
+Example:
+
+- If Search needs Chinese, Japanese, or Korean input on Debian/X11, integrate the X11 target with the session input method and emit committed UTF-8 text. Do not implement a private Pinyin, Kana, or Hangul engine inside the Search page, and do not advertise framebuffer/evdev direct key input as desktop IME support.
+
+### 4.13 Current UI Scope Beats Styling Ideas
 
 - `lofibox-zero-page-spec.md` beats layout and visual ideas on questions of the current UI's content and behavior.
 
@@ -399,7 +426,7 @@ Example:
 
 - If a mockup suggests `Repeat` inside `Settings` but the page spec excludes it, `Repeat` does not go into `Settings`.
 
-### 4.13 Layout Beats Ad-Hoc Composition
+### 4.14 Layout Beats Ad-Hoc Composition
 
 - `lofibox-zero-layout-spec.md` beats improvised spacing and positioning decisions.
 
@@ -407,7 +434,7 @@ Example:
 
 - If the layout spec assigns a fixed metadata zone for `Now Playing`, you do not resize or relocate it ad hoc because a single track title is very short.
 
-### 4.14 Visual Spec Beats Local Taste
+### 4.15 Visual Spec Beats Local Taste
 
 - `lofibox-zero-visual-design-spec.md` beats one-off styling choices.
 
@@ -415,7 +442,7 @@ Example:
 
 - If the visual spec defines blue focus bars and muted gray metadata, a single page does not get a different highlight color without a spec change.
 
-### 4.15 Legacy Guidance Is Fallback Only
+### 4.16 Legacy Guidance Is Fallback Only
 
 - `legacy-lofibox-product-guidance.md` loses to all newer `LoFiBox Zero` specs when there is direct conflict.
 
@@ -434,10 +461,11 @@ When implementing a UI page, follow this sequence:
 9. If the work touches decode, playback-pipeline, or output-path behavior, read `lofibox-zero-media-pipeline-spec.md`.
 10. If the work touches EQ or DSP behavior, read `lofibox-zero-audio-dsp-spec.md`.
 11. If the work touches remote sources, media servers, or network playback, read `lofibox-zero-streaming-spec.md`.
-12. Read the shared current UI rules in `lofibox-zero-page-spec.md` and then the specific page file under `docs/specification/current-ui-pages/`.
-13. Read the page template and geometry rules in `lofibox-zero-layout-spec.md`.
-14. Read the component and styling rules in `lofibox-zero-visual-design-spec.md`.
-15. Only if still needed, consult `legacy-lofibox-product-guidance.md` for intent clarification.
+12. If the work touches Search, login fields, source-profile fields, playlist names, or any editable text, read `lofibox-zero-text-input-spec.md`.
+13. Read the shared current UI rules in `lofibox-zero-page-spec.md` and then the specific page file under `docs/specification/current-ui-pages/`.
+14. Read the page template and geometry rules in `lofibox-zero-layout-spec.md`.
+15. Read the component and styling rules in `lofibox-zero-visual-design-spec.md`.
+16. Only if still needed, consult `legacy-lofibox-product-guidance.md` for intent clarification.
 
 ## 6. Practical Decision Table
 
@@ -459,6 +487,7 @@ When implementing a UI page, follow this sequence:
 | Does this EQ or DSP concept belong, and what responsibility owns it? | `lofibox-zero-audio-dsp-spec.md` |
 | What does the current UI implementation contain right now? | `lofibox-zero-page-spec.md` |
 | Does this remote-media concept belong, and what responsibility owns it? | `lofibox-zero-streaming-spec.md` |
+| Is this committed text, preedit text, raw key input, or system input-method behavior? | `lofibox-zero-text-input-spec.md` |
 | Which code layer should own it? | `project-architecture-spec.md` |
 | Where does it sit on the screen? | `lofibox-zero-layout-spec.md` |
 | What does it look like? | `lofibox-zero-visual-design-spec.md` |

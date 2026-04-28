@@ -115,7 +115,11 @@ This template is used by:
 - `Compilations`
 - `Playlists`
 - `Playlist Detail`
+- `Search`
 - `Settings`
+- `Remote Setup`
+- `Remote Profile Settings`
+- `Remote Field Editor`
 
 ### Geometry
 
@@ -201,6 +205,46 @@ Zones:
 - `icon`: `x=12, y=row+3, w=16, h=16`
 - `primary`: `x=36, y=row+3, w=160, h=16`
 - `value-or-chevron`: `x=212, y=row+3, w=88, h=16`
+
+#### T2-E Search Row
+
+Used by:
+
+- `Search`
+
+Search keeps the standard list shell but reserves the first row for query entry.
+When preedit or source-status text is present, the second row may become a non-actionable status row.
+Result rows then occupy the remaining visible slots.
+
+Zones:
+
+- `query-label`: first row `x=12, y=row+3, w=50, h=16`
+- `query-text`: first row `x=66, y=row+3, w=232, h=16`
+- `preedit-or-status`: optional second row `x=12, y=row+3, w=286, h=16`
+- `result-primary`: result rows `x=12, y=row+3, w=188, h=16`
+- `result-source`: result rows `x=206, y=row+3, w=92, h=16`
+
+The query and preedit/status rows are not normal playable result rows.
+Selection movement must wrap across actionable result rows without treating the query prompt as a playable item.
+
+#### T2-F Field Editor Row
+
+Used by:
+
+- `Remote Field Editor`
+
+Field editor pages keep a compact list shell but reserve the first rows for one editable value rather than for browse results.
+
+Zones:
+
+- `field-label`: first row `x=12, y=row+3, w=286, h=16`
+- `field-value`: second row `x=12, y=row+3, w=286, h=16`
+- `preedit-or-validation`: optional third row `x=12, y=row+3, w=286, h=16`
+- `action-primary`: action rows `x=12, y=row+3, w=188, h=16`
+- `action-status`: action rows `x=206, y=row+3, w=92, h=16`
+
+Secret values must reserve the same value geometry but render redacted text.
+Validation status must not resize the row layout.
 
 ### Rules
 
@@ -305,11 +349,13 @@ Five evenly distributed slots inside `transport-row`:
 | Compilations | `T2-A` | simple browse rows |
 | Playlists | `T2-A` | simple browse rows |
 | Playlist Detail | `T2-B` | title plus artist |
+| Search | `T2-E` | pinned query row plus source-aware results |
 | Now Playing | `T3` | dedicated playback layout |
 | Equalizer | `T4` | dedicated EQ layout |
 | Settings | `T2-D` | icon plus value/chevron |
 | Remote Setup | `T2-A` | supported remote source kinds before profile fields |
 | Remote Profile Settings | `T2-B` | concrete selected-kind profile fields |
+| Remote Field Editor | `T2-F` | one editable remote profile field |
 | About | `T5` | dedicated information card |
 
 ## 12. Layout Prohibitions

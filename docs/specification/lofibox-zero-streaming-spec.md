@@ -23,6 +23,7 @@ For persisted source profiles, streaming-server settings, credential references,
 For credential references, secret storage, and runtime session material rules, use `lofibox-zero-credential-spec.md`.
 For decode, metadata, and output-pipeline behavior after a source has been resolved, use `lofibox-zero-media-pipeline-spec.md`.
 For EQ, `ReplayGain`, limiter, loudness, and other DSP behavior after decode, use `lofibox-zero-audio-dsp-spec.md`.
+For address, account, token, and other editable source-profile fields, use `lofibox-zero-text-input-spec.md`.
 For page-level UI contracts, use `lofibox-zero-page-spec.md`.
 For legacy carry-forward intent, use `legacy-lofibox-product-guidance.md`.
 

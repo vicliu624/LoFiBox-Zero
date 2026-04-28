@@ -79,7 +79,25 @@ The X11 desktop-widget shell `MUST` remain chromeless without a traditional menu
 
 The application icon must be installed through the hicolor icon theme under the desktop id `io.github.vicliu624.lofibox`, including the SVG metadata icon and a product-logo PNG fallback where available.
 
-## 7. XDG Runtime Paths
+## 7. Desktop Input Method Integration
+
+The X11 desktop-widget shell must participate in the user's Debian/Linux text-input session.
+
+This means:
+
+- text-entry pages receive committed UTF-8 text rather than raw ASCII-only key bytes
+- in-progress input-method composition, when available, is represented as transient preedit projection rather than committed app state
+- X11 text input should use XIM or an equivalent input-method context instead of plain `XLookupString`
+- shell-level shortcuts such as `Super+H` are handled before text events enter the shared app router
+- the Debian package must not hard-depend on one specific input-method framework such as IBus, Fcitx5, or uim merely to launch the player
+
+The desktop integration layer may bridge system input-method output into app events.
+It must not put Fcitx, IBus, XIM, or desktop-session protocol details into shared page, SearchState, or playback code.
+
+Framebuffer/evdev device-profile input is governed by `lofibox-zero-text-input-spec.md` and `cardputer-zero-adaptation-spec.md`.
+It must not be advertised as system CJK IME support unless a separate device input-method or input-proxy design is specified.
+
+## 8. XDG Runtime Paths
 
 Runtime data must follow:
 

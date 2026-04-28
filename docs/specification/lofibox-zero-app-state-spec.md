@@ -22,6 +22,7 @@ For architecture ownership and code placement, use `project-architecture-spec.md
 For persisted versus runtime-only behavior, use `lofibox-zero-persistence-spec.md`.
 For credential references, secret storage, and runtime auth/session handling, use `lofibox-zero-credential-spec.md`.
 For scan, build, refresh, rebuild, and readiness rules of the local library index, use `lofibox-zero-library-indexing-spec.md`.
+For committed text, preedit projection, Unicode-safe editing, and input-method boundaries, use `lofibox-zero-text-input-spec.md`.
 This document defines the shared app-state contracts that sit between those higher truths and the current page implementations.
 
 ## 3. Scope
@@ -104,3 +105,4 @@ Page files must not:
 - fork separate local versions of library-index readiness truth
 - fork separate local versions of credential readiness or session validity truth
 - encode cross-page state transitions solely in page-local language when a shared app-state contract already owns that meaning
+- store raw key bytes, input-method composition internals, or runtime-shell protocol details as shared app-state truth

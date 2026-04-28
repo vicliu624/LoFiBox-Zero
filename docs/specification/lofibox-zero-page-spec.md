@@ -17,6 +17,7 @@ Use `legacy-lofibox-product-guidance.md` when deciding whether a feature belongs
 Use `lofibox-zero-media-pipeline-spec.md` when decode, playback-pipeline, or output behavior is involved.
 Use `lofibox-zero-audio-dsp-spec.md` when EQ or DSP behavior is involved.
 Use `lofibox-zero-streaming-spec.md` when remote-source or server-backed behavior is involved.
+Use `lofibox-zero-text-input-spec.md` when Search, remote-profile fields, playlist names, or any editable text behavior is involved.
 Use `project-architecture-spec.md` when deciding where code belongs architecturally.
 Use `lofibox-zero-layout-spec.md` for page geometry and template ownership.
 Use `lofibox-zero-visual-design-spec.md` for styling, color, and typography.
@@ -62,7 +63,7 @@ The following words are normative in this document:
 - `Back` `MUST` return to the previous page in the navigation stack.
 - `Confirm` `MUST` activate the current selection or the page's primary action.
 - Selection movement `MUST` be predictable and page-consistent.
-- Non-main-menu pages `MUST` expose a clear back affordance.
+- Non-main-menu pages `MUST` expose a clear back affordance through input behavior and page-local help, but the standard top bar left zone remains `F1:HELP` rather than a raw back glyph.
 
 ### 4.2 Selection And Focus Rules
 
@@ -114,7 +115,7 @@ LoFiBox Zero targets the Debian/Linux handheld keyboard layout as a product inpu
 - `UP` and `DOWN` move one row in list-like pages. `PGUP` and `PGDN` move by one viewport in list-like pages.
 - On the Main Menu, `LEFT` and `RIGHT` move one page preview; `PGUP` and `PGDN` jump by a larger page step; `HOME` resets to the first menu item.
 - Outside the Main Menu, `HOME` returns to the Main Menu. `BACKSPACE` returns to the previous page unless the current page is a text editor that owns backspace for editing.
-- Text-entry pages own printable character keys, `BACKSPACE`, and `OK` while editing. Global playback keys must not corrupt text buffers.
+- Text-entry pages own committed UTF-8 text, `BACKSPACE`, and `OK` while editing according to `lofibox-zero-text-input-spec.md`. Global playback keys must not corrupt text buffers.
 - Page-local shortcuts such as `L` for Lyrics, `Q` for Queue, `T` for sort, and `E`/`INS` for playlist editing are valid only on pages whose help modal advertises them.
 
 ## 5. Application-Level Navigation Map
@@ -128,6 +129,7 @@ The current implementation page graph is:
 - `Main Menu` -> `Now Playing`
 - `Main Menu` -> `Equalizer`
 - `Main Menu` -> `Settings`
+- any non-`Boot` page -> `Search` via global `F9`
 - `Settings` -> `Remote Setup`
 - `Remote Setup` -> `Remote Profile Settings`
 - `Remote Profile Settings` -> `Remote Field Editor`
@@ -206,7 +208,7 @@ Pages may extend this vocabulary with domain-specific events when needed, for ex
 
 Custom events should remain action-oriented and should not encode backend implementation details into the event name.
 
-### 6.2 Page Specification Index
+### 6.4 Page Specification Index
 
 The shared rules in Sections `4`, `5`, `7`, `8`, and `9` apply to every page spec below.
 
@@ -223,10 +225,13 @@ Each current implementation page has its own dedicated specification file:
 - `Compilations`: `docs/specification/current-ui-pages/compilations.md`
 - `Playlists`: `docs/specification/current-ui-pages/playlists.md`
 - `Playlist Detail`: `docs/specification/current-ui-pages/playlist-detail.md`
+- `Search`: `docs/specification/current-ui-pages/search.md`
 - `Now Playing`: `docs/specification/current-ui-pages/now-playing.md`
 - `Equalizer`: `docs/specification/current-ui-pages/equalizer.md`
 - `Settings`: `docs/specification/current-ui-pages/settings.md`
 - `Remote Setup`: `docs/specification/current-ui-pages/remote-setup.md`
+- `Remote Profile Settings`: `docs/specification/current-ui-pages/remote-profile-settings.md`
+- `Remote Field Editor`: `docs/specification/current-ui-pages/remote-field-editor.md`
 - `About`: `docs/specification/current-ui-pages/about.md`
 
 ## 7. Shared App-State Index
@@ -244,6 +249,9 @@ The current shared application-state contracts are:
 - `SettingsState`: `docs/specification/app-states/settings-state.md`
 - `NetworkState`: `docs/specification/app-states/network-state.md`
 - `MetadataServiceState`: `docs/specification/app-states/metadata-service-state.md`
+- `CredentialState`: `docs/specification/app-states/credential-state.md`
+- `LibraryIndexState`: `docs/specification/app-states/library-index-state.md`
+- `PersistenceState`: `docs/specification/app-states/persistence-state.md`
 
 Page files may project these states and trigger their events, but page files must not become the primary owner of those truths.
 
@@ -251,10 +259,9 @@ Page files may project these states and trigger their events, but page files mus
 
 The following are intentionally deferred from the current UI pages and `MUST NOT` be smuggled into page implementations without an explicit product decision and page-spec update:
 
-- search
+- advanced search filters, search history, and search ranking controls beyond the current Search page contract
 - custom playlist creation
 - queue editor
-- lyrics
 - streaming or server-management UI that has not yet been page-specified
 - online artwork lookup
 - account sync

@@ -139,7 +139,8 @@ The current visual roles are:
 
 ### Content Rules
 
-- Left zone `SHOULD` contain a back affordance on non-root pages.
+- Standard top bars `MUST` show `F1:HELP` in the left zone on every non-boot page that uses the standard top bar.
+- Back navigation belongs to keyboard behavior and page-local help; it must not replace the left-zone help label with a raw back glyph.
 - Title zone `MUST` remain visually centered.
 - Right zone `MAY` contain battery and other truthful device status.
 
@@ -239,6 +240,15 @@ The current visual roles are:
 - Branding or logo treatment `MAY` appear on the left.
 - Information rows on the right `MUST` remain readable and restrained.
 
+## 6.9 Text Input And Search Rows
+
+- Text-entry rows `MUST` visually distinguish committed text from transient preedit text.
+- Committed query text should use primary or strong secondary text depending on available space.
+- Placeholder prompts such as `TYPE...` must look inactive and must not look like search results.
+- Preedit text, when shown, should be visually adjacent to the query while remaining clearly temporary.
+- Search result source labels must use muted or secondary text and must not overpower track, album, artist, or station names.
+- Invalid or unsupported text-input states must degrade as status text rather than corrupting the visible query.
+
 ## 7. Page Family Styles
 
 ## 7.1 Root Pages
@@ -260,6 +270,10 @@ Pages:
 - `Playlists`
 - `Playlist Detail`
 - `Settings`
+- `Search`
+- `Remote Setup`
+- `Remote Profile Settings`
+- `Remote Field Editor`
 
 These pages `MUST` share a common family resemblance:
 

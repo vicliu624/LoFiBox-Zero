@@ -44,6 +44,8 @@ For current implementation progress, use `implementation-status.md`.
   Windows, pages, controls, view models, themes, and projection of product state.
 - `product shell`
   The chromeless, no-menu-bar product surface used by LoFiBox as a desktop-widget music terminal.
+- `text input`
+  The boundary that receives committed UTF-8 text and optional preedit projection from runtime shells before editable product fields such as Search queries or source-profile fields mutate app state.
 - `platform/host`
   Runtime capability adapters that expose one unified metadata, artwork, playback, logging, caching, enrichment, tag-writing, and connectivity surface to the shared app.
 - `integrated product core`
@@ -107,6 +109,9 @@ Any future visual or input validation must go through a real Linux product targe
 - `desktop` integration may translate desktop events into player commands; it must not redefine core product state.
 - Host adapters may implement `RuntimeServices` and helper/resource resolution, but they must not include concrete page implementations or the concrete `LoFiBoxApp` type.
 - Device/X11 presentation adapters may translate platform input/output into app-facing interfaces, but they must not depend on host runtime, concrete pages, or concrete app construction details.
+- Shared app code may consume logical command keys and committed UTF-8 text events, but it must not call XIM, Fcitx, IBus, Linux `evdev`, or input-method daemon APIs directly.
+- X11 presentation adapters own desktop input-method integration and must convert system IME output into committed UTF-8 text plus optional preedit projection before it reaches app state.
+- Device-profile `evdev` adapters own direct Linux `EV_KEY` translation. They may emit directly translatable committed text, but they must not claim system CJK input-method support without a separate device input-method specification.
 - `targets` may compose app runners, host runtime services, asset loaders, presenters, and command-line parsing; they must not include page implementations or own product behavior.
 - Protocol clients must not directly persist plaintext passwords, tokens, API keys, cookies, or authentication headers.
 - Runtime user data must not be written to `/usr`, `/opt`, installation directories, or the current working directory.
@@ -130,6 +135,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Integrated product core responsibilities must follow `integrated-product-core-spec.md`.
 - Track identity and fingerprint-backed enrichment responsibilities must follow `lofibox-zero-track-identity-spec.md`.
 - Shared cross-page application-state responsibilities must follow `lofibox-zero-app-state-spec.md`.
+- Text input, committed UTF-8, preedit, and system input-method responsibilities must follow `lofibox-zero-text-input-spec.md`.
 - Persistence domains, hydration, and repair behavior must follow `lofibox-zero-persistence-spec.md`.
 - Credential references, secure secret storage, and runtime session handling must follow `lofibox-zero-credential-spec.md`.
 - Library scan, index build, refresh, and rebuild behavior must follow `lofibox-zero-library-indexing-spec.md`.
@@ -185,6 +191,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Container-specific tooling must stay in scripts and documentation; it must not leak Docker concepts into shared app or device code.
 - Vendor Linux hardware wrappers, if reintroduced, must stay behind our own device-side adapter code.
 - Linux input device paths, `evdev` details, and keyboard layout translation must stay inside the device adapter layer.
+- X11 input-method contexts, Fcitx/IBus session protocols, and `evdev` key translation must stay inside runtime shell adapters; shared Search, Settings, and page code may only see logical commands, committed UTF-8 text, and optional preedit projection.
 - Future player features must be added by clarifying their responsibility first, not by introducing generic `service` or `manager` folders.
 - Do not put asynchronous enrichment, metadata/artwork/lyrics network calls, or pending-result merge logic back into `PlaybackController`.
 - Do not collapse concrete enrichment protocol clients back into `runtime_enrichment_clients.cpp`.

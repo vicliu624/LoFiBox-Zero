@@ -54,6 +54,8 @@ Other specification types serve different roles:
   EQ and DSP-domain contracts
 - `lofibox-zero-streaming-spec.md`
   Remote-source and media-server capability contracts
+- `lofibox-zero-text-input-spec.md`
+  Committed text, preedit, Unicode editing, and system input-method boundary contracts
 - `lofibox-zero-page-spec.md`
   Current UI implementation contract, not final product truth
 - `lofibox-zero-layout-spec.md`
@@ -257,6 +259,7 @@ Core interaction invariants:
 
 - every essential path is operable without pointer input
 - navigation is predictable and page-consistent
+- editable text accepts committed Unicode text through the active runtime shell without making the player own general input-method engines
 - playback adjustments feel realtime
 - source changes, EQ changes, and queue changes do not require the user to reason about backend internals
 
