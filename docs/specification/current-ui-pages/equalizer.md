@@ -47,8 +47,9 @@ Each visible band `MUST` support `-12 dB` to `+12 dB`.
 
 - Ten vertical sliders
 - Clear `+12 dB`, `0 dB`, and `-12 dB` reference labels
+- A per-band current gain label above each vertical slider
 - Band labels
-- Preset row
+- Preset row with a compact current preset selector
 
 ## 7. Event Contract
 
@@ -62,6 +63,8 @@ Each visible band `MUST` support `-12 dB` to `+12 dB`.
   - effect: increase selected band gain within allowed range
 - `EVT_NAV_DOWN`
   - effect: decrease selected band gain within allowed range
+- `EVT_CONFIRM`
+  - effect: cycle to the next built-in EQ preset and update all ten visible band gains
 - `EVT_BACK`
   - effect: return to previous page
 
@@ -71,13 +74,29 @@ Each visible band `MUST` support `-12 dB` to `+12 dB`.
 - `STATE_EQUALIZER_READY + EVT_NAV_RIGHT [guard: selected band is not last band]` -> effect: move selection right -> `STATE_EQUALIZER_READY`
 - `STATE_EQUALIZER_READY + EVT_NAV_UP [guard: selected band gain is below +12 dB]` -> effect: increase selected band gain -> `STATE_EQUALIZER_READY`
 - `STATE_EQUALIZER_READY + EVT_NAV_DOWN [guard: selected band gain is above -12 dB]` -> effect: decrease selected band gain -> `STATE_EQUALIZER_READY`
+- `STATE_EQUALIZER_READY + EVT_CONFIRM` -> effect: cycle built-in preset -> `STATE_EQUALIZER_READY`
 - `STATE_EQUALIZER_READY + EVT_BACK` -> effect: return to previous page -> previous page
 
 ## 8.1 Page-Local F1 Help
 
 - `F1` `MUST` open the `Equalizer` page's own help modal.
-- The current `Equalizer` page has no explicit shortcut rows; therefore the modal `MUST` use the empty implementation.
+- The current `Equalizer` help modal `MUST` include page-specific rows for:
+  - `LEFT/RIGHT`: select band
+  - `UP/DOWN`: adjust selected band by `1 dB`
+  - `PGUP/PGDN`: adjust selected band by `3 dB`
+  - `OK`: cycle built-in preset
+  - global playback shortcuts
+  - `HOME`: return to Main Menu
 - The modal `MUST NOT` reuse list, playback, or main-menu shortcut content.
+
+## 8.2 Visual Contract
+
+- The per-band gain labels are current values, not scale labels; they `MUST` show signed dB values such as `+3`, `0`, or `-12`.
+- The gain-label row may reduce slider height slightly, but the ten-band graph must remain the dominant page element.
+- EQ slider tracks and fills `MUST` use the app's glass/gradient visual language rather than flat opaque rectangles.
+- The selected band `MUST` combine the normal EQ value fill with a blue-tinted selection treatment.
+- Manual gain edits `MUST` mark the displayed preset as `CUSTOM`.
+- Built-in preset cycling `MUST NOT` imply full preset CRUD, import/export, or device binding on this small-screen page.
 
 ## 9. Empty State
 

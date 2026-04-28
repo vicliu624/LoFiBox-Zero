@@ -230,6 +230,8 @@ The current visual roles are:
 - Warm orange is the current EQ slider color.
 - The selected EQ slider `MUST` receive a blue-tinted selection treatment that is visually distinct from its default orange fill.
 - The `0 dB` line `MUST` be more prominent than other grid lines.
+- EQ slider tracks and fills `MUST` use the same glass/gradient language as focused rows, progress bars, and the Main Menu chrome; flat opaque rectangular bars are not acceptable current styling.
+- Each EQ slider column `MUST` show the band's current signed gain above the slider so users can read the exact value without inferring it from bar height.
 
 ## 6.8 About Card
 

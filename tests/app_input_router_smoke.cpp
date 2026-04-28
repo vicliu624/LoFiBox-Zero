@@ -39,6 +39,7 @@ public:
 
     void moveEqualizerSelection(int delta) override { eq_selection_delta += delta; }
     void adjustSelectedEqualizerBand(int delta) override { eq_band_delta += delta; }
+    void cycleEqualizerPreset(int delta) override { eq_preset_delta += delta; }
 
     void cycleSongSortModeAndClamp() override { ++cycle_sort_calls; }
     void moveSelection(int delta) override { list_delta += delta; }
@@ -73,6 +74,7 @@ public:
     int toggle_play_pause_calls{0};
     int eq_selection_delta{0};
     int eq_band_delta{0};
+    int eq_preset_delta{0};
     int cycle_sort_calls{0};
     int list_delta{0};
     int page_delta{0};
@@ -143,7 +145,8 @@ int main()
     target.page = lofibox::app::AppPage::Equalizer;
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Right));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Up));
-    if (target.eq_selection_delta != 1 || target.eq_band_delta != 1) {
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::Enter));
+    if (target.eq_selection_delta != 1 || target.eq_band_delta != 1 || target.eq_preset_delta != 1) {
         std::cerr << "Expected equalizer page controls to route.\n";
         return 1;
     }

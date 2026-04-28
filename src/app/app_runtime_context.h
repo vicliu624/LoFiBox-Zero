@@ -90,6 +90,7 @@ public:
     void togglePlayPause() override;
     void moveEqualizerSelection(int delta) override;
     void adjustSelectedEqualizerBand(int delta) override;
+    void cycleEqualizerPreset(int delta) override;
     void cycleSongSortModeAndClamp() override;
     void confirmListPage() override;
     void moveSelectionPage(int delta_pages) override;

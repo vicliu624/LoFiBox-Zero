@@ -169,6 +169,8 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
             target.adjustSelectedEqualizerBand(3);
         } else if (action == UserAction::PageDown) {
             target.adjustSelectedEqualizerBand(-3);
+        } else if (action == UserAction::Confirm) {
+            target.cycleEqualizerPreset(1);
         }
         return;
     }

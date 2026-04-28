@@ -42,6 +42,7 @@ public:
 
     virtual void moveEqualizerSelection(int delta) = 0;
     virtual void adjustSelectedEqualizerBand(int delta) = 0;
+    virtual void cycleEqualizerPreset(int delta) = 0;
 
     virtual void cycleSongSortModeAndClamp() = 0;
     virtual void moveSelection(int delta) = 0;

@@ -767,6 +767,11 @@ void AppRuntimeContext::adjustSelectedEqualizerBand(int delta)
     commandAdjustSelectedEqualizerBand(*this, delta);
 }
 
+void AppRuntimeContext::cycleEqualizerPreset(int delta)
+{
+    commandCycleEqualizerPreset(*this, delta);
+}
+
 void AppRuntimeContext::cycleSongSortModeAndClamp()
 {
     commandCycleSongSortModeAndClamp(*this);

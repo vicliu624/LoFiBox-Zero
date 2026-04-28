@@ -74,6 +74,7 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
             {"LEFT/RIGHT", "BAND"},
             {"UP/DOWN", "+/- 1DB"},
             {"PGUP/PGDN", "+/- 3DB"},
+            {"OK", "PRESET"},
             {"F2-F8", "PLAYBACK"},
             {"HOME", "MENU"},
         };

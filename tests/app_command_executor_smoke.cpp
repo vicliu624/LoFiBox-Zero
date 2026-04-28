@@ -102,6 +102,17 @@ int main()
         std::cerr << "Expected EQ selected band to clamp to last band.\n";
         return 1;
     }
+    target.eq.preset_name = "FLAT";
+    lofibox::app::commandCycleEqualizerPreset(target, 1);
+    if (target.eq.preset_name != "BASS BOOST" || target.eq.bands[0] != 6 || target.eq.bands[9] != -2) {
+        std::cerr << "Expected EQ preset cycling to apply the next built-in preset.\n";
+        return 1;
+    }
+    lofibox::app::commandAdjustSelectedEqualizerBand(target, 1);
+    if (target.eq.preset_name != "CUSTOM") {
+        std::cerr << "Expected manual EQ adjustment to mark the preset as CUSTOM.\n";
+        return 1;
+    }
 
     auto& model = target.library.mutableModel();
     model.tracks.push_back(lofibox::app::TrackRecord{7, std::filesystem::path{"song.mp3"}, "Song", "Artist", "Album"});

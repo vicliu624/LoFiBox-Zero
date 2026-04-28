@@ -4,7 +4,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cctype>
 #include <cstddef>
+#include <string>
+#include <string_view>
+
+#include "audio/dsp/dsp_chain.h"
 
 namespace lofibox::app {
 namespace {
@@ -21,6 +27,15 @@ constexpr int kEqMinGainDb = -12;
 constexpr int kEqMaxGainDb = 12;
 constexpr int kSettingsRemoteSetupIndex = 5;
 constexpr int kSettingsAboutIndex = 6;
+
+std::string upperAscii(std::string_view text)
+{
+    std::string result{text};
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    return result;
+}
 
 void clampListSelection(AppCommandTarget& target)
 {
@@ -169,6 +184,33 @@ void commandAdjustSelectedEqualizerBand(AppCommandTarget& target, int delta)
     auto& eq = target.eqState();
     auto& band = eq.bands[static_cast<std::size_t>(eq.selected_band)];
     band = std::clamp(band + delta, kEqMinGainDb, kEqMaxGainDb);
+    eq.preset_name = "CUSTOM";
+}
+
+void commandCycleEqualizerPreset(AppCommandTarget& target, int delta)
+{
+    auto presets = audio::dsp::builtinEqPresets();
+    if (presets.empty()) {
+        return;
+    }
+
+    auto& eq = target.eqState();
+    int current = -1;
+    const auto current_name = upperAscii(eq.preset_name);
+    for (int index = 0; index < static_cast<int>(presets.size()); ++index) {
+        if (upperAscii(presets[static_cast<std::size_t>(index)].name) == current_name) {
+            current = index;
+            break;
+        }
+    }
+
+    const int count = static_cast<int>(presets.size());
+    const int next = ((current + delta) % count + count) % count;
+    const auto& preset = presets[static_cast<std::size_t>(next)];
+    for (std::size_t index = 0; index < eq.bands.size() && index < preset.bands.size(); ++index) {
+        eq.bands[index] = std::clamp(static_cast<int>(std::round(preset.bands[index].gain_db)), kEqMinGainDb, kEqMaxGainDb);
+    }
+    eq.preset_name = upperAscii(preset.name);
 }
 
 void commandCycleSongSortModeAndClamp(AppCommandTarget& target)

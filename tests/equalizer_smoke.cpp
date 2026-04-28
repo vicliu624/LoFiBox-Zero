@@ -7,6 +7,29 @@
 #include "core/canvas.h"
 #include "core/display_profile.h"
 
+namespace {
+
+int changedPixels(
+    const lofibox::core::Canvas& before,
+    const lofibox::core::Canvas& after,
+    int x,
+    int y,
+    int width,
+    int height)
+{
+    int changed = 0;
+    for (int row = y; row < y + height; ++row) {
+        for (int col = x; col < x + width; ++col) {
+            if (before.pixel(col, row) != after.pixel(col, row)) {
+                ++changed;
+            }
+        }
+    }
+    return changed;
+}
+
+} // namespace
+
 int main()
 {
     lofibox::app::LoFiBoxApp app{};
@@ -46,13 +69,23 @@ int main()
         return 1;
     }
 
+    lofibox::core::Canvas preset_before{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
+    lofibox::core::Canvas preset_after{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
+    app.render(preset_before);
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
+    app.render(preset_after);
+    if (changedPixels(preset_before, preset_after, 76, 30, 230, 128) < 12) {
+        std::cerr << "Expected Equalizer OK to cycle preset and update gain labels/sliders.\n";
+        return 1;
+    }
+
     lofibox::core::Canvas before{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
     lofibox::core::Canvas after{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
     app.render(before);
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F1, "F1", '\0'});
     app.render(after);
     if (before.pixel(30, 30) == after.pixel(30, 30) || before.pixel(160, 82) == after.pixel(160, 82)) {
-        std::cerr << "Expected Equalizer F1 to render its page-owned empty help modal.\n";
+        std::cerr << "Expected Equalizer F1 to render its page-owned shortcut help modal.\n";
         return 1;
     }
 

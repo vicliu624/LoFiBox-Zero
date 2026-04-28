@@ -247,9 +247,10 @@ Five evenly distributed slots inside `transport-row`:
 - `topbar`: common top bar
 - `eq-panel`: `x=6, y=24, w=308, h=140`
 - `left-label-column`: `x=10, y=34, w=42, h=86`
-- `db-scale-column`: `x=54, y=34, w=24, h=86`
-- `slider-graph-region`: `x=82, y=30, w=222, h=86`
-- `band-label-row`: `x=82, y=118, w=222, h=16`
+- `db-scale-column`: `x=50, y=44, w=24, h=56`
+- `band-gain-row`: `x=78, y=30, w=222, h=12`
+- `slider-graph-region`: `x=78, y=44, w=222, h=56`
+- `band-label-row`: `x=78, y=118, w=222, h=16`
 - `preset-strip`: `x=8, y=142, w=304, h=16`
 
 ### Slider Geometry
@@ -257,13 +258,14 @@ Five evenly distributed slots inside `transport-row`:
 - visible slider count: `10`
 - each slider column width: `18`
 - inter-column gap: `4`
-- slider body height: `64`
+- slider body height: `54`
 - slider body vertical center line aligned to `0 dB`
 
 ### Rules
 
 - The EQ graph region `MUST` visually dominate the page.
 - Left labels and dB labels `MUST` remain outside the slider area.
+- The per-band gain row `MUST` show each band's current signed gain value above its slider column.
 - Preset strip `MUST` remain below the graph region.
 - The layout `MUST NOT` collapse into a list-page presentation.
 

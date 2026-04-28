@@ -53,6 +53,7 @@ void commandCycleRepeatMode(AppCommandTarget& target);
 void commandTogglePlayPause(AppCommandTarget& target);
 void commandMoveEqualizerSelection(AppCommandTarget& target, int delta);
 void commandAdjustSelectedEqualizerBand(AppCommandTarget& target, int delta);
+void commandCycleEqualizerPreset(AppCommandTarget& target, int delta);
 void commandCycleSongSortModeAndClamp(AppCommandTarget& target);
 void commandMoveSelection(AppCommandTarget& target, int delta);
 void commandMoveSelectionPage(AppCommandTarget& target, int delta_pages);
