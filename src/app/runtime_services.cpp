@@ -87,6 +87,7 @@ class NullRemoteProfileStore final : public RemoteProfileStore {
 public:
     [[nodiscard]] std::vector<RemoteServerProfile> loadProfiles() const override { return {}; }
     bool saveProfiles(const std::vector<RemoteServerProfile>&) const override { return false; }
+    bool deleteCredentials(const ::lofibox::security::CredentialRef&) const override { return false; }
 };
 
 template <typename T>

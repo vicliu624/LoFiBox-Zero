@@ -16,6 +16,7 @@ public:
     [[nodiscard]] std::vector<app::RemoteServerProfile> loadProfiles() const override;
     bool saveProfiles(const std::vector<app::RemoteServerProfile>& profiles) const override;
     bool saveCredentials(const app::RemoteServerProfile& profile) const override;
+    bool deleteCredentials(const ::lofibox::security::CredentialRef& credential_ref) const override;
     [[nodiscard]] const std::filesystem::path& profilePath() const noexcept;
 
 private:

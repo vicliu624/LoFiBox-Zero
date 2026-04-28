@@ -72,6 +72,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath.StartsWith("src/cli/", [System.StringComparison]::Ordinal)) {
+            if ($line -match '\bAppRuntimeContext\b|ui::|pages::|playbackCommands\(\)\.(pause|resume|toggle|step|start|setDspProfile)|queueCommands\(\)\.(step|rebuild|set)') {
+                Add-Violation $violations $repoPath $lineNumber "direct CLI boundary" "First-stage direct CLI must use application services for durable commands and must not touch GUI runtime, UI pages, or live playback/queue commands"
+            }
+        }
+
         if ($repoPath.StartsWith("src/playback/", [System.StringComparison]::Ordinal)) {
             if ($line -match '#\s*include\s+"application/') {
                 Add-Violation $violations $repoPath $lineNumber "playback internal boundary" "Playback internals must not depend on application command/query services"
@@ -187,6 +193,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         if ($repoPath.StartsWith("src/application/", [System.StringComparison]::Ordinal)) {
             if (Test-AnyPrefix $include @("platform/", "targets/", "ui/pages/")) {
                 Add-Violation $violations $repoPath $lineNumber $include "application command/query services must not include concrete platform adapters, targets, or UI pages"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/cli/", [System.StringComparison]::Ordinal)) {
+            if (Test-AnyPrefix $include @("platform/", "targets/", "ui/", "app/app_runtime_context.h", "playback/playback_controller.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "direct CLI parsing/formatting must depend on application services, not concrete platform adapters, targets, GUI runtime, UI, or playback internals"
             }
         }
 

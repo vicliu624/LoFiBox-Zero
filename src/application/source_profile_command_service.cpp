@@ -31,15 +31,6 @@ bool SourceProfileCommandService::persistProfiles(std::vector<app::RemoteServerP
     return services_.remote.remote_profile_store->saveProfiles(profiles);
 }
 
-bool SourceProfileCommandService::saveCredentials(app::RemoteServerProfile& profile, std::size_t profile_count) const
-{
-    ensureCredentialRef(profile, profile_count);
-    if (!supportsCredentials(profile.kind)) {
-        return true;
-    }
-    return services_.remote.remote_profile_store->saveCredentials(profile);
-}
-
 app::RemoteServerProfile SourceProfileCommandService::createProfile(app::RemoteServerKind kind, std::size_t existing_profile_count) const
 {
     app::RemoteServerProfile profile{};
@@ -98,13 +89,9 @@ bool SourceProfileCommandService::updateTextField(app::RemoteServerProfile& prof
         profile.username = std::string{value};
         return true;
     case SourceProfileTextField::Password:
-        ensureCredentialRef(profile, profile_count);
-        profile.password = std::string{value};
-        return saveCredentials(profile, profile_count);
     case SourceProfileTextField::ApiToken:
         ensureCredentialRef(profile, profile_count);
-        profile.api_token = std::string{value};
-        return saveCredentials(profile, profile_count);
+        return false;
     }
     return false;
 }
@@ -210,9 +197,7 @@ std::string SourceProfileCommandService::readiness(const app::RemoteServerProfil
     if (profile.username.empty()) {
         return "NEEDS USER";
     }
-    if (profile.password.empty()
-        && profile.api_token.empty()
-        && profile.credential_ref.id.empty()) {
+    if (profile.password.empty() && profile.api_token.empty()) {
         return "NEEDS SECRET";
     }
     return "READY";

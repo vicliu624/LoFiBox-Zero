@@ -104,7 +104,7 @@ This update records specification and implementation convergence:
 
 - `application-command-boundary-spec.md` now defines an application command/query boundary for product evolvability, not for CLI alone.
 - The boundary separates product commands and queries from GUI page commands, selected-row confirmation, focused-field editing, and runtime-shell details.
-- GUI routing, desktop integration, future CLI, automation clients, and tests are all command consumers that must converge through application services instead of each inventing a route into controllers, `AppRuntimeContext`, UI pages, or runtime providers.
+- GUI routing, desktop integration, direct CLI, future runtime CLI, automation clients, and tests are all command consumers that must converge through application services instead of each inventing a route into controllers, `AppRuntimeContext`, UI pages, or runtime providers.
 - `AppRuntimeContext` remains the current GUI runtime composition shell under migration pressure; it is not the long-term public product command API.
 - `RuntimeServices` remains a grouped capability registry, not the product command/query service layer.
 - Direct versus runtime command ownership is now specified as a state-ownership distinction: durable configuration/library/cache/diagnostic work may be direct, while live playback, active queue, current output, and in-memory runtime truth must target the running runtime once external runtime commands exist.
@@ -115,3 +115,18 @@ This update records specification and implementation convergence:
 - `LibraryController` keeps GUI browse context and repository access while reusable query, mutation, and open-action services live under `src/application`.
 - Architecture and implementation-placement gates now enforce the new application boundary placement and reject controller exposure from GUI command routing.
 - No CLI feature is implemented by this status entry.
+
+## 2026-04-28 Remote Browse / Credential / Direct CLI Boundary Update
+
+This update records specification and implementation convergence for the next boundary pass:
+
+- `RemoteBrowseQueryService` now lives under `src/application` and owns remote root/child browsing, source-scoped search, playable-node normalization, remote stream resolution, remote directory cache reads/writes, recent-browse cache writes, local read-only remote track fact caching, provider capability facts, degraded-state facts, source diagnostics, and stream diagnostics.
+- `AppRuntimeContext` still owns GUI page state such as selected remote profile, parent, node, and stream, but Remote Browse, Search remote results, Server Diagnostics, and Stream Detail now consume structured application-service query results before projecting rows.
+- Server diagnostics and stream details now have reusable structured truth before UI projection, including source label, provider kind/family, connection, credential reference status, TLS status, permission, token redaction status, stream URL redaction, buffer state, recovery action, quality preference, bitrate, codec, sample rate, channel count, live/seekable state, and provider availability.
+- `CredentialCommandService` now owns credential status, secret set, and secret delete. `SourceProfileCommandService` no longer persists password or API token values through text-field updates; it keeps profile lifecycle, profile field mutation, readiness, credential-reference attachment, TLS toggles, permission labels, persistence, and probe.
+- `CacheCommandService` and `RuntimeDiagnosticService` now provide application-level cache and doctor facts for direct command consumers.
+- `AppServiceHost` now composes direct-command application services over the current app/controller/runtime objects so `src/cli` and tests do not treat `AppRuntimeContext`, targets, controllers, or runtime provider groups as their public command boundary.
+- `src/cli` now contains the first direct-only command dispatcher for durable commands: source list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor.
+- The direct CLI intentionally does not implement live playback, active queue, now-playing, seek, previous/next, pause/resume, or active EQ control. Those remain runtime-command work and still require a future runtime command client/server before external command consumers may affect live runtime state.
+- Architecture and implementation-placement gates now cover `src/application/remote_browse_query_service.*`, `credential_command_service.*`, `cache_command_service.*`, `runtime_diagnostic_service.*`, and `src/cli/direct_cli.*`.
+- The current arm64 Debian package was built and installed over the existing same-version package on `vicliu@192.168.50.92`; package-time CTest passed 60/60, `dpkg -i` replaced `lofibox (0.1.0-1) over (0.1.0-1)`, the installed `/usr/bin/lofibox` hash matched the package build artifact, GUI startup stayed alive until the timeout killed it, and installed direct CLI checks passed for source list, cache status, doctor, local library status/query, isolated source/credential/cache writes, and probe of every configured remote source.

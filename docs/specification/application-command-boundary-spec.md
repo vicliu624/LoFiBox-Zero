@@ -10,9 +10,9 @@ It exists to keep product commands from being trapped inside the current GUI run
 Without this boundary, every new consumer will be tempted to borrow UI flows, call controllers directly, or reach into runtime providers in its own way.
 That would make the project harder to evolve, harder to test, and easier to drift.
 
-CLI is one future beneficiary of this refactor.
+CLI is one beneficiary of this refactor.
 It is not the reason the boundary exists.
-The same boundary must serve GUI routing, desktop integration, future runtime IPC, future automation clients, and internal tests.
+The same boundary must serve GUI routing, desktop integration, the current direct CLI, future runtime IPC, future automation clients, and internal tests.
 
 This document is about long-term command/query ownership.
 It is not the CLI command tree.
@@ -112,10 +112,16 @@ The GUI path should become:
 InputEvent -> GuiCommandRouter -> ApplicationService -> product/domain/runtime services
 ```
 
-The CLI path, when added, should become:
+The current direct CLI path is:
 
 ```text
-argv -> CliDispatcher -> ApplicationService or RuntimeCommandClient
+argv -> DirectCliDispatcher -> AppServiceHost/AppServiceRegistry -> ApplicationService
+```
+
+Future runtime CLI commands must become:
+
+```text
+argv -> CliDispatcher -> RuntimeCommandClient -> running RuntimeCommandServer -> ApplicationService
 ```
 
 The desktop integration path should become:
@@ -310,7 +316,7 @@ It must redact sensitive data and must not become a backdoor to provider interna
 
 ## 7. Direct Commands And Runtime Commands
 
-Future non-GUI command consumers must split command execution into two modes.
+Every non-GUI command consumer must split command execution into two modes.
 This distinction is about state ownership, not about terminal syntax.
 
 ### 7.1 Direct Commands
@@ -421,7 +427,7 @@ Command clients must not directly fish providers out of `RuntimeServices`.
 
 `src/targets` must remain thin.
 
-Future target entry points may:
+Target entry points may:
 
 - parse high-level startup mode
 - construct host runtime/service registry
@@ -430,12 +436,13 @@ Future target entry points may:
 
 They must not contain product command implementations.
 
-### 8.6 Future Source Placement
+### 8.6 Source Placement
 
-When code is introduced for this boundary, the preferred semantic source placement is:
+Application command/query boundary source placement is:
 
 ```text
 src/application/
+  app_service_host.*
   app_service_registry.*
   playback_command_service.*
   queue_command_service.*
@@ -452,7 +459,7 @@ src/application/
   runtime_diagnostic_service.*
 ```
 
-`src/cli/` may exist later for terminal parsing and formatting only.
+`src/cli/` exists for terminal parsing, dispatch, and formatting only.
 `src/cli/` must depend on `src/application/`, not on `src/app/AppRuntimeContext`, UI pages, or provider implementations.
 
 No empty aspirational source directory should be created before it has real files and implementation placement checks.
@@ -481,23 +488,26 @@ Runtime commands that modify live state must go through the runtime command serv
 Single-instance locking is not a substitute for command-mode design.
 The lock prevents multiple live runtime owners; it does not authorize a second CLI process to mutate in-memory playback state directly.
 
-## 11. Relationship To Existing Current Code
+## 11. Relationship To Current Code
 
-The current code already contains useful pieces, but they are not yet the application command boundary:
+The current code now contains a first application command/query boundary, with remaining migration pressure still visible in GUI runtime composition:
 
 - `AppRuntimeContext` is a GUI runtime shell under migration pressure, not a public command API.
 - `app_command_executor` owns page command execution semantics, not general product command semantics.
-- `library_query_service`, `library_mutation_service`, and `library_open_action_resolver` are partial precursors that should be evaluated during migration.
+- `AppServiceRegistry` groups current application services for GUI routing, direct CLI, and tests.
+- `AppServiceHost` composes the current app/controller/runtime objects needed by direct command consumers without making targets or `src/cli` construct product internals directly.
+- `playback_command_service`, `queue_command_service`, `playback_status_query_service`, `library_query_service`, `library_mutation_service`, `library_open_action_service`, `source_profile_command_service`, `remote_browse_query_service`, `credential_command_service`, `cache_command_service`, and `runtime_diagnostic_service` are current service-family implementations.
 - `RuntimeServices` groups capabilities but is not an application service registry.
-- `targets/cli_options.cpp` is startup-option handling and positional-open support, not a reusable product command surface.
+- `src/cli/direct_cli.*` is the current direct-only terminal adapter for durable source, credential, library, cache, and doctor commands.
+- `targets/cli_options.cpp` remains startup-option handling and positional-open support, not the reusable product command surface.
 
 Future refactors must preserve working behavior while moving product commands behind application services.
 
 ## 12. Required Machine Gates
 
-The architecture and implementation-placement checks should grow as this boundary becomes code.
+The architecture and implementation-placement checks must grow as this boundary becomes code.
 
-They should eventually reject:
+They must reject current and future drift such as:
 
 - `src/cli` including UI pages or `AppRuntimeContext`
 - `src/targets` owning command implementations
@@ -508,15 +518,27 @@ They should eventually reject:
 - direct external commands mutating live playback or active queue state without a runtime command client
 - automation or desktop adapters mutating live playback or active queue state without a runtime command path
 
-The first implementation step after this specification should update checks only when corresponding source files exist.
+Implementation steps after this specification must update checks only when corresponding source files exist.
 Checks must not force empty aspirational directories.
 
 ## 13. AI Constraints For Future Work
 
-- Do not implement new external command surfaces before the application command/query boundary exists.
+- Do not implement new external command surfaces outside the application command/query boundary.
 - Do not treat page names, row indexes, or field-edit states as external-facing product objects.
 - Do not make `AppRuntimeContext` a convenient public API for product commands.
 - Do not expose controllers as the stable external command boundary.
 - Do not create a `src/cli` command tree that directly calls runtime providers.
 - Do not add a runtime IPC system until direct versus runtime command semantics are explicitly selected for the command family being implemented.
 - If a future requirement changes what is direct versus runtime, update this specification before changing command code.
+
+## 14. 2026-04-28 Remote / Credential / Direct CLI Boundary Regression
+
+This update clarifies and records the next boundary step after the first application-service pass.
+
+- `RemoteBrowseQueryService` is the product-facing owner for remote catalog queries, remote source search, playable-node normalization, remote stream resolution, remote directory cache use, recent-browse cache updates, local read-only remote track fact caching, provider capability facts, degraded-state facts, source diagnostics, and stream diagnostics.
+- GUI `RemoteBrowse`, `ServerDiagnostics`, `StreamDetail`, and Search flows may keep page-local selected profile, selected parent, selected node, and selected stream state, but they must consume structured remote query results and project them into rows. They must not call remote catalog providers or stream resolvers directly.
+- Server diagnostics and stream detail truth are structured application query results before they become UI rows or terminal lines. The reusable truth includes source identity, provider family, connection status, credential reference status, TLS policy, permission, token redaction status, resolved URL redaction, buffer state, recovery action, quality preference, bitrate, codec, sample rate, channel count, live/seekable flags, and provider capability facts.
+- `CredentialCommandService` owns secret set/status/delete behavior. `SourceProfileCommandService` owns profile lifecycle, profile fields, credential-reference attachment, readiness, capability labels, permission labels, TLS toggles, persistence, and probe. Source-profile text editing must not write passwords or API tokens directly.
+- `AppServiceHost` is the direct-command composition helper. It exists so direct CLI and tests can build application services without treating `AppRuntimeContext`, targets, controllers, or runtime provider groups as their public command boundary.
+- `src/cli` now exists only for direct durable commands. It parses and formats terminal commands, creates the existing service registry, and calls application services. It does not control live playback, active queue, current output, GUI page state, UI pages, runtime IPC, concrete platform adapters, or provider internals.
+- The first direct CLI stage is limited to source profile list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor. Live playback, active queue, active EQ, now-playing, seek, next/previous, pause/resume, and live runtime status remain runtime-command work and require a future runtime command client/server before external CLI control is allowed.

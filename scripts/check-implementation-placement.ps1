@@ -70,6 +70,11 @@ Assert-PathExists "src/application/library_query_service.cpp" "Library query ser
 Assert-PathExists "src/application/library_mutation_service.cpp" "Library mutation service must live under src/application."
 Assert-PathExists "src/application/library_open_action_service.cpp" "Library open-action service must live under src/application."
 Assert-PathExists "src/application/source_profile_command_service.cpp" "Source profile command service must live under src/application."
+Assert-PathExists "src/application/remote_browse_query_service.cpp" "Remote browse query service must live under src/application."
+Assert-PathExists "src/application/credential_command_service.cpp" "Credential command service must live under src/application."
+Assert-PathExists "src/application/cache_command_service.cpp" "Cache command service must live under src/application."
+Assert-PathExists "src/application/runtime_diagnostic_service.cpp" "Runtime diagnostic service must live under src/application."
+Assert-PathExists "src/cli/direct_cli.cpp" "Direct CLI dispatcher must live under src/cli."
 
 Assert-PathExists "src/audio/decoder/audio_decoder_contract.h" "Audio decoder boundary must live under src/audio/decoder."
 Assert-PathExists "src/audio/output/audio_output_contract.h" "Audio output boundary must live under src/audio/output."

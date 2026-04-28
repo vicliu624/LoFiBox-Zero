@@ -39,7 +39,6 @@ public:
 
     [[nodiscard]] std::vector<app::RemoteServerProfile> loadProfiles() const;
     [[nodiscard]] bool persistProfiles(std::vector<app::RemoteServerProfile>& profiles) const;
-    [[nodiscard]] bool saveCredentials(app::RemoteServerProfile& profile, std::size_t profile_count) const;
 
     [[nodiscard]] app::RemoteServerProfile createProfile(app::RemoteServerKind kind, std::size_t existing_profile_count) const;
     [[nodiscard]] std::size_t ensureProfileForKind(std::vector<app::RemoteServerProfile>& profiles, app::RemoteServerKind kind) const;

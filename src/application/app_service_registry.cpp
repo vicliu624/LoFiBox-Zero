@@ -32,7 +32,7 @@ LibraryQueryService AppServiceRegistry::libraryQueries() const noexcept
 
 LibraryMutationService AppServiceRegistry::libraryMutations() const noexcept
 {
-    return LibraryMutationService{controllers_.library};
+    return LibraryMutationService{controllers_.library, runtime_services_};
 }
 
 LibraryOpenActionService AppServiceRegistry::libraryOpenActions() const noexcept
@@ -43,6 +43,26 @@ LibraryOpenActionService AppServiceRegistry::libraryOpenActions() const noexcept
 SourceProfileCommandService AppServiceRegistry::sourceProfiles() const noexcept
 {
     return SourceProfileCommandService{runtime_services_};
+}
+
+RemoteBrowseQueryService AppServiceRegistry::remoteBrowseQueries() const noexcept
+{
+    return RemoteBrowseQueryService{runtime_services_};
+}
+
+CredentialCommandService AppServiceRegistry::credentials() const noexcept
+{
+    return CredentialCommandService{runtime_services_};
+}
+
+CacheCommandService AppServiceRegistry::cacheCommands() const noexcept
+{
+    return CacheCommandService{runtime_services_};
+}
+
+RuntimeDiagnosticService AppServiceRegistry::diagnostics() const noexcept
+{
+    return RuntimeDiagnosticService{runtime_services_};
 }
 
 } // namespace lofibox::application

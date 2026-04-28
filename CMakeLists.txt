@@ -49,12 +49,16 @@ add_library(lofibox_zero_core STATIC
     src/app/app_renderer.cpp
     src/app/app_runtime_context.cpp
     src/application/app_service_registry.cpp
+    src/application/cache_command_service.cpp
+    src/application/credential_command_service.cpp
     src/application/library_mutation_service.cpp
     src/application/library_open_action_service.cpp
     src/application/library_query_service.cpp
     src/application/playback_command_service.cpp
     src/application/playback_status_query_service.cpp
     src/application/queue_command_service.cpp
+    src/application/remote_browse_query_service.cpp
+    src/application/runtime_diagnostic_service.cpp
     src/application/source_profile_command_service.cpp
     src/app/library_controller.cpp
     src/app/library_navigation_service.cpp
@@ -173,11 +177,13 @@ else()
 endif()
 
 add_library(lofibox_zero_target_cli STATIC
+    src/cli/direct_cli.cpp
     src/targets/cli_options.cpp
 )
 target_include_directories(lofibox_zero_target_cli PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(lofibox_zero_target_cli PUBLIC cxx_std_20)
 target_compile_definitions(lofibox_zero_target_cli PUBLIC LOFIBOX_VERSION=\"${PROJECT_VERSION}\")
+target_link_libraries(lofibox_zero_target_cli PUBLIC lofibox_zero_core)
 if(MSVC)
     target_compile_options(lofibox_zero_target_cli PRIVATE /W4 /permissive- /FS)
 else()
@@ -305,6 +311,14 @@ if(BUILD_TESTING)
     add_executable(lofibox_application_command_boundary_smoke tests/application_command_boundary_smoke.cpp)
     target_link_libraries(lofibox_application_command_boundary_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_application_command_boundary_smoke COMMAND lofibox_application_command_boundary_smoke)
+
+    add_executable(lofibox_remote_browse_query_service_smoke tests/remote_browse_query_service_smoke.cpp)
+    target_link_libraries(lofibox_remote_browse_query_service_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_remote_browse_query_service_smoke COMMAND lofibox_remote_browse_query_service_smoke)
+
+    add_executable(lofibox_direct_cli_smoke tests/direct_cli_smoke.cpp)
+    target_link_libraries(lofibox_direct_cli_smoke PRIVATE lofibox_zero_target_cli)
+    add_test(NAME lofibox_direct_cli_smoke COMMAND lofibox_direct_cli_smoke)
 
     add_executable(lofibox_app_input_router_smoke tests/app_input_router_smoke.cpp)
     target_link_libraries(lofibox_app_input_router_smoke PRIVATE lofibox_zero_core)

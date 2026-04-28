@@ -55,6 +55,12 @@ int main()
     assert(credential_content.find("secret/home-nav") != std::string::npos);
     assert(credential_content.find("must-not-persist-token") != std::string::npos);
 
+    assert(store.deleteCredentials(profile.credential_ref));
+    const auto loaded_after_delete = store.loadProfiles();
+    assert(loaded_after_delete.size() == 1U);
+    assert(loaded_after_delete.front().password.empty());
+    assert(loaded_after_delete.front().api_token.empty());
+
     std::filesystem::remove_all(root, ec);
     return 0;
 }

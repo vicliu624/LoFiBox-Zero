@@ -20,6 +20,11 @@ public:
         (void)profile;
         return false;
     }
+    virtual bool deleteCredentials(const ::lofibox::security::CredentialRef& credential_ref) const
+    {
+        (void)credential_ref;
+        return false;
+    }
 };
 
 [[nodiscard]] std::string remoteServerKindToString(RemoteServerKind kind);

@@ -85,6 +85,7 @@ public:
 
     [[nodiscard]] CacheUsage usage() const;
     std::size_t collectGarbage();
+    std::size_t clearAll();
 
 private:
     [[nodiscard]] std::filesystem::path bucketPath(CacheBucket bucket) const;

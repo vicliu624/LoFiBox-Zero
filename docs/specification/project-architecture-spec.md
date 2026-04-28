@@ -19,7 +19,7 @@ For current implementation progress, use `implementation-status.md`.
 - `app`
   Product-facing orchestration and view-model behavior that survives platform changes.
 - `application command boundary`
-  Product command and query services that preserve product evolvability across GUI, desktop integration, future CLI, automation clients, and tests. It translates explicit product actions into playback, queue, library, source, remote, metadata, EQ, credential, cache, and diagnostic behavior without depending on page selection state or a particular runtime shell.
+  Product command and query services that preserve product evolvability across GUI, desktop integration, the current direct CLI, future runtime command clients, automation clients, and tests. It translates explicit product actions into playback, queue, library, source, remote, metadata, EQ, credential, cache, and diagnostic behavior without depending on page selection state or a particular runtime shell.
 - `playback`
   Playback lifecycle, playback session, queue, seek, gapless, crossfade, and playback-mode semantics.
 - `audio`
@@ -59,7 +59,7 @@ For current implementation progress, use `implementation-status.md`.
 - `targets`
   Thin entry points that bind one platform runtime to the shared app.
 - `cli`
-  Future terminal parsing and formatting adapters. CLI code is not product command truth; it must dispatch into the application command boundary or into a runtime command client.
+  Terminal parsing, dispatch, and formatting adapters. CLI code is not product command truth; the current first-stage direct CLI must dispatch into the application command boundary, and future live-state commands must dispatch into a runtime command client.
 - `container tooling`
   Reproducible Linux build/run environment. It is a delivery and validation shell, not a product behavior layer.
 - `process instance lock`
@@ -114,7 +114,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Host adapters may implement `RuntimeServices` and helper/resource resolution, but they must not include concrete page implementations or the concrete `LoFiBoxApp` type.
 - Device/X11 presentation adapters may translate platform input/output into app-facing interfaces, but they must not depend on host runtime, concrete pages, or concrete app construction details.
 - Shared app code may consume logical command keys and committed UTF-8 text events, but it must not call XIM, Fcitx, IBus, Linux `evdev`, or input-method daemon APIs directly.
-- GUI, desktop integration, future CLI, automation clients, and tests must converge through the application command/query boundary defined in `application-command-boundary-spec.md`; they must not each drill into controllers, `AppRuntimeContext`, UI pages, or runtime providers independently.
+- GUI, desktop integration, direct CLI, future runtime CLI, automation clients, and tests must converge through the application command/query boundary defined in `application-command-boundary-spec.md`; they must not each drill into controllers, `AppRuntimeContext`, UI pages, or runtime providers independently.
 - Page commands and product commands are distinct. Page-level confirm, selection, field-edit, and help behavior belongs to GUI routing. Product commands such as play, queue mutation, library scan, source profile mutation, remote browse, EQ update, credential mutation, cache command, and diagnostics belong behind application services.
 - `AppRuntimeContext` is not a stable public command API. It may compose GUI runtime state, services, lifecycle, input routing, rendering, and page navigation, but product commands intended for GUI/desktop/CLI/automation/test reuse must move behind application services.
 - `RuntimeServices` is a capability registry, not an application command surface. Command clients must not select metadata, playback, remote, cache, credential, or protocol providers directly.
@@ -145,7 +145,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Track identity and fingerprint-backed enrichment responsibilities must follow `lofibox-zero-track-identity-spec.md`.
 - Shared cross-page application-state responsibilities must follow `lofibox-zero-app-state-spec.md`.
 - Text input, committed UTF-8, preedit, and system input-method responsibilities must follow `lofibox-zero-text-input-spec.md`.
-- Product command/query responsibilities shared by GUI, desktop integration, future CLI, automation clients, and tests must follow `application-command-boundary-spec.md`.
+- Product command/query responsibilities shared by GUI, desktop integration, direct CLI, future runtime CLI, automation clients, and tests must follow `application-command-boundary-spec.md`.
 - Persistence domains, hydration, and repair behavior must follow `lofibox-zero-persistence-spec.md`.
 - Credential references, secure secret storage, and runtime session handling must follow `lofibox-zero-credential-spec.md`.
 - Library scan, index build, refresh, and rebuild behavior must follow `lofibox-zero-library-indexing-spec.md`.
@@ -176,8 +176,12 @@ Any future visual or input validation must go through a real Linux product targe
 - `src/app/app_lifecycle.*` owns application tick ordering: runtime status refresh, media-library loading, boot-page transition, and playback update; `LoFiBoxApp` delegates `update()` through a narrow lifecycle target interface.
 - `src/app/app_runtime_context.*` owns runtime state, runtime services, controllers, and the target-interface implementations used by input routing, render routing, lifecycle, and command execution; `LoFiBoxApp` must remain a thin public facade and must not directly include app state, controllers, page model, render router, input router, lifecycle, or command executor headers.
 - `src/app/app_runtime_context.*` is a current GUI runtime composition shell, not the long-term owner of reusable product command semantics. As application services are introduced, product commands must move out of page-specific `AppRuntimeContext` methods and into the application command/query boundary.
-- Future `src/application` code owns application command/query services and the service registry described in `application-command-boundary-spec.md`. It must not include concrete platform adapters, UI pages, or target entry points.
-- Future `src/cli` code owns terminal argument parsing, dispatch, and text/JSON output formatting only. It must depend on application services or a runtime command client, not on `AppRuntimeContext`, UI pages, controllers, or provider implementations.
+- `src/application` owns application command/query services and the service registry described in `application-command-boundary-spec.md`. It must not include concrete platform adapters, UI pages, or target entry points.
+- `src/application/app_service_host.*` owns direct-command service composition over current app/controller/runtime objects so terminal adapters and tests do not construct controllers, runtime providers, or `AppRuntimeContext` as public command APIs.
+- `src/application/remote_browse_query_service.*` owns remote browse, remote search, playable-node normalization, remote stream resolution, remote directory cache use, recent-browse cache updates, local remote fact cache writes, provider capability facts, degraded-state facts, source diagnostics, and stream diagnostics. GUI code may project those facts, but it must not call remote catalog providers or stream resolvers directly.
+- `src/application/credential_command_service.*` owns secret set/status/delete behavior. Source profile code may attach or rotate credential references, but it must not write password or token payloads.
+- `src/application/cache_command_service.*` and `src/application/runtime_diagnostic_service.*` own cache and diagnostic direct-command facts. Terminal output, UI rows, and automation payloads must be projections over these structured results.
+- `src/cli` owns terminal argument parsing, dispatch, and text output formatting only. The current first-stage direct CLI may dispatch durable source, credential, library, cache, and doctor commands into application services. It must not control live playback, active queue, current output, GUI page state, runtime IPC, UI pages, controllers, concrete platform adapters, or provider implementations.
 - `src/app/app_runtime_state.*` owns scalar/session runtime state; `src/app/app_controller_set.*` owns app controllers; `AppRuntimeContext` may adapt these objects to target interfaces but must not become a new raw-field aggregate.
 - `src/app/runtime_services.*` owns the runtime capability registry; runtime services must be grouped as connectivity, metadata, playback, remote, and cache capabilities instead of exposing top-level provider fields.
 - `src/playback/playback_controller.*` owns playback state-machine, queue, playback-mode, and current-track command semantics; it must not own enrichment worker threads, pending result maps, or network enrichment merging.

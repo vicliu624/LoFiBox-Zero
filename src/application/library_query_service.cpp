@@ -6,6 +6,7 @@
 #include <cctype>
 
 #include "app/library_controller.h"
+#include "app/media_search_service.h"
 
 namespace lofibox::application {
 namespace {
@@ -92,6 +93,11 @@ std::optional<std::string> LibraryQueryService::titleOverrideForPage(app::AppPag
 std::optional<std::vector<std::pair<std::string, std::string>>> LibraryQueryService::rowsForPage(app::AppPage page) const
 {
     return controller_.rowsForPage(page);
+}
+
+std::vector<app::MediaItem> LibraryQueryService::searchLocal(std::string_view query, int limit) const
+{
+    return app::MediaSearchService::searchLocal(controller_.model(), query, limit).local_items;
 }
 
 const app::TrackRecord* LibraryQueryService::findTrack(const app::LibraryModel& library, int id) noexcept

@@ -11,16 +11,11 @@
 #include <utility>
 
 #include "app/media_search_service.h"
-#include "app/remote_media_contract.h"
 #include "app/source_manager_projection.h"
 #include "app/text_input_utils.h"
 #include "audio/dsp/dsp_chain.h"
-#include "cache/cache_manager.h"
-#include "remote/common/remote_catalog_model.h"
-#include "remote/common/remote_provider_contract.h"
 #include "remote/common/remote_source_registry.h"
 #include "remote/common/stream_source_model.h"
-#include "playback/streaming_playback_policy.h"
 
 namespace lofibox::app {
 
@@ -60,16 +55,6 @@ std::string qualityLabel(StreamQualityPreference preference)
     return "AUTO";
 }
 
-std::string bufferDecisionLabel(BufferDecision decision)
-{
-    switch (decision) {
-    case BufferDecision::StartImmediately: return "READY";
-    case BufferDecision::WaitForMinimumBuffer: return "BUFFERING";
-    case BufferDecision::PauseAndRebuffer: return "REBUFFER";
-    }
-    return "UNKNOWN";
-}
-
 constexpr int kRemoteProfileRowProfile = 0;
 constexpr int kRemoteProfileRowKind = 1;
 constexpr int kRemoteProfileRowName = 2;
@@ -99,24 +84,6 @@ std::string remoteEditFieldName(int field)
 std::string hiddenSecretLabel(std::string_view value)
 {
     return value.empty() ? "EMPTY" : "SET";
-}
-
-RemoteTrack preferCachedRemoteTrackFacts(RemoteTrack current, const RemoteTrack& cached)
-{
-    if (!cached.title.empty()) current.title = cached.title;
-    if (!cached.artist.empty()) current.artist = cached.artist;
-    if (!cached.album.empty()) current.album = cached.album;
-    if (!cached.album_id.empty()) current.album_id = cached.album_id;
-    if (cached.duration_seconds > 0) current.duration_seconds = cached.duration_seconds;
-    if (!cached.source_id.empty()) current.source_id = cached.source_id;
-    if (!cached.source_label.empty()) current.source_label = cached.source_label;
-    if (!cached.artwork_key.empty()) current.artwork_key = cached.artwork_key;
-    if (!cached.artwork_url.empty()) current.artwork_url = cached.artwork_url;
-    if (!cached.lyrics_plain.empty()) current.lyrics_plain = cached.lyrics_plain;
-    if (!cached.lyrics_synced.empty()) current.lyrics_synced = cached.lyrics_synced;
-    if (!cached.lyrics_source.empty()) current.lyrics_source = cached.lyrics_source;
-    if (!cached.fingerprint.empty()) current.fingerprint = cached.fingerprint;
-    return current;
 }
 
 std::string searchItemKey(const MediaItem& item)
@@ -281,8 +248,8 @@ void AppRuntimeContext::handlePendingOpenRequests()
             "",
             true,
             false};
-        rememberRemoteTrackFacts(profile, track);
-        state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(profile, state_.selected_remote_session, track);
+        remoteBrowseService().rememberTrackFacts(profile, track);
+        state_.selected_remote_stream = remoteBrowseService().resolve(profile, state_.selected_remote_session, track).stream;
         if (state_.selected_remote_stream && appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, "DESKTOP")) {
             state_.navigation.replaceStack({AppPage::MainMenu, AppPage::NowPlaying});
         }
@@ -327,6 +294,11 @@ NavigationState& AppRuntimeContext::navigationState() noexcept
 ::lofibox::application::SourceProfileCommandService AppRuntimeContext::sourceProfileService() const noexcept
 {
     return ::lofibox::application::SourceProfileCommandService{services_};
+}
+
+::lofibox::application::RemoteBrowseQueryService AppRuntimeContext::remoteBrowseService() const noexcept
+{
+    return ::lofibox::application::RemoteBrowseQueryService{services_};
 }
 
 EqState& AppRuntimeContext::eqState() noexcept
@@ -382,10 +354,6 @@ void AppRuntimeContext::refreshLibrary()
 
 void AppRuntimeContext::refreshRemoteLibraryTracks()
 {
-    if (!services_.remote.remote_source_provider->available() || !services_.remote.remote_catalog_provider->available()) {
-        return;
-    }
-
     for (auto& profile : state_.remote_profiles) {
         if (profile.base_url.empty()) {
             continue;
@@ -395,31 +363,12 @@ void AppRuntimeContext::refreshRemoteLibraryTracks()
             continue;
         }
 
-        const auto session = source_profiles.probe(profile, state_.remote_profiles.size()).session;
-        if (!session.available) {
+        auto library_result = remoteBrowseService().libraryTracks(profile, state_.remote_profiles.size(), kUnifiedRemoteLibraryTrackLimit);
+        if (!library_result.session.available) {
             continue;
         }
 
-        auto tracks = services_.remote.remote_catalog_provider->libraryTracks(profile, session, kUnifiedRemoteLibraryTrackLimit);
-        for (auto& track : tracks) {
-            if (track.source_id.empty()) {
-                track.source_id = profile.id;
-            }
-            if (track.source_label.empty()) {
-                track.source_label = source_profiles.profileLabel(profile);
-            }
-            if (services_.cache.cache_manager && !track.id.empty()) {
-                const auto cached = services_.cache.cache_manager->getText(
-                    ::lofibox::cache::CacheBucket::Metadata,
-                    remoteMediaCacheKey(profile, track.id));
-                if (cached) {
-                    track = preferCachedRemoteTrackFacts(std::move(track), parseRemoteTrackCache(*cached));
-                }
-            }
-            rememberRemoteTrackFacts(profile, track);
-        }
-
-        appServices().libraryMutations().mergeRemoteTracks(profile, tracks);
+        appServices().libraryMutations().mergeRemoteTracks(profile, library_result.playable_tracks);
     }
 }
 
@@ -807,51 +756,34 @@ RemoteServerProfile* AppRuntimeContext::selectedMutableRemoteProfile() noexcept
 
 std::vector<std::pair<std::string, std::string>> AppRuntimeContext::serverDiagnosticsRows() const
 {
-    const auto profile = selectedRemoteProfile();
-    std::string permission = "READ ONLY";
-    if (state_.selected_remote_kind) {
-        for (const auto& manifest : remote::RemoteSourceRegistry{}.manifests()) {
-            if (manifest.kind == *state_.selected_remote_kind) {
-                const auto writable = std::find(manifest.capabilities.begin(), manifest.capabilities.end(), remote::RemoteProviderCapability::WritableFavorites) != manifest.capabilities.end();
-                permission = writable ? "READ/WRITE" : "READ ONLY";
-                break;
-            }
-        }
-    }
+    const auto diagnostics = remoteBrowseService().sourceDiagnostics(selectedRemoteProfile(), state_.selected_remote_session);
     return {
-        {"SOURCE", profile ? (profile->name.empty() ? profile->base_url : profile->name) : "NOT SELECTED"},
-        {"TYPE", state_.selected_remote_kind ? "CONFIGURED" : "UNKNOWN"},
-        {"CONNECTION", state_.selected_remote_session.available ? "ONLINE" : "OFFLINE"},
-        {"MESSAGE", state_.selected_remote_session.message.empty() ? "-" : state_.selected_remote_session.message},
-        {"USER", profile && !profile->username.empty() ? profile->username : "-"},
-        {"CREDENTIAL", profile && !profile->credential_ref.id.empty() ? "XDG STATE" : "NONE"},
-        {"TLS", profile && !profile->tls_policy.verify_peer ? "EXCEPTION" : "VERIFY"},
-        {"PERMISSION", permission},
-        {"TOKEN", state_.selected_remote_session.access_token.empty() ? "NONE" : "REDACTED"},
+        {"SOURCE", diagnostics.source_label},
+        {"TYPE", diagnostics.kind_id.empty() ? "UNKNOWN" : diagnostics.kind_id},
+        {"CONNECTION", diagnostics.connection_status},
+        {"MESSAGE", diagnostics.message.empty() ? "-" : diagnostics.message},
+        {"USER", diagnostics.user.empty() ? "-" : diagnostics.user},
+        {"CREDENTIAL", diagnostics.credential_status.empty() ? "NONE" : diagnostics.credential_status},
+        {"TLS", diagnostics.tls_status.empty() ? "UNKNOWN" : diagnostics.tls_status},
+        {"PERMISSION", diagnostics.permission.empty() ? "UNKNOWN" : diagnostics.permission},
+        {"TOKEN", diagnostics.token_status.empty() ? "NONE" : diagnostics.token_status},
     };
 }
 
 std::vector<std::pair<std::string, std::string>> AppRuntimeContext::streamDetailRows() const
 {
-    const auto profile = selectedRemoteProfile();
-    if (!state_.selected_remote_stream) {
+    const auto diagnostics = remoteBrowseService().streamDiagnostics(selectedRemoteProfile(), state_.selected_remote_stream);
+    if (!diagnostics.resolved) {
         return {{"STREAM", "NOT RESOLVED"}, {"ENTER", "RETRY"}};
     }
-    const auto& diagnostics = state_.selected_remote_stream->diagnostics;
-    NetworkBufferState buffer{};
-    buffer.connected = diagnostics.connected;
-    buffer.live = diagnostics.live;
-    buffer.buffered_duration = diagnostics.live ? std::chrono::milliseconds{0} : buffer.minimum_playable_duration;
-    const auto decision = StreamingPlaybackPolicy{}.bufferDecision(buffer);
-    const auto recovery = StreamingPlaybackPolicy{}.recoveryPlan(buffer, !diagnostics.connected);
     return {
-        {"SOURCE", diagnostics.source_name.empty() ? (profile ? sourceProfileService().profileLabel(*profile) : "REMOTE") : diagnostics.source_name},
-        {"URL", diagnostics.resolved_url_redacted.empty() ? "REDACTED" : diagnostics.resolved_url_redacted},
-        {"CONNECTION", diagnostics.connection_status.empty() ? (diagnostics.connected ? "READY" : "OFFLINE") : diagnostics.connection_status},
-        {"BUFFER", bufferDecisionLabel(decision)},
-        {"MIN BUFFER", std::to_string(static_cast<int>(buffer.minimum_playable_duration.count() / 1000)) + "S"},
-        {"RECOVERY", recovery.retry ? (recovery.reconnect ? "RECONNECT" : "RETRY") : "NONE"},
-        {"QUALITY", qualityLabel(state_.selected_remote_stream->quality_preference)},
+        {"SOURCE", diagnostics.source_name.empty() ? "REMOTE" : diagnostics.source_name},
+        {"URL", diagnostics.redacted_url.empty() ? "REDACTED" : diagnostics.redacted_url},
+        {"CONNECTION", diagnostics.connection_status.empty() ? "UNKNOWN" : diagnostics.connection_status},
+        {"BUFFER", diagnostics.buffer_state.empty() ? "UNKNOWN" : diagnostics.buffer_state},
+        {"MIN BUFFER", std::to_string(diagnostics.minimum_playable_seconds) + "S"},
+        {"RECOVERY", diagnostics.recovery_action.empty() ? "NONE" : diagnostics.recovery_action},
+        {"QUALITY", qualityLabel(diagnostics.quality_preference)},
         {"BITRATE", diagnostics.bitrate_kbps > 0 ? std::to_string(diagnostics.bitrate_kbps) + "K" : "UNKNOWN"},
         {"CODEC", diagnostics.codec.empty() ? "UNKNOWN" : diagnostics.codec},
         {"SAMPLE RATE", diagnostics.sample_rate_hz > 0 ? std::to_string(diagnostics.sample_rate_hz) + "HZ" : "UNKNOWN"},
@@ -965,27 +897,20 @@ void AppRuntimeContext::openRemoteProfile(std::size_t profile_index)
     }
     state_.selected_remote_profile_index = profile_index;
     state_.selected_remote_kind = state_.remote_profiles[profile_index].kind;
-    state_.selected_remote_session = sourceProfileService().probe(state_.remote_profiles[profile_index], state_.remote_profiles.size()).session;
     loadRemoteRoot();
 }
 
 void AppRuntimeContext::loadRemoteRoot()
 {
     state_.selected_remote_parent = RemoteCatalogNode{};
-    const auto profile = selectedRemoteProfile();
-    if (!profile || !state_.selected_remote_session.available) {
-        state_.remote_browse_nodes = remote::RemoteCatalogMap::rootNodes();
+    auto* profile = selectedMutableRemoteProfile();
+    if (profile == nullptr) {
+        state_.remote_browse_nodes = {};
         return;
     }
-    state_.remote_browse_nodes = services_.remote.remote_catalog_provider->browse(*profile, state_.selected_remote_session, state_.selected_remote_parent, 100);
-    if (!state_.remote_browse_nodes.empty()) {
-        rememberRemoteBrowse(*profile, state_.selected_remote_parent, state_.remote_browse_nodes);
-    } else {
-        state_.remote_browse_nodes = cachedRemoteBrowse(*profile, state_.selected_remote_parent);
-    }
-    if (state_.remote_browse_nodes.empty()) {
-        state_.remote_browse_nodes = remote::RemoteCatalogMap::rootNodes();
-    }
+    const auto result = remoteBrowseService().browseRoot(*profile, state_.remote_profiles.size(), 100);
+    state_.selected_remote_session = result.session;
+    state_.remote_browse_nodes = result.nodes;
 }
 
 bool AppRuntimeContext::persistRemoteProfiles()
@@ -1172,9 +1097,6 @@ bool AppRuntimeContext::handleRemoteProfileSettingsConfirm(int selected)
         return true;
     case kRemoteProfileRowSave:
         (void)persistRemoteProfiles();
-        if (!profile->password.empty() || !profile->api_token.empty()) {
-            (void)sourceProfileService().saveCredentials(*profile, state_.remote_profiles.size());
-        }
         return true;
     default:
         return false;
@@ -1193,22 +1115,11 @@ bool AppRuntimeContext::handleRemoteBrowseConfirm(int selected)
 
     const auto node = state_.remote_browse_nodes[static_cast<std::size_t>(selected)];
     state_.selected_remote_node = node;
-    if (services_.cache.cache_manager) {
-        (void)services_.cache.cache_manager->rememberRecentBrowse(
-            profile->id,
-            node.id,
-            node.title.empty() ? node.id : node.title);
-    }
+    remoteBrowseService().rememberRecentBrowse(*profile, node);
     if (node.playable) {
-        const auto track = cachedRemoteTrackFromNode(*profile, node);
-        rememberRemoteTrackFacts(*profile, track);
-        std::vector<RemoteTrack> visible_tracks{};
-        visible_tracks.reserve(state_.remote_browse_nodes.size());
-        for (const auto& visible_node : state_.remote_browse_nodes) {
-            if (visible_node.playable) {
-                visible_tracks.push_back(cachedRemoteTrackFromNode(*profile, visible_node));
-            }
-        }
+        const auto track = remoteBrowseService().trackFromNode(*profile, node);
+        remoteBrowseService().rememberTrackFacts(*profile, track);
+        std::vector<RemoteTrack> visible_tracks = remoteBrowseService().tracksFromPlayableNodes(*profile, state_.remote_browse_nodes);
         if (visible_tracks.empty()) {
             visible_tracks.push_back(track);
         }
@@ -1243,12 +1154,13 @@ bool AppRuntimeContext::handleRemoteBrowseConfirm(int selected)
 
     if (node.browsable) {
         state_.selected_remote_parent = node;
-        state_.remote_browse_nodes = services_.remote.remote_catalog_provider->browse(*profile, state_.selected_remote_session, node, 100);
-        if (!state_.remote_browse_nodes.empty()) {
-            rememberRemoteBrowse(*profile, node, state_.remote_browse_nodes);
-        } else {
-            state_.remote_browse_nodes = cachedRemoteBrowse(*profile, node);
-        }
+        const auto result = remoteBrowseService().browseChild(
+            state_.remote_profiles[*state_.selected_remote_profile_index],
+            state_.selected_remote_session,
+            node,
+            100);
+        state_.selected_remote_session = result.session;
+        state_.remote_browse_nodes = result.nodes;
         state_.navigation.list_selection.selected = 0;
         state_.navigation.list_selection.scroll = 0;
         return true;
@@ -1266,13 +1178,17 @@ bool AppRuntimeContext::handleStreamDetailConfirm()
         if (!state_.selected_remote_node) {
             return false;
         }
-        const auto track = cachedRemoteTrackFromNode(*profile, *state_.selected_remote_node);
-        state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(*profile, state_.selected_remote_session, track);
+        auto* mutable_profile = selectedMutableRemoteProfile();
+        if (mutable_profile == nullptr) {
+            return false;
+        }
+        const auto track = remoteBrowseService().trackFromNode(*mutable_profile, *state_.selected_remote_node);
+        state_.selected_remote_stream = remoteBrowseService().resolve(*mutable_profile, state_.selected_remote_session, track).stream;
     }
     if (!state_.selected_remote_stream) {
         return false;
     }
-    const auto track = state_.selected_remote_node ? cachedRemoteTrackFromNode(*profile, *state_.selected_remote_node) : RemoteTrack{};
+    const auto track = state_.selected_remote_node ? remoteBrowseService().trackFromNode(*profile, *state_.selected_remote_node) : RemoteTrack{};
     const auto source = sourceProfileService().profileLabel(*profile);
     return state_.selected_remote_stream ? appServices().playbackCommands().startRemoteStream(*state_.selected_remote_stream, track, source) : false;
 }
@@ -1304,7 +1220,7 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
     const auto profile_index = static_cast<std::size_t>(std::distance(state_.remote_profiles.begin(), profile_it));
     state_.selected_remote_profile_index = profile_index;
     state_.selected_remote_kind = profile_it->kind;
-    state_.selected_remote_session = sourceProfileService().probe(*profile_it, state_.remote_profiles.size()).session;
+    state_.selected_remote_session = sourceProfileService().probe(state_.remote_profiles[profile_index], state_.remote_profiles.size()).session;
     if (!state_.selected_remote_session.available) {
         return false;
     }
@@ -1317,8 +1233,10 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
     track.duration_seconds = item.duration_seconds;
     track.source_id = profile_it->id;
     track.source_label = item.source.source_label.empty() ? sourceProfileService().profileLabel(*profile_it) : item.source.source_label;
-    rememberRemoteTrackFacts(*profile_it, track);
-    state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(*profile_it, state_.selected_remote_session, track);
+    remoteBrowseService().rememberTrackFacts(state_.remote_profiles[profile_index], track);
+    const auto resolve = remoteBrowseService().resolve(state_.remote_profiles[profile_index], state_.selected_remote_session, track);
+    state_.selected_remote_stream = resolve.stream;
+    track = resolve.track;
     state_.selected_remote_node = RemoteCatalogNode{
         RemoteCatalogNodeKind::Tracks,
         track.id,
@@ -1343,24 +1261,6 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
         : false;
 }
 
-RemoteTrack AppRuntimeContext::cachedRemoteTrackFromNode(const RemoteServerProfile& profile, const RemoteCatalogNode& node) const
-{
-    auto track = remoteTrackFromCatalogNode(node);
-    if (track.source_id.empty()) {
-        track.source_id = profile.id;
-    }
-    if (track.source_label.empty()) {
-        track.source_label = sourceProfileService().profileLabel(profile);
-    }
-    if (!services_.cache.cache_manager || node.id.empty()) {
-        return track;
-    }
-    const auto cached = services_.cache.cache_manager->getText(
-        ::lofibox::cache::CacheBucket::Metadata,
-        remoteMediaCacheKey(profile, node.id));
-    return cached ? mergeRemoteTrackCache(std::move(track), parseRemoteTrackCache(*cached)) : track;
-}
-
 RemoteTrack AppRuntimeContext::remoteTrackFromLibraryTrack(const RemoteServerProfile& profile, const TrackRecord& track) const
 {
     RemoteTrack remote_track{};
@@ -1380,15 +1280,27 @@ RemoteTrack AppRuntimeContext::remoteTrackFromLibraryTrack(const RemoteServerPro
     remote_track.lyrics_source = track.lyrics_source;
     remote_track.fingerprint = track.fingerprint;
 
-    if (services_.cache.cache_manager && !remote_track.id.empty()) {
-        const auto cached = services_.cache.cache_manager->getText(
-            ::lofibox::cache::CacheBucket::Metadata,
-            remoteMediaCacheKey(profile, remote_track.id));
-        if (cached) {
-            remote_track = preferCachedRemoteTrackFacts(std::move(remote_track), parseRemoteTrackCache(*cached));
-        }
-    }
-    return remote_track;
+    return remoteBrowseService().trackFromNode(
+        profile,
+        RemoteCatalogNode{
+            RemoteCatalogNodeKind::Tracks,
+            remote_track.id,
+            remote_track.title,
+            remote_track.artist,
+            true,
+            false,
+            remote_track.artist,
+            remote_track.album,
+            remote_track.duration_seconds,
+            remote_track.album_id,
+            remote_track.source_id,
+            remote_track.source_label,
+            remote_track.artwork_key,
+            remote_track.artwork_url,
+            remote_track.lyrics_plain,
+            remote_track.lyrics_synced,
+            remote_track.lyrics_source,
+            remote_track.fingerprint});
 }
 
 bool AppRuntimeContext::startRemoteLibraryTrack(const TrackRecord& track)
@@ -1407,16 +1319,16 @@ bool AppRuntimeContext::startRemoteLibraryTrack(const TrackRecord& track)
     const auto profile_index = static_cast<std::size_t>(std::distance(state_.remote_profiles.begin(), profile_it));
     state_.selected_remote_profile_index = profile_index;
     state_.selected_remote_kind = profile_it->kind;
-    state_.selected_remote_session = sourceProfileService().probe(*profile_it, state_.remote_profiles.size()).session;
+    state_.selected_remote_session = sourceProfileService().probe(state_.remote_profiles[profile_index], state_.remote_profiles.size()).session;
     if (!state_.selected_remote_session.available) {
         return false;
     }
 
-    auto remote_track = remoteTrackFromLibraryTrack(*profile_it, track);
+    auto remote_track = remoteTrackFromLibraryTrack(state_.remote_profiles[profile_index], track);
     if (remote_track.source_label.empty()) {
         remote_track.source_label = sourceProfileService().profileLabel(*profile_it);
     }
-    rememberRemoteTrackFacts(*profile_it, remote_track);
+    remoteBrowseService().rememberTrackFacts(state_.remote_profiles[profile_index], remote_track);
     state_.selected_remote_node = RemoteCatalogNode{
         RemoteCatalogNodeKind::Tracks,
         remote_track.id,
@@ -1436,7 +1348,9 @@ bool AppRuntimeContext::startRemoteLibraryTrack(const TrackRecord& track)
         remote_track.lyrics_synced,
         remote_track.lyrics_source,
         remote_track.fingerprint};
-    state_.selected_remote_stream = services_.remote.remote_stream_resolver->resolveTrack(*profile_it, state_.selected_remote_session, remote_track);
+    const auto resolve = remoteBrowseService().resolve(state_.remote_profiles[profile_index], state_.selected_remote_session, remote_track);
+    state_.selected_remote_stream = resolve.stream;
+    remote_track = resolve.track;
     auto* mutable_track = controllers_.library.findMutableTrack(track.id);
     if (!state_.selected_remote_stream || mutable_track == nullptr) {
         return false;
@@ -1452,51 +1366,6 @@ bool AppRuntimeContext::startRemoteLibraryTrack(const TrackRecord& track)
         remote_track,
         source,
         sourceProfileService().keepsLocalFacts(profile_it->kind));
-}
-
-void AppRuntimeContext::rememberRemoteTrackFacts(const RemoteServerProfile& profile, const RemoteTrack& track) const
-{
-    if (!services_.cache.cache_manager || track.id.empty() || !remoteTrackHasLocalCacheableFacts(track)) {
-        return;
-    }
-
-    if (!sourceProfileService().keepsLocalFacts(profile.kind)) {
-        return;
-    }
-
-    (void)services_.cache.cache_manager->putText(
-        ::lofibox::cache::CacheBucket::Metadata,
-        remoteMediaCacheKey(profile, track.id),
-        serializeRemoteTrackCache(track));
-
-    if (!track.lyrics_plain.empty() || !track.lyrics_synced.empty()) {
-        (void)services_.cache.cache_manager->putText(
-            ::lofibox::cache::CacheBucket::Lyrics,
-            remoteMediaCacheKey(profile, track.id),
-            serializeRemoteTrackCache(track));
-    }
-}
-
-void AppRuntimeContext::rememberRemoteBrowse(const RemoteServerProfile& profile, const RemoteCatalogNode& parent, const std::vector<RemoteCatalogNode>& nodes) const
-{
-    if (!services_.cache.cache_manager || nodes.empty()) {
-        return;
-    }
-    (void)services_.cache.cache_manager->rememberRemoteDirectory(
-        profile.id,
-        remoteDirectoryCacheKey(profile, parent),
-        remoteBrowseCachePayload(nodes));
-}
-
-std::vector<RemoteCatalogNode> AppRuntimeContext::cachedRemoteBrowse(const RemoteServerProfile& profile, const RemoteCatalogNode& parent) const
-{
-    if (!services_.cache.cache_manager) {
-        return {};
-    }
-    const auto cached = services_.cache.cache_manager->remoteDirectory(
-        profile.id,
-        remoteDirectoryCacheKey(profile, parent));
-    return cached ? parseRemoteBrowseCachePayload(*cached) : std::vector<RemoteCatalogNode>{};
 }
 
 void AppRuntimeContext::refreshSearchResults()
@@ -1527,21 +1396,16 @@ void AppRuntimeContext::refreshSearchResults()
         remember_item(std::move(item));
     }
 
-    if (!services_.remote.remote_source_provider->available() || !services_.remote.remote_catalog_provider->available()) {
-        return;
-    }
-
     for (auto& profile : state_.remote_profiles) {
         if (state_.search_results.size() >= 12U || profile.base_url.empty() || sourceProfileService().readiness(profile) != "READY") {
             continue;
         }
-        const auto session = sourceProfileService().probe(profile, state_.remote_profiles.size()).session;
-        if (!session.available) {
-            state_.search_degraded_sources.push_back(sourceProfileService().profileLabel(profile));
+        const auto remote_result = remoteBrowseService().search(profile, state_.remote_profiles.size(), state_.search_query, 4);
+        if (remote_result.degraded) {
+            state_.search_degraded_sources.push_back(remote_result.source_label.empty() ? sourceProfileService().profileLabel(profile) : remote_result.source_label);
             continue;
         }
-        const auto remote_tracks = services_.remote.remote_catalog_provider->searchTracks(profile, session, state_.search_query, 4);
-        for (const auto& track : remote_tracks) {
+        for (const auto& track : remote_result.tracks) {
             remember_item(mediaItemFromRemoteTrack(profile, track));
         }
     }
@@ -1598,10 +1462,14 @@ void AppRuntimeContext::commitRemoteProfileEdit()
         (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::Username, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
         break;
     case kRemoteProfileRowPassword:
-        (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::Password, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
+        (void)appServices().credentials().setSecret(
+            *profile,
+            ::lofibox::application::CredentialSecretPatch{"", state_.remote_profile_edit_buffer, ""});
         break;
     case kRemoteProfileRowToken:
-        (void)sourceProfileService().updateTextField(*profile, ::lofibox::application::SourceProfileTextField::ApiToken, state_.remote_profile_edit_buffer, state_.remote_profiles.size());
+        (void)appServices().credentials().setSecret(
+            *profile,
+            ::lofibox::application::CredentialSecretPatch{"", "", state_.remote_profile_edit_buffer});
         break;
     default:
         break;

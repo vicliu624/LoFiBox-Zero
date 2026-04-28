@@ -221,6 +221,31 @@ bool XdgRemoteProfileStore::saveCredentials(const app::RemoteServerProfile& prof
     return static_cast<bool>(output);
 }
 
+bool XdgRemoteProfileStore::deleteCredentials(const ::lofibox::security::CredentialRef& credential_ref) const
+{
+    if (credential_ref.id.empty()) {
+        return false;
+    }
+    auto secrets = loadCredentialSecrets(credential_path_);
+    const auto removed = secrets.erase(credential_ref.id);
+
+    std::error_code ec{};
+    fs::create_directories(credential_path_.parent_path(), ec);
+    if (ec) {
+        return false;
+    }
+
+    std::ofstream output(credential_path_, std::ios::binary | std::ios::trunc);
+    if (!output) {
+        return false;
+    }
+    output << "# LoFiBox remote credential references v1\n";
+    for (const auto& [id, value] : secrets) {
+        output << lineForCredential(id, value) << '\n';
+    }
+    return removed > 0U || static_cast<bool>(output);
+}
+
 const std::filesystem::path& XdgRemoteProfileStore::profilePath() const noexcept
 {
     return profile_path_;

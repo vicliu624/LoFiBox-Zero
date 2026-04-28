@@ -349,4 +349,28 @@ std::size_t CacheManager::collectGarbage()
     return removed.size();
 }
 
+std::size_t CacheManager::clearAll()
+{
+    std::size_t removed = 0;
+    std::error_code ec{};
+    if (!fs::exists(root_, ec) || ec) {
+        return 0;
+    }
+    for (const auto& entry : fs::recursive_directory_iterator(root_, ec)) {
+        if (ec) {
+            break;
+        }
+        if (!entry.is_regular_file(ec) || ec) {
+            ec.clear();
+            continue;
+        }
+        fs::remove(entry.path(), ec);
+        if (!ec) {
+            ++removed;
+        }
+        ec.clear();
+    }
+    return removed;
+}
+
 } // namespace lofibox::cache

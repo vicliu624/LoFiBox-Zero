@@ -4,11 +4,13 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "app/app_page.h"
 #include "app/library_model.h"
+#include "app/media_item.h"
 
 namespace lofibox::app {
 class LibraryController;
@@ -30,6 +32,7 @@ public:
     [[nodiscard]] std::string songSortLabel() const;
     [[nodiscard]] std::optional<std::string> titleOverrideForPage(app::AppPage page) const;
     [[nodiscard]] std::optional<std::vector<std::pair<std::string, std::string>>> rowsForPage(app::AppPage page) const;
+    [[nodiscard]] std::vector<app::MediaItem> searchLocal(std::string_view query, int limit) const;
 
     [[nodiscard]] static const app::TrackRecord* findTrack(const app::LibraryModel& library, int id) noexcept;
     [[nodiscard]] static app::TrackRecord* findMutableTrack(app::LibraryModel& library, int id) noexcept;

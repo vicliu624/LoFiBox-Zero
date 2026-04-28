@@ -14,6 +14,12 @@ LibraryMutationService::LibraryMutationService(app::LibraryController& controlle
 {
 }
 
+LibraryMutationService::LibraryMutationService(app::LibraryController& controller, const app::RuntimeServices& services) noexcept
+    : controller_(controller),
+      services_(&services)
+{
+}
+
 void LibraryMutationService::startLoading() const noexcept
 {
     controller_.startLoading();
@@ -22,6 +28,15 @@ void LibraryMutationService::startLoading() const noexcept
 void LibraryMutationService::refreshLibrary(const std::vector<std::filesystem::path>& media_roots, const app::MetadataProvider& metadata_provider) const
 {
     controller_.refreshLibrary(media_roots, metadata_provider);
+}
+
+bool LibraryMutationService::refreshLibrary(const std::vector<std::filesystem::path>& media_roots) const
+{
+    if (services_ == nullptr || !services_->metadata.metadata_provider) {
+        return false;
+    }
+    controller_.refreshLibrary(media_roots, *services_->metadata.metadata_provider);
+    return true;
 }
 
 void LibraryMutationService::mergeRemoteTracks(const app::RemoteServerProfile& profile, const std::vector<app::RemoteTrack>& tracks) const

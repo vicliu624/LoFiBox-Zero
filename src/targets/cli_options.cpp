@@ -28,6 +28,13 @@ void printHelp(std::ostream& out)
         << "  --help        Show this help text and exit.\n"
         << "  --version     Show version information and exit.\n"
         << '\n'
+        << "Direct commands:\n"
+        << "  source list|add|update|probe\n"
+        << "  credentials set|status|delete\n"
+        << "  library scan|status|query\n"
+        << "  cache status|clear\n"
+        << "  doctor\n"
+        << '\n'
         << "Environment:\n"
         << "  LOFIBOX_ASSET_DIR   Override the runtime asset directory.\n"
         << "  LOFIBOX_FONT_PATH   Override the system font file used for text rendering.\n";

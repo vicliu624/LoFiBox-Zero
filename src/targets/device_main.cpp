@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "app/lofibox_app_runner.h"
+#include "cli/direct_cli.h"
 #include "platform/host/legacy_asset_loader.h"
 #include "platform/host/runtime_services_factory.h"
 #include "platform/host/single_instance_lock.h"
@@ -65,6 +66,11 @@ int main(int argc, char** argv)
             return 0;
         }
 
+        auto services = lofibox::platform::host::createHostRuntimeServices();
+        if (const auto direct_cli_exit = lofibox::cli::runDirectCliCommand(argc, argv, services, std::cout, std::cerr)) {
+            return *direct_cli_exit;
+        }
+
         const DeviceOptions options = parseOptions(argc, argv);
         auto instance_lock = lofibox::platform::host::SingleInstanceLock::acquire();
         if (!instance_lock.acquired()) {
@@ -75,7 +81,6 @@ int main(int argc, char** argv)
             std::move(options.framebuffer_path),
             std::move(options.input_device_path)};
         auto assets = lofibox::platform::host::loadLegacyAssets();
-        auto services = lofibox::platform::host::createHostRuntimeServices();
         lofibox::app::runLoFiBoxApp(
             device,
             std::move(assets),

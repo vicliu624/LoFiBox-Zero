@@ -130,15 +130,12 @@ private:
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> remoteFieldEditorRows() const;
     [[nodiscard]] std::optional<RemoteServerProfile> selectedRemoteProfile() const;
     [[nodiscard]] RemoteServerProfile* selectedMutableRemoteProfile() noexcept;
-    [[nodiscard]] RemoteTrack cachedRemoteTrackFromNode(const RemoteServerProfile& profile, const RemoteCatalogNode& node) const;
     [[nodiscard]] RemoteTrack remoteTrackFromLibraryTrack(const RemoteServerProfile& profile, const TrackRecord& track) const;
     [[nodiscard]] bool startRemoteLibraryTrack(const TrackRecord& track);
-    void rememberRemoteTrackFacts(const RemoteServerProfile& profile, const RemoteTrack& track) const;
-    void rememberRemoteBrowse(const RemoteServerProfile& profile, const RemoteCatalogNode& parent, const std::vector<RemoteCatalogNode>& nodes) const;
-    [[nodiscard]] std::vector<RemoteCatalogNode> cachedRemoteBrowse(const RemoteServerProfile& profile, const RemoteCatalogNode& parent) const;
     void refreshSearchResults();
     void applyEqualizerStateToPlayback();
     [[nodiscard]] ::lofibox::application::SourceProfileCommandService sourceProfileService() const noexcept;
+    [[nodiscard]] ::lofibox::application::RemoteBrowseQueryService remoteBrowseService() const noexcept;
     void openRemoteProfile(std::size_t profile_index);
     void loadRemoteRoot();
     void openRemoteSetup();

@@ -10,6 +10,7 @@
 #include "app/remote_profile_store.h"
 #include "app/runtime_services.h"
 #include "application/app_service_registry.h"
+#include "security/credential_policy.h"
 
 namespace {
 
@@ -34,11 +35,20 @@ public:
         return true;
     }
 
+    bool deleteCredentials(const lofibox::security::CredentialRef& credential_ref) const override
+    {
+        deleted_credential_ref = credential_ref.id;
+        ++delete_credentials_calls;
+        return true;
+    }
+
     std::vector<lofibox::app::RemoteServerProfile> loaded{};
     mutable std::vector<lofibox::app::RemoteServerProfile> saved{};
     mutable lofibox::app::RemoteServerProfile saved_credentials{};
+    mutable std::string deleted_credential_ref{};
     mutable int save_profiles_calls{0};
     mutable int save_credentials_calls{0};
+    mutable int delete_credentials_calls{0};
 };
 
 class ProbeRemoteSourceProvider final : public lofibox::app::RemoteSourceProvider {
@@ -115,14 +125,12 @@ int main()
         lofibox::application::SourceProfileTextField::Username,
         "vicliu",
         profiles.size());
-    (void)registry.sourceProfiles().updateTextField(
+    const auto credential_result = registry.credentials().setSecret(
         profile,
-        lofibox::application::SourceProfileTextField::Password,
-        "secret",
-        profiles.size());
+        lofibox::application::CredentialSecretPatch{"", "secret", ""});
 
-    if (profile_store->save_credentials_calls != 1 || profile.credential_ref.id.empty()) {
-        std::cerr << "Expected credential edits to persist through SourceProfileCommandService with a credential ref.\n";
+    if (!credential_result.accepted || profile_store->save_credentials_calls != 1 || profile.credential_ref.id.empty()) {
+        std::cerr << "Expected credential edits to persist through CredentialCommandService with a credential ref.\n";
         return 1;
     }
     if (registry.sourceProfiles().readiness(profile) != "READY") {

@@ -14,6 +14,9 @@ Unit tests should cover:
 - core state machine
 - playback queue
 - application command/query services returning structured command results without depending on GUI page selection state
+- remote browse query service behavior for root browsing, child browsing, search, stream resolution, degraded facts, directory cache reuse, and local read-only remote fact caching
+- credential command service behavior for secret status, set, delete, safe redaction assumptions, and separation from source-profile field editing
+- cache and runtime diagnostic command services returning structured facts before terminal or UI projection
 - playlist parsers
 - metadata parser behavior
 - EQ and biquad behavior
@@ -27,6 +30,7 @@ Integration tests should cover:
 
 - GUI command routing translating page events into application commands without duplicating product behavior
 - direct command service behavior for library/source/credential/cache/diagnostic domains under isolated XDG test roots
+- first-stage direct CLI parsing/formatting for source list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor
 - runtime command client/server behavior before live playback or active queue control is exposed to external command consumers
 - local library scan
 - database migration
@@ -34,6 +38,7 @@ Integration tests should cover:
 - direct URL stream using a controlled local fixture server
 - mock playback through `NullAudioOutput`
 - local and remote search result grouping over normalized media items
+- GUI Remote Browse, Server Diagnostics, Stream Detail, and Search consuming application-service query results instead of calling remote providers directly
 - Search matching and display with non-ASCII metadata fixtures
 
 ## 3.1 Platform Input Adapter Tests
@@ -83,6 +88,7 @@ Tests must not:
 - access the external internet
 - depend on a real user input-method configuration
 - simulate product commands by driving GUI-only selected-row or field-editor internals when an application command service is the intended boundary
+- test remote diagnostics or stream detail by asserting only rendered row text when structured application query facts are available
 - mutate live playback or active queue from a second process without an explicit runtime command path
 
 Tests must support CI and Debian autopkgtest environments.
