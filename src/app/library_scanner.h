@@ -11,5 +11,6 @@
 namespace lofibox::app {
 
 [[nodiscard]] LibraryModel scanLibrary(const std::vector<std::filesystem::path>& requested_roots, const MetadataProvider& metadata_provider);
+void rebuildLibraryIndexes(LibraryModel& model);
 
 } // namespace lofibox::app

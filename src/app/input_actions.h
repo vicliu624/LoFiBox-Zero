@@ -15,6 +15,8 @@ enum class UserAction {
     Confirm,
     Back,
     Home,
+    PageUp,
+    PageDown,
     NextTrack,
 };
 

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
 
@@ -62,6 +63,75 @@ namespace {
     return app::makeCharacterInput(ch, label);
 }
 
+struct MotifWmHints {
+    unsigned long flags{};
+    unsigned long functions{};
+    unsigned long decorations{};
+    long input_mode{};
+    unsigned long status{};
+};
+
+void makeChromelessManagedWindow(Display* display, Window window)
+{
+    constexpr unsigned long kMotifHintsDecorations = 1UL << 1U;
+    const Atom hints_atom = XInternAtom(display, "_MOTIF_WM_HINTS", False);
+    if (hints_atom == None) {
+        return;
+    }
+
+    MotifWmHints hints{};
+    hints.flags = kMotifHintsDecorations;
+    hints.decorations = 0;
+    XChangeProperty(
+        display,
+        window,
+        hints_atom,
+        hints_atom,
+        32,
+        PropModeReplace,
+        reinterpret_cast<const unsigned char*>(&hints),
+        5);
+}
+
+[[nodiscard]] bool isSuperH(KeySym keysym, unsigned int state) noexcept
+{
+    return (state & Mod4Mask) != 0U && (keysym == XK_h || keysym == XK_H);
+}
+
+int ignoreRecoverableXError(Display*, XErrorEvent*) noexcept
+{
+    return 0;
+}
+
+void safelyFocusWindow(Display* display, Window window)
+{
+    XWindowAttributes attributes{};
+    if (XGetWindowAttributes(display, window, &attributes) == 0 || attributes.map_state != IsViewable) {
+        return;
+    }
+
+    auto* previous_handler = XSetErrorHandler(ignoreRecoverableXError);
+    XSetInputFocus(display, window, RevertToParent, CurrentTime);
+    XSync(display, False);
+    XSetErrorHandler(previous_handler);
+}
+
+void waitUntilMapped(Display* display, Window window)
+{
+    XWindowAttributes attributes{};
+    if (XGetWindowAttributes(display, window, &attributes) != 0 && attributes.map_state == IsViewable) {
+        return;
+    }
+
+    for (;;) {
+        XEvent event{};
+        XWindowEvent(display, window, StructureNotifyMask, &event);
+        if (event.type == MapNotify) {
+            return;
+        }
+    }
+}
+
 [[nodiscard]] std::vector<app::InputEvent> translateKey(Display* display, XKeyEvent& key_event)
 {
     KeySym keysym{};
@@ -90,8 +160,26 @@ namespace {
         return {app::InputEvent{app::InputKey::F5, "F5", '\0'}};
     case XK_F6:
         return {app::InputEvent{app::InputKey::F6, "F6", '\0'}};
+    case XK_F7:
+        return {app::InputEvent{app::InputKey::F7, "F7", '\0'}};
+    case XK_F8:
+        return {app::InputEvent{app::InputKey::F8, "F8", '\0'}};
+    case XK_F9:
+        return {app::InputEvent{app::InputKey::F9, "F9", '\0'}};
+    case XK_F10:
+        return {app::InputEvent{app::InputKey::F10, "F10", '\0'}};
+    case XK_F11:
+        return {app::InputEvent{app::InputKey::F11, "F11", '\0'}};
+    case XK_F12:
+        return {app::InputEvent{app::InputKey::F12, "F12", '\0'}};
     case XK_Home:
         return {app::InputEvent{app::InputKey::Home, "HOME", '\0'}};
+    case XK_Page_Up:
+        return {app::InputEvent{app::InputKey::PageUp, "PGUP", '\0'}};
+    case XK_Page_Down:
+        return {app::InputEvent{app::InputKey::PageDown, "PGDN", '\0'}};
+    case XK_Insert:
+        return {app::InputEvent{app::InputKey::Insert, "INS", '\0'}};
     case XK_Left:
         return {app::InputEvent{app::InputKey::Left, "LEFT", '\0'}};
     case XK_Right:
@@ -145,13 +233,12 @@ struct X11Presenter::Impl {
         }
 
         XStoreName(display, window, "LoFiBox Zero");
-        XSetWindowAttributes attributes{};
-        attributes.override_redirect = True;
-        XChangeWindowAttributes(display, window, CWOverrideRedirect, &attributes);
+        makeChromelessManagedWindow(display, window);
         XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
         XMapRaised(display, window);
-        XSync(display, False);
-        XSetInputFocus(display, window, RevertToParent, CurrentTime);
+        XFlush(display);
+        waitUntilMapped(display, window);
+        safelyFocusWindow(display, window);
         gc = XCreateGC(display, window, 0, nullptr);
         if (gc == nullptr) {
             throw std::runtime_error("XCreateGC failed");
@@ -208,6 +295,14 @@ bool X11Presenter::pump()
         if (event.type == DestroyNotify) {
             impl_->running = false;
         } else if (event.type == KeyPress) {
+            KeySym keysym{};
+            char text_buffer[8]{};
+            XLookupString(&event.xkey, text_buffer, static_cast<int>(sizeof(text_buffer)), &keysym, nullptr);
+            if (isSuperH(keysym, event.xkey.state)) {
+                XIconifyWindow(impl_->display, impl_->window, impl_->screen);
+                XFlush(impl_->display);
+                continue;
+            }
             auto translated = translateKey(impl_->display, event.xkey);
             impl_->pending_inputs.insert(impl_->pending_inputs.end(), translated.begin(), translated.end());
         } else if (event.type == ButtonPress && event.xbutton.button == Button1 && !impl_->fixed_device_surface) {

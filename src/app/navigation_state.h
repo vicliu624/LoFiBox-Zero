@@ -68,7 +68,14 @@ public:
 
     void moveSelection(int delta, int count, int max_visible_rows)
     {
-        list_selection.selected += delta;
+        if (count <= 0) {
+            list_selection = {};
+            return;
+        }
+        list_selection.selected = (list_selection.selected + delta) % count;
+        if (list_selection.selected < 0) {
+            list_selection.selected += count;
+        }
         clampListSelection(count, max_visible_rows);
     }
 };

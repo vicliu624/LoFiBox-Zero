@@ -5,10 +5,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <utility>
 
+#include "app/library_scanner.h"
 #include "app/library_navigation_service.h"
 #include "app/library_open_action_resolver.h"
 #include "app/library_query_service.h"
+#include "app/remote_profile_store.h"
 
 namespace lofibox::app {
 namespace {
@@ -19,6 +22,18 @@ std::string sortKey(std::string value)
         return static_cast<char>(std::tolower(ch));
     });
     return value;
+}
+
+std::string sourceLabelForProfile(const RemoteServerProfile& profile)
+{
+    if (!profile.name.empty()) {
+        return profile.name;
+    }
+    auto label = remoteServerKindToString(profile.kind);
+    std::transform(label.begin(), label.end(), label.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    return label.empty() ? std::string{"REMOTE"} : label;
 }
 
 } // namespace
@@ -47,6 +62,97 @@ void LibraryController::refreshLibrary(const std::vector<std::filesystem::path>&
 {
     repository_.rescan(media_roots, metadata_provider);
     setSongsContextAll();
+}
+
+void LibraryController::mergeRemoteTracks(const RemoteServerProfile& profile, const std::vector<RemoteTrack>& tracks)
+{
+    if (tracks.empty()) {
+        return;
+    }
+
+    auto& model = repository_.mutableModel();
+    int next_id = 1;
+    for (const auto& track : model.tracks) {
+        next_id = std::max(next_id, track.id + 1);
+    }
+
+    for (const auto& remote_track : tracks) {
+        if (remote_track.id.empty()) {
+            continue;
+        }
+
+        auto existing = std::find_if(model.tracks.begin(), model.tracks.end(), [&](const TrackRecord& track) {
+            return track.remote && track.remote_profile_id == profile.id && track.remote_track_id == remote_track.id;
+        });
+        if (existing != model.tracks.end()) {
+            existing->title = remote_track.title.empty() ? existing->title : remote_track.title;
+            existing->artist = remote_track.artist.empty() ? existing->artist : remote_track.artist;
+            existing->album = remote_track.album.empty() ? existing->album : remote_track.album;
+            existing->duration_seconds = remote_track.duration_seconds > 0 ? remote_track.duration_seconds : existing->duration_seconds;
+            existing->source_label = remote_track.source_label.empty() ? existing->source_label : remote_track.source_label;
+            existing->artwork_key = remote_track.artwork_key.empty() ? existing->artwork_key : remote_track.artwork_key;
+            existing->artwork_url = remote_track.artwork_url.empty() ? existing->artwork_url : remote_track.artwork_url;
+            existing->lyrics_plain = remote_track.lyrics_plain.empty() ? existing->lyrics_plain : remote_track.lyrics_plain;
+            existing->lyrics_synced = remote_track.lyrics_synced.empty() ? existing->lyrics_synced : remote_track.lyrics_synced;
+            existing->lyrics_source = remote_track.lyrics_source.empty() ? existing->lyrics_source : remote_track.lyrics_source;
+            existing->fingerprint = remote_track.fingerprint.empty() ? existing->fingerprint : remote_track.fingerprint;
+            continue;
+        }
+
+        TrackRecord track{};
+        track.id = next_id++;
+        track.title = remote_track.title.empty() ? std::string(kUnknownMetadata) : remote_track.title;
+        track.artist = remote_track.artist.empty() ? std::string(kUnknownMetadata) : remote_track.artist;
+        track.album = remote_track.album.empty() ? std::string(kUnknownMetadata) : remote_track.album;
+        track.genre = std::string(kUnknownMetadata);
+        track.composer = std::string(kUnknownMetadata);
+        track.duration_seconds = remote_track.duration_seconds > 0 ? remote_track.duration_seconds : 180;
+        track.remote = true;
+        track.remote_profile_id = profile.id;
+        track.remote_track_id = remote_track.id;
+        track.source_label = remote_track.source_label.empty()
+            ? sourceLabelForProfile(profile)
+            : remote_track.source_label;
+        track.artwork_key = remote_track.artwork_key;
+        track.artwork_url = remote_track.artwork_url;
+        track.lyrics_plain = remote_track.lyrics_plain;
+        track.lyrics_synced = remote_track.lyrics_synced;
+        track.lyrics_source = remote_track.lyrics_source;
+        track.fingerprint = remote_track.fingerprint;
+        model.tracks.push_back(std::move(track));
+    }
+
+    rebuildLibraryIndexes(model);
+    setSongsContextAll();
+}
+
+bool LibraryController::applyRemoteTrackFacts(const RemoteServerProfile& profile, const RemoteTrack& remote_track)
+{
+    if (remote_track.id.empty()) {
+        return false;
+    }
+
+    auto& model = repository_.mutableModel();
+    auto existing = std::find_if(model.tracks.begin(), model.tracks.end(), [&](const TrackRecord& track) {
+        return track.remote && track.remote_profile_id == profile.id && track.remote_track_id == remote_track.id;
+    });
+    if (existing == model.tracks.end()) {
+        return false;
+    }
+
+    if (!remote_track.title.empty()) existing->title = remote_track.title;
+    if (!remote_track.artist.empty()) existing->artist = remote_track.artist;
+    if (!remote_track.album.empty()) existing->album = remote_track.album;
+    if (remote_track.duration_seconds > 0) existing->duration_seconds = remote_track.duration_seconds;
+    if (!remote_track.source_label.empty()) existing->source_label = remote_track.source_label;
+    if (!remote_track.artwork_key.empty()) existing->artwork_key = remote_track.artwork_key;
+    if (!remote_track.artwork_url.empty()) existing->artwork_url = remote_track.artwork_url;
+    if (!remote_track.lyrics_plain.empty()) existing->lyrics_plain = remote_track.lyrics_plain;
+    if (!remote_track.lyrics_synced.empty()) existing->lyrics_synced = remote_track.lyrics_synced;
+    if (!remote_track.lyrics_source.empty()) existing->lyrics_source = remote_track.lyrics_source;
+    if (!remote_track.fingerprint.empty()) existing->fingerprint = remote_track.fingerprint;
+    rebuildLibraryIndexes(model);
+    return true;
 }
 
 const TrackRecord* LibraryController::findTrack(int id) const noexcept
@@ -184,6 +290,11 @@ void LibraryController::setSongsContextAll()
     list_context_.songs.mode = SongsMode::All;
     list_context_.songs.label = "SONGS";
     list_context_.songs.track_ids = allSongIdsSorted();
+}
+
+void LibraryController::setSongsContextTrackIds(std::string label, std::vector<int> ids)
+{
+    setSongsContextFiltered(SongsMode::All, std::move(label), std::move(ids));
 }
 
 std::optional<std::string> LibraryController::titleOverrideForPage(AppPage page) const

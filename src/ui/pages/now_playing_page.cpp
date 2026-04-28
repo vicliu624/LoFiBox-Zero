@@ -81,7 +81,7 @@ void renderTidalSpectrum(core::Canvas& canvas, const NowPlayingView& view)
     constexpr int kLeft = 16;
     constexpr int kRight = 304;
     constexpr int kBaseline = 160;
-    constexpr int kMaxHeight = 14;
+    constexpr int kMaxHeight = 24;
     constexpr int kColumnWidth = 4;
     constexpr int kGap = 3;
     constexpr int kStride = kColumnWidth + kGap;
@@ -90,7 +90,7 @@ void renderTidalSpectrum(core::Canvas& canvas, const NowPlayingView& view)
     for (int column = 0; column < kColumnCount; ++column) {
         const float position = static_cast<float>(column) / static_cast<float>(std::max(1, kColumnCount - 1));
         const float energy = view.visualization.available ? spectrumEnergyForColumn(view.visualization.bands, column, kColumnCount) : 0.0f;
-        const float visible_energy = std::pow(std::clamp(energy, 0.0f, 1.0f), 0.72f);
+        const float visible_energy = std::pow(std::clamp(energy * 1.65f, 0.0f, 1.0f), 0.52f);
         const int height = view.visualization.available
             ? std::clamp(static_cast<int>(std::round(1.0f + (visible_energy * static_cast<float>(kMaxHeight - 1)))), 1, kMaxHeight)
             : 2;

@@ -94,9 +94,11 @@ Every source must eventually define configuration, authentication, connection li
 - A playable item must be representable without knowing whether it came from local storage or a remote server.
 - A stream must be resolved before audio playback consumes it.
 - The audio pipeline is the source of real visualization data.
+- Spectrum and wave visualizations must be derived from real decoded/output audio samples or an injected test backend frame. Elapsed-time oscillators, sine-wave placeholders, or page-local fake animation frames are invalid product facts.
 - Metadata enrichment must distinguish lookup, acceptance, cache, and writeback.
 - Existing embedded metadata must not be overwritten by weaker online evidence.
 - Weak online evidence must not write back metadata, artwork, or lyrics unless accepted by authority and match-confidence policy.
+- Remote metadata writeback authority is capability-based. Read-only remote sources must use local metadata cache records keyed by stable source/item identity for accepted enrichment results instead of pretending the remote server was updated.
 - Library facts must survive UI navigation changes.
 - The Library entry surface must project both local library dimensions and reachable configured remote profiles. Selecting a remote profile from Library enters the same remote catalog browsing model used by Source Manager; it must not teach `LibraryController` to call remote providers.
 - Search and queue semantics must operate on `MediaItem` values so local and remote content can be mixed without teaching playback or UI about provider internals.

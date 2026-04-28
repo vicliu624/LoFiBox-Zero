@@ -76,6 +76,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Do not let Cardputer Zero, PocketFrame, VNC, framebuffer, X11, Wayland, or container execution define the product's core object model.
 - Do not confuse “not product identity” with “not supported”; `Cardputer Zero` is a required current adaptation profile.
 - Do not add a conventional application menu bar to the primary product surface merely because LoFiBox is a Linux desktop application.
+- Do not add new Windows compatibility branches for product runtime behavior without a prior specification change. The product target is Debian/Linux; cross-host convenience must not become architecture truth.
 
 ## 5. Stable Engineering Decisions
 
@@ -89,6 +90,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Device-side Linux integration: direct framebuffer and `evdev` adapters behind our own device boundary
 - Linux dev-container family: Debian `Trixie` userland for reproducible Linux builds
 - Official distribution target: Debian and Ubuntu archive-compatible source package
+- Release runtime target: Debian/Linux. Host-machine facts from Windows development environments are not product facts and must not define new runtime behavior, UI contracts, packaging decisions, playback semantics, or remote-provider design.
 
 ## 6. Architecture Contract
 

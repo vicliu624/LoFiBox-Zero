@@ -9,8 +9,7 @@ RUN apt-get -o Acquire::Retries=5 update \
     autopkgtest \
     debhelper \
     desktop-file-utils \
-    lintian \
- && rm -rf /var/lib/apt/lists/*
+    lintian
 
 WORKDIR /workspace/LoFiBox-Zero
 

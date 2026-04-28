@@ -40,7 +40,7 @@ The helper intentionally refuses to build or pull images. If it fails, refresh o
 
 ## Local Debian Package Build Image
 
-The package build image is intentionally separate from simulator/runtime images:
+The package build image is intentionally separate from runtime and device images:
 
 ```powershell
 scripts/build-debian-package-image.ps1
@@ -60,7 +60,7 @@ scripts/run-dpkg-buildpackage.ps1 -BuildArgs "-us -uc"
 
 The generated archive is written next to the repository as `lofibox_0.1.0.orig.tar.xz`. It excludes `debian/`, VCS metadata, build directories, and generated package artifacts. This is a local validation helper; actual archive uploads should use release-tag tarballs tracked by `debian/watch`.
 
-`debian/source/options` also ignores local build/debug directories such as `build/`, `.tmp/`, `out/`, `runs/`, and `obj-*` so source package checks are not polluted by simulator output or temporary media-debug artifacts. These directories are not project source and must not be represented in Debian source diffs.
+`debian/source/options` also ignores local build/debug directories such as `build/`, `.tmp/`, `out/`, `runs/`, and `obj-*` so source package checks are not polluted by generated debug output or temporary media-debug artifacts. These directories are not project source and must not be represented in Debian source diffs.
 
 ## Local Package Validation Gate
 
@@ -70,7 +70,7 @@ Local package validation should use the same package-level gates as CI:
 scripts/run-debian-package-validation.ps1
 ```
 
-The helper creates the local upstream tarball, builds the Debian package through the dedicated package-build image, runs `lintian`, and runs `autopkgtest` against the generated `.changes` file. It intentionally depends on a pre-existing local image and does not pull or build images implicitly.
+The helper creates the local upstream tarball, builds the Debian package through the dedicated package-build image, runs `lintian`, and runs `autopkgtest` against the generated `.changes` file. It intentionally depends on a pre-existing local image and does not pull or build images implicitly. By default the final `lintian`/`autopkgtest` container is run with Docker networking disabled so routine validation proves the prepared package-build image is self-contained; pass `-AllowNetwork` only when intentionally refreshing or diagnosing the image.
 
 ## Autopkgtest
 

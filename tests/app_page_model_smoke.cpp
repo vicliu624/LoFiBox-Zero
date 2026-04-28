@@ -13,7 +13,12 @@ int main()
     input.metadata_display_name = "BUILT-IN";
     input.settings.backlight_index = 2;
     const auto settings_model = lofibox::app::buildAppPageModel(input);
-    if (settings_model.title != "SETTINGS" || settings_model.rows.size() != 8 || settings_model.rows[0].second != "ONLINE" || settings_model.rows[3].second != "3") {
+    if (settings_model.title != "SETTINGS"
+        || settings_model.rows.size() != 7
+        || settings_model.rows[0].second != "ONLINE"
+        || settings_model.rows[3].second != "3"
+        || settings_model.rows[5].first != "REMOTE SETUP"
+        || settings_model.rows[5].second != "15 TYPES") {
         std::cerr << "Expected Settings page model to own settings rows.\n";
         return 1;
     }
@@ -41,6 +46,17 @@ int main()
     const auto source_model = lofibox::app::buildAppPageModel(input);
     if (source_model.title != "SOURCES" || !source_model.browse_list || source_model.rows.size() != 1) {
         std::cerr << "Expected Source Manager to be a projected browse list.\n";
+        return 1;
+    }
+
+    input.page = lofibox::app::AppPage::RemoteSetup;
+    input.source_manager_rows.reset();
+    const auto remote_setup_model = lofibox::app::buildAppPageModel(input);
+    if (remote_setup_model.title != "REMOTE SETUP"
+        || !remote_setup_model.browse_list
+        || remote_setup_model.rows.size() < 15U
+        || remote_setup_model.rows.front().first != "Jellyfin") {
+        std::cerr << "Expected Remote Setup to list supported remote media types before profile fields.\n";
         return 1;
     }
 

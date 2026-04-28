@@ -1,17 +1,76 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <filesystem>
+#include <cstdlib>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "app/runtime_services.h"
+#include "platform/host/runtime_enrichment_client_helpers.h"
 #include "platform/host/runtime_enrichment_clients.h"
 #include "platform/host/runtime_host_internal.h"
+
+namespace {
+
+bool networkSmokeEnabled()
+{
+    const char* value = std::getenv("LOFIBOX_RUN_NETWORK_LYRICS_SMOKE");
+    return value != nullptr && std::string(value) == "1";
+}
+
+bool verifyOfflineLyricsParsers()
+{
+    using lofibox::platform::host::runtime_detail::LrclibLookupSeed;
+    using lofibox::platform::host::runtime_detail::LyricsOvhSuggestion;
+    using lofibox::platform::host::runtime_detail::bestLrclibLyricsFromJson;
+    using lofibox::platform::host::runtime_detail::lyricsOvhLyricsFromJson;
+    using lofibox::platform::host::runtime_detail::lyricsOvhSuggestionsFromJson;
+
+    const std::vector<LrclibLookupSeed> seeds{
+        LrclibLookupSeed{"Yellow", "Coldplay", "", 266, false},
+    };
+    const auto lrclib_lyrics = bestLrclibLyricsFromJson(
+        R"([{"trackName":"Yellow","artistName":"Coldplay","duration":266,"plainLyrics":"Look at the stars","syncedLyrics":"[00:01.00]Look at the stars"}])",
+        seeds);
+    if (!lrclib_lyrics.plain || !lrclib_lyrics.synced || lrclib_lyrics.source != "LRCLIB") {
+        std::cerr << "Expected LRCLIB parser to choose a matching offline lyric payload.\n";
+        return false;
+    }
+
+    const auto lyrics_ovh_lyrics = lyricsOvhLyricsFromJson(R"({"lyrics":"Look at the stars\nLook how they shine"})");
+    if (!lyrics_ovh_lyrics.plain || lyrics_ovh_lyrics.source != "lyrics.ovh") {
+        std::cerr << "Expected lyrics.ovh parser to read plain lyrics from an offline payload.\n";
+        return false;
+    }
+
+    const auto suggestions = lyricsOvhSuggestionsFromJson(
+        R"({"data":[{"title":"Yellow","title_short":"Yellow","artist":{"name":"Coldplay"}}]})",
+        seeds);
+    if (suggestions.size() != 1 || suggestions.front().title != "Yellow" || suggestions.front().artist != "Coldplay") {
+        std::cerr << "Expected lyrics.ovh suggestion parser to keep matching offline suggestions.\n";
+        return false;
+    }
+
+    return true;
+}
+
+} // namespace
 
 int main()
 {
     using lofibox::platform::host::runtime_detail::LrclibClient;
     using lofibox::platform::host::runtime_detail::LyricsOvhClient;
     using lofibox::platform::host::runtime_detail::probeConnectivity;
+
+    if (!verifyOfflineLyricsParsers()) {
+        return 1;
+    }
+
+    if (!networkSmokeEnabled()) {
+        std::cout << "Network lyrics smoke disabled; offline lyric parser coverage passed.\n";
+        return 0;
+    }
 
     LrclibClient client{};
     LyricsOvhClient lyrics_ovh{};

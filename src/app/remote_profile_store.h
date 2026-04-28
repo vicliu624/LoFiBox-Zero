@@ -15,6 +15,11 @@ public:
 
     [[nodiscard]] virtual std::vector<RemoteServerProfile> loadProfiles() const = 0;
     virtual bool saveProfiles(const std::vector<RemoteServerProfile>& profiles) const = 0;
+    virtual bool saveCredentials(const RemoteServerProfile& profile) const
+    {
+        (void)profile;
+        return false;
+    }
 };
 
 [[nodiscard]] std::string remoteServerKindToString(RemoteServerKind kind);

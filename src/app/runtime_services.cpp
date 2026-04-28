@@ -19,6 +19,7 @@ public:
     [[nodiscard]] bool available() const override { return false; }
     [[nodiscard]] std::string displayName() const override { return "UNAVAILABLE"; }
     [[nodiscard]] TrackIdentity resolve(const std::filesystem::path&, const TrackMetadata& = {}) const override { return {}; }
+    [[nodiscard]] TrackIdentity resolveRemoteStream(std::string_view, std::string_view, const std::filesystem::path&, const TrackMetadata& = {}) const override { return {}; }
 };
 
 class NullArtworkProvider final : public ArtworkProvider {
@@ -26,6 +27,7 @@ public:
     [[nodiscard]] bool available() const override { return false; }
     [[nodiscard]] std::string displayName() const override { return "BUILT-IN"; }
     [[nodiscard]] std::optional<core::Canvas> read(const std::filesystem::path&, ArtworkReadMode = ArtworkReadMode::AllowOnline) const override { return std::nullopt; }
+    [[nodiscard]] std::optional<core::Canvas> readRemoteIdentity(std::string_view, const std::filesystem::path&, ArtworkReadMode = ArtworkReadMode::AllowOnline) const override { return std::nullopt; }
 };
 
 class NullAudioPlaybackBackend final : public AudioPlaybackBackend {

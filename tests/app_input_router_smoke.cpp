@@ -22,6 +22,13 @@ public:
     void pausePlayback() override { ++pause_calls; }
     void stepTrack(int delta) override { last_step_delta = delta; ++step_track_calls; }
     void cycleMainMenuPlaybackMode() override { ++cycle_menu_mode_calls; }
+    void toggleRepeatAll() override { ++toggle_repeat_all_calls; }
+    void toggleRepeatOne() override { ++toggle_repeat_one_calls; }
+    void openSearchPage() override { ++open_search_calls; page = lofibox::app::AppPage::Search; }
+    void openLibraryPage() override { ++open_library_calls; page = lofibox::app::AppPage::MusicIndex; }
+    void openQueuePage() override { ++open_queue_calls; page = lofibox::app::AppPage::Queue; }
+    void openSettingsPage() override { ++open_settings_calls; page = lofibox::app::AppPage::Settings; }
+    void showMainMenuPage() override { ++show_main_menu_calls; page = lofibox::app::AppPage::MainMenu; }
     void moveMainMenuSelection(int delta) override { main_menu_delta += delta; }
     void resetMainMenuSelection() override { ++reset_main_menu_calls; }
     void confirmMainMenu() override { ++confirm_main_menu_calls; }
@@ -35,6 +42,7 @@ public:
 
     void cycleSongSortModeAndClamp() override { ++cycle_sort_calls; }
     void moveSelection(int delta) override { list_delta += delta; }
+    void moveSelectionPage(int delta_pages) override { page_delta += delta_pages; }
     void confirmListPage() override { ++confirm_list_calls; }
 
     lofibox::app::AppPage page{lofibox::app::AppPage::MainMenu};
@@ -50,6 +58,13 @@ public:
     int step_track_calls{0};
     int last_step_delta{0};
     int cycle_menu_mode_calls{0};
+    int toggle_repeat_all_calls{0};
+    int toggle_repeat_one_calls{0};
+    int open_search_calls{0};
+    int open_library_calls{0};
+    int open_queue_calls{0};
+    int open_settings_calls{0};
+    int show_main_menu_calls{0};
     int main_menu_delta{0};
     int reset_main_menu_calls{0};
     int confirm_main_menu_calls{0};
@@ -60,6 +75,7 @@ public:
     int eq_band_delta{0};
     int cycle_sort_calls{0};
     int list_delta{0};
+    int page_delta{0};
     int confirm_list_calls{0};
 };
 
@@ -94,8 +110,12 @@ int main()
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::F2));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::F3));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::F4));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F5));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F6));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F7));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F8));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Right));
-    if (target.play_from_menu_calls != 1 || target.pause_calls != 1 || target.last_step_delta != -1 || target.main_menu_delta != 1) {
+    if (target.play_from_menu_calls != 1 || target.pause_calls != 1 || target.last_step_delta != 1 || target.step_track_calls != 2 || target.toggle_shuffle_calls != 1 || target.toggle_repeat_all_calls != 1 || target.toggle_repeat_one_calls != 1 || target.main_menu_delta != 1) {
         std::cerr << "Expected main menu shortcuts and navigation to route to menu commands.\n";
         return 1;
     }
@@ -130,11 +150,24 @@ int main()
 
     target.page = lofibox::app::AppPage::Songs;
     target.browse_list_page = true;
+    const int pause_calls_before = target.pause_calls;
+    const int sort_calls_before = target.cycle_sort_calls;
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::F3));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::PageDown));
+    lofibox::app::routeInput(target, character('T'));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Down));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Enter));
-    if (target.cycle_sort_calls != 1 || target.list_delta != 1 || target.confirm_list_calls != 1) {
-        std::cerr << "Expected browse list controls to route.\n";
+    if (target.pause_calls != pause_calls_before + 1 || target.cycle_sort_calls != sort_calls_before + 1 || target.page_delta != 1 || target.list_delta != 1 || target.confirm_list_calls != 1) {
+        std::cerr << "Expected browse list transport shortcuts to stay global while list and page navigation still route.\n";
+        return 1;
+    }
+
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F9));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F10));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F11));
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F12));
+    if (target.open_search_calls != 1 || target.open_library_calls != 1 || target.open_queue_calls != 1 || target.open_settings_calls != 1) {
+        std::cerr << "Expected global F9-F12 page shortcuts to route.\n";
         return 1;
     }
 

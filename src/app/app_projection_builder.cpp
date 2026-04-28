@@ -76,9 +76,9 @@ std::string playbackSummary(const AppRenderTarget& target)
         if (!playback.current_stream_title.empty()) {
             std::string summary = playback.status == PlaybackStatus::Paused ? "PAUSED  " : "PLAYING  ";
             summary += playback.current_stream_title;
-            if (!playback.current_stream_source.empty()) {
+            if (!playback.current_stream_artist.empty()) {
                 summary += " - ";
-                summary += playback.current_stream_source;
+                summary += playback.current_stream_artist;
             }
             return summary;
         }
@@ -107,6 +107,7 @@ std::string emptyLabelForPage(AppPage page)
     case AppPage::Composers: return std::string(kNoComposers);
     case AppPage::Compilations: return std::string(kNoCompilations);
     case AppPage::PlaylistDetail: return std::string(kEmpty);
+    case AppPage::RemoteBrowse: return "NO ITEMS";
     default: return std::string(kEmpty);
     }
 }
@@ -133,9 +134,9 @@ ui::pages::NowPlayingView buildNowPlayingProjection(const AppRenderTarget& targe
     return ui_pages::NowPlayingView{
         track != nullptr || has_remote_stream,
         track ? track->title : playback.current_stream_title,
-        track ? track->artist : playback.current_stream_source,
-        track ? track->album : playback.current_stream_url_redacted,
-        track ? track->duration_seconds : 0,
+        track ? track->artist : playback.current_stream_artist,
+        track ? track->album : playback.current_stream_album,
+        track ? track->duration_seconds : playback.current_stream_duration_seconds,
         playback.elapsed_seconds,
         toUiPlaybackStatus(playback.status),
         playback.shuffle_enabled,
@@ -153,8 +154,8 @@ ui::pages::LyricsPageView buildLyricsProjection(const AppRenderTarget& target)
     return ui_pages::LyricsPageView{
         track != nullptr || has_remote_stream,
         track ? track->title : playback.current_stream_title,
-        track ? track->artist : playback.current_stream_source,
-        track ? track->duration_seconds : 0,
+        track ? track->artist : playback.current_stream_artist,
+        track ? track->duration_seconds : playback.current_stream_duration_seconds,
         playback.elapsed_seconds,
         toUiPlaybackStatus(playback.status),
         playback.lyrics_lookup_pending,

@@ -27,31 +27,83 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
     switch (page) {
     case AppPage::MainMenu:
         return {
-            {"F2", "PLAY SONG"},
-            {"F3", "PAUSE"},
-            {"F4", "PREVIOUS"},
-            {"F5", "NEXT"},
-            {"F6", "MODE: SHUFFLE/SEQ/ONE"},
+            {"LEFT/RIGHT", "CHOOSE PAGE"},
+            {"PGUP/PGDN", "JUMP PAGE"},
+            {"OK", "OPEN"},
+            {"F2/F3", "PLAY / PAUSE"},
+            {"F4/F5", "PREV / NEXT"},
+            {"F6", "SHUFFLE"},
+            {"F7", "LOOP ALL"},
+            {"F8", "LOOP ONE"},
+            {"F9-F12", "SEARCH LIB QUEUE SET"},
         };
     case AppPage::Songs:
     case AppPage::PlaylistDetail:
         return {
-            {"DEL", "DELETE SONG"},
-            {"ENTER", "PLAY"},
+            {"UP/DOWN", "MOVE"},
+            {"PGUP/PGDN", "PAGE"},
+            {"OK", "PLAY"},
             {"BACKSPACE", "BACK"},
-            {"F2", "SEARCH"},
-            {"F3", "SORT"},
-            {"F4", "EDIT PLAYLIST"},
+            {"T", "SORT"},
+            {"E/INS", "EDIT PLAYLIST"},
+            {"F2-F8", "PLAYBACK"},
+            {"F9", "SEARCH"},
         };
     case AppPage::NowPlaying:
         return {
-            {"ENTER", "PLAY / PAUSE"},
+            {"OK", "PLAY / PAUSE"},
             {"LEFT", "PREVIOUS"},
             {"RIGHT", "NEXT"},
+            {"UP", "SHUFFLE"},
+            {"DOWN", "REPEAT"},
             {"L", "LYRICS"},
             {"Q", "QUEUE"},
+            {"F2-F8", "PLAYBACK"},
+            {"HOME", "MENU"},
         };
-    case AppPage::Boot:
+    case AppPage::Lyrics:
+        return {
+            {"L", "NOW PLAYING"},
+            {"LEFT/RIGHT", "PREV / NEXT"},
+            {"BACKSPACE", "BACK"},
+            {"F2-F8", "PLAYBACK"},
+            {"HOME", "MENU"},
+        };
+    case AppPage::Equalizer:
+        return {
+            {"LEFT/RIGHT", "BAND"},
+            {"UP/DOWN", "+/- 1DB"},
+            {"PGUP/PGDN", "+/- 3DB"},
+            {"F2-F8", "PLAYBACK"},
+            {"HOME", "MENU"},
+        };
+    case AppPage::Search:
+        return {
+            {"TYPE", "QUERY"},
+            {"BACKSPACE", "EDIT"},
+            {"UP/DOWN", "MOVE"},
+            {"PGUP/PGDN", "PAGE"},
+            {"OK", "PLAY"},
+            {"F2-F8", "PLAYBACK"},
+            {"HOME", "MENU"},
+        };
+    case AppPage::RemoteFieldEditor:
+        return {
+            {"TYPE", "VALUE"},
+            {"BACKSPACE", "EDIT"},
+            {"OK", "SAVE"},
+            {"F1", "HELP"},
+        };
+    case AppPage::PlaylistEditor:
+        return {
+            {"UP/DOWN", "MOVE"},
+            {"PGUP/PGDN", "PAGE"},
+            {"OK", "OPEN"},
+            {"DEL", "REMOVE"},
+            {"BACKSPACE", "BACK"},
+            {"F2-F8", "PLAYBACK"},
+            {"HOME", "MENU"},
+        };
     case AppPage::MusicIndex:
     case AppPage::Artists:
     case AppPage::Albums:
@@ -59,20 +111,32 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
     case AppPage::Composers:
     case AppPage::Compilations:
     case AppPage::Playlists:
-    case AppPage::Lyrics:
-    case AppPage::Equalizer:
-    case AppPage::Settings:
+    case AppPage::RemoteSetup:
     case AppPage::SourceManager:
-    case AppPage::Search:
+    case AppPage::RemoteProfileSettings:
     case AppPage::Queue:
     case AppPage::RemoteBrowse:
     case AppPage::ServerDiagnostics:
     case AppPage::StreamDetail:
-    case AppPage::PlaylistEditor:
         return {
-            {"ENTER", "OPEN / PLAY"},
+            {"UP/DOWN", "MOVE"},
+            {"PGUP/PGDN", "PAGE"},
+            {"OK", "OPEN"},
             {"BACKSPACE", "BACK"},
-            {"F1", "HELP"},
+            {"F2-F8", "PLAYBACK"},
+            {"F9-F12", "SEARCH LIB QUEUE SET"},
+            {"HOME", "MENU"},
+        };
+    case AppPage::Boot:
+    case AppPage::Settings:
+        return {
+            {"UP/DOWN", "MOVE"},
+            {"PGUP/PGDN", "PAGE"},
+            {"OK", "OPEN"},
+            {"BACKSPACE", "BACK"},
+            {"F2-F8", "PLAYBACK"},
+            {"F9", "SEARCH"},
+            {"HOME", "MENU"},
         };
     case AppPage::About:
         return {};
@@ -120,7 +184,16 @@ void renderMainMenu(core::Canvas& canvas, const AppRenderTarget& target)
 void renderNowPlaying(core::Canvas& canvas, const AppRenderTarget& target)
 {
     ui::drawListPageFrame(canvas);
-    ui::drawTopBar(canvas, target.pageModel().title, true);
+    const auto& playback = target.playbackSession();
+    std::string source_label = playback.current_stream_source;
+    if (playback.current_track_id) {
+        if (const auto* track = target.findTrack(*playback.current_track_id); track && track->remote) {
+            source_label = track->source_label;
+        } else {
+            source_label.clear();
+        }
+    }
+    ui::drawTopBar(canvas, target.pageModel().title, true, {}, source_label);
     ui_pages::renderNowPlayingPage(
         canvas,
         buildNowPlayingProjection(target));
@@ -182,7 +255,10 @@ void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
     case AppPage::Playlists:
     case AppPage::PlaylistDetail:
     case AppPage::Settings:
+    case AppPage::RemoteSetup:
     case AppPage::SourceManager:
+    case AppPage::RemoteProfileSettings:
+    case AppPage::RemoteFieldEditor:
     case AppPage::Search:
     case AppPage::Queue:
     case AppPage::RemoteBrowse:

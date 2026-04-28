@@ -46,15 +46,8 @@ bool handledLocally(app::RemoteServerKind kind) noexcept
     switch (kind) {
     case app::RemoteServerKind::DirectUrl:
     case app::RemoteServerKind::InternetRadio:
-    case app::RemoteServerKind::PlaylistManifest:
     case app::RemoteServerKind::Hls:
     case app::RemoteServerKind::Dash:
-    case app::RemoteServerKind::Smb:
-    case app::RemoteServerKind::Nfs:
-    case app::RemoteServerKind::WebDav:
-    case app::RemoteServerKind::Ftp:
-    case app::RemoteServerKind::Sftp:
-    case app::RemoteServerKind::DlnaUpnp:
         return true;
     default:
         return false;
@@ -73,24 +66,26 @@ bool isLiveKind(app::RemoteServerKind kind) noexcept
 
 app::RemoteTrack localRemoteTrack(const app::RemoteServerProfile& profile)
 {
-    return app::RemoteTrack{
-        profile.base_url,
-        profile.name.empty() ? "REMOTE STREAM" : profile.name,
-        "",
-        profile.base_url,
-        "",
-        0};
+    app::RemoteTrack track{};
+    track.id = profile.base_url;
+    track.title = profile.name.empty() ? "REMOTE STREAM" : profile.name;
+    track.source_id = profile.id;
+    track.source_label = profile.name;
+    return track;
 }
 
 app::RemoteCatalogNode localRemoteNode(const app::RemoteServerProfile& profile)
 {
-    return app::RemoteCatalogNode{
-        app::RemoteCatalogNodeKind::Tracks,
-        profile.base_url,
-        profile.name.empty() ? "REMOTE STREAM" : profile.name,
-        ::lofibox::security::SecretRedactor{}.redact(profile.base_url),
-        true,
-        false};
+    app::RemoteCatalogNode node{};
+    node.kind = app::RemoteCatalogNodeKind::Tracks;
+    node.id = profile.base_url;
+    node.title = profile.name.empty() ? "REMOTE STREAM" : profile.name;
+    node.subtitle = profile.base_url;
+    node.playable = true;
+    node.browsable = false;
+    node.source_id = profile.id;
+    node.source_label = profile.name;
+    return node;
 }
 
 std::string remoteProfileJson(const app::RemoteServerProfile& profile)
@@ -123,10 +118,10 @@ std::string remoteSessionJson(const app::RemoteSourceSession& session)
 app::RemoteSourceSession parseRemoteSession(std::string_view json)
 {
     app::RemoteSourceSession session{};
-    if (const auto value = extractJsonString(json, "\"server_name\":\"")) session.server_name = *value;
+    if (const auto value = extractJsonString(json, "\"server_name\":\"")) session.server_name = repairMetadataText(*value);
     if (const auto value = extractJsonString(json, "\"user_id\":\"")) session.user_id = *value;
     if (const auto value = extractJsonString(json, "\"access_token\":\"")) session.access_token = *value;
-    if (const auto value = extractJsonString(json, "\"message\":\"")) session.message = *value;
+    if (const auto value = extractJsonString(json, "\"message\":\"")) session.message = repairMetadataText(*value);
     session.available = parseJsonBool(json, "\"available\":").value_or(false);
     return session;
 }
@@ -148,10 +143,18 @@ std::vector<app::RemoteTrack> parseRemoteTracks(std::string_view json)
         const auto block = json.substr(pos, end - pos + 1);
         app::RemoteTrack track{};
         if (const auto value = extractJsonString(block, "\"id\":\"")) track.id = *value;
-        if (const auto value = extractJsonString(block, "\"title\":\"")) track.title = *value;
-        if (const auto value = extractJsonString(block, "\"artist\":\"")) track.artist = *value;
-        if (const auto value = extractJsonString(block, "\"album\":\"")) track.album = *value;
+        if (const auto value = extractJsonString(block, "\"title\":\"")) track.title = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"artist\":\"")) track.artist = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"album\":\"")) track.album = repairMetadataText(*value);
         if (const auto value = extractJsonString(block, "\"album_id\":\"")) track.album_id = *value;
+        if (const auto value = extractJsonString(block, "\"source_id\":\"")) track.source_id = *value;
+        if (const auto value = extractJsonString(block, "\"source_label\":\"")) track.source_label = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"artwork_key\":\"")) track.artwork_key = *value;
+        if (const auto value = extractJsonString(block, "\"artwork_url\":\"")) track.artwork_url = *value;
+        if (const auto value = extractJsonString(block, "\"lyrics_plain\":\"")) track.lyrics_plain = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"lyrics_synced\":\"")) track.lyrics_synced = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"lyrics_source\":\"")) track.lyrics_source = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"fingerprint\":\"")) track.fingerprint = *value;
         if (const auto duration = parseJsonInt(block, "\"duration_seconds\":")) {
             track.duration_seconds = *duration;
         }
@@ -224,8 +227,20 @@ std::vector<app::RemoteCatalogNode> parseRemoteNodes(std::string_view json)
         app::RemoteCatalogNode node{};
         if (const auto value = extractJsonString(block, "\"kind\":\"")) node.kind = parseNodeKind(*value);
         if (const auto value = extractJsonString(block, "\"id\":\"")) node.id = *value;
-        if (const auto value = extractJsonString(block, "\"title\":\"")) node.title = *value;
-        if (const auto value = extractJsonString(block, "\"subtitle\":\"")) node.subtitle = *value;
+        if (const auto value = extractJsonString(block, "\"title\":\"")) node.title = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"subtitle\":\"")) node.subtitle = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"artist\":\"")) node.artist = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"album\":\"")) node.album = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"album_id\":\"")) node.album_id = *value;
+        if (const auto value = extractJsonString(block, "\"source_id\":\"")) node.source_id = *value;
+        if (const auto value = extractJsonString(block, "\"source_label\":\"")) node.source_label = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"artwork_key\":\"")) node.artwork_key = *value;
+        if (const auto value = extractJsonString(block, "\"artwork_url\":\"")) node.artwork_url = *value;
+        if (const auto value = extractJsonString(block, "\"lyrics_plain\":\"")) node.lyrics_plain = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"lyrics_synced\":\"")) node.lyrics_synced = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"lyrics_source\":\"")) node.lyrics_source = repairMetadataText(*value);
+        if (const auto value = extractJsonString(block, "\"fingerprint\":\"")) node.fingerprint = *value;
+        if (const auto duration = parseJsonInt(block, "\"duration_seconds\":")) node.duration_seconds = *duration;
         node.playable = parseJsonBool(block, "\"playable\":").value_or(false);
         node.browsable = parseJsonBool(block, "\"browsable\":").value_or(true);
         if (!node.id.empty() || !node.title.empty()) {
@@ -245,6 +260,29 @@ std::optional<app::ResolvedRemoteStream> parseResolvedStream(std::string_view js
         return std::nullopt;
     }
     stream.seekable = parseJsonBool(json, "\"seekable\":").value_or(true);
+    if (const auto source = extractJsonString(json, "\"source_label\":\"")) {
+        stream.diagnostics.source_name = *source;
+    }
+    if (const auto redacted = extractJsonString(json, "\"resolved_url_redacted\":\"")) {
+        stream.diagnostics.resolved_url_redacted = *redacted;
+    }
+    if (const auto codec = extractJsonString(json, "\"codec\":\"")) {
+        stream.diagnostics.codec = *codec;
+    }
+    if (const auto status = extractJsonString(json, "\"connection_status\":\"")) {
+        stream.diagnostics.connection_status = *status;
+    }
+    if (const auto bitrate = parseJsonInt(json, "\"bitrate_kbps\":")) {
+        stream.diagnostics.bitrate_kbps = *bitrate;
+    }
+    if (const auto sample_rate = parseJsonInt(json, "\"sample_rate_hz\":")) {
+        stream.diagnostics.sample_rate_hz = *sample_rate;
+    }
+    if (const auto channel_count = parseJsonInt(json, "\"channel_count\":")) {
+        stream.diagnostics.channel_count = *channel_count;
+    }
+    stream.diagnostics.live = parseJsonBool(json, "\"live\":").value_or(false);
+    stream.diagnostics.connected = parseJsonBool(json, "\"connected\":").value_or(!stream.url.empty());
     return stream;
 }
 
@@ -428,19 +466,32 @@ std::optional<app::ResolvedRemoteStream> RemoteMediaToolClient::resolveTrack(
             << "\",\"album\":\"" << jsonEscape(track.album)
             << "\",\"album_id\":\"" << jsonEscape(track.album_id)
             << "\",\"duration_seconds\":" << track.duration_seconds
-            << "}}";
+            << ",\"source_id\":\"" << jsonEscape(track.source_id)
+            << "\",\"source_label\":\"" << jsonEscape(track.source_label)
+            << "\",\"artwork_key\":\"" << jsonEscape(track.artwork_key)
+            << "\",\"artwork_url\":\"" << jsonEscape(track.artwork_url)
+            << "\",\"lyrics_plain\":\"" << jsonEscape(track.lyrics_plain)
+            << "\",\"lyrics_synced\":\"" << jsonEscape(track.lyrics_synced)
+            << "\",\"lyrics_source\":\"" << jsonEscape(track.lyrics_source)
+            << "\",\"fingerprint\":\"" << jsonEscape(track.fingerprint)
+            << "\"}}";
     if (const auto json = callRemoteMediaTool(*python_path_, payload.str())) {
         auto resolved = parseResolvedStream(*json);
         if (resolved) {
             const auto entry = ::lofibox::remote::StreamSourceClassifier::classify(resolved->url);
             resolved->quality_preference = app::StreamQualityPreference::Auto;
-            resolved->diagnostics.source_name = profile.name.empty() ? toKindString(profile.kind) : profile.name;
-            resolved->diagnostics.resolved_url_redacted = ::lofibox::security::SecretRedactor{}.redact(resolved->url);
+            if (resolved->diagnostics.source_name.empty()) {
+                resolved->diagnostics.source_name = profile.name.empty() ? toKindString(profile.kind) : profile.name;
+            }
+            if (resolved->diagnostics.resolved_url_redacted.empty()) {
+                resolved->diagnostics.resolved_url_redacted = ::lofibox::security::SecretRedactor{}.redact(resolved->url);
+            }
             resolved->diagnostics.protocol = protocolFromDirectEntry(entry);
-            resolved->diagnostics.live = false;
             resolved->diagnostics.seekable = resolved->seekable;
             resolved->diagnostics.connected = true;
-            resolved->diagnostics.connection_status = "READY";
+            if (resolved->diagnostics.connection_status.empty()) {
+                resolved->diagnostics.connection_status = "READY";
+            }
         }
         logRuntime(resolved ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn, "remote", std::string("Resolve ") + profile.name + " track " + track.id + (resolved ? " succeeded" : " failed"));
         return resolved;

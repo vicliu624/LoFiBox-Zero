@@ -16,7 +16,8 @@ int main()
     std::filesystem::create_directories(root, ec);
 
     const auto path = root / "remote-profiles.tsv";
-    lofibox::platform::host::XdgRemoteProfileStore store{path};
+    const auto credential_path = root / "remote-credentials.tsv";
+    lofibox::platform::host::XdgRemoteProfileStore store{path, credential_path};
 
     lofibox::app::RemoteServerProfile profile{};
     profile.kind = lofibox::app::RemoteServerKind::Navidrome;
@@ -41,6 +42,18 @@ int main()
     const std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
     assert(content.find("must-not-persist") == std::string::npos);
     assert(content.find("must-not-persist-token") == std::string::npos);
+
+    assert(store.saveCredentials(profile));
+    const auto loaded_with_secret = store.loadProfiles();
+    assert(loaded_with_secret.size() == 1U);
+    assert(loaded_with_secret.front().username == "vic");
+    assert(loaded_with_secret.front().password == "must-not-persist");
+    assert(loaded_with_secret.front().api_token == "must-not-persist-token");
+
+    std::ifstream credential_input(credential_path, std::ios::binary);
+    const std::string credential_content((std::istreambuf_iterator<char>(credential_input)), std::istreambuf_iterator<char>());
+    assert(credential_content.find("secret/home-nav") != std::string::npos);
+    assert(credential_content.find("must-not-persist-token") != std::string::npos);
 
     std::filesystem::remove_all(root, ec);
     return 0;

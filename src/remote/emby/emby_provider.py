@@ -37,7 +37,7 @@ def playable_item_query(
     if query:
         params_dict["SearchTerm"] = query
     data = json_request(f"{base_url(profile)}{jellyfin_provider.items_path(user_id)}?{urllib.parse.urlencode(params_dict)}")
-    return jellyfin_provider.parse_items(data.get("Items", []))
+    return jellyfin_provider.parse_items(data.get("Items", []), profile)
 
 
 def search(profile: Dict[str, Any], session: Dict[str, Any], query: str, limit: int) -> List[Dict[str, Any]]:
@@ -62,7 +62,21 @@ def browse(profile: Dict[str, Any], session: Dict[str, Any], parent: Dict[str, A
     kind = parent.get("kind", "root")
     if kind in ("tracks", "recently-added", "recently-played", "favorites"):
         return [
-            jellyfin_provider.node("tracks", item["id"], item["title"], item.get("artist", ""), playable=True, browsable=False)
+            jellyfin_provider.node(
+                "tracks",
+                item["id"],
+                item["title"],
+                item.get("artist", ""),
+                playable=True,
+                browsable=False,
+                artist=item.get("artist", ""),
+                album=item.get("album", ""),
+                duration_seconds=int(item.get("duration_seconds", 0) or 0),
+                album_id=item.get("album_id", ""),
+                artwork_key=item.get("artwork_key", ""),
+                artwork_url=item.get("artwork_url", ""),
+                profile=profile,
+            )
             for item in playable_item_query(profile, session, limit)
         ]
     return nodes
@@ -71,8 +85,10 @@ def browse(profile: Dict[str, Any], session: Dict[str, Any], parent: Dict[str, A
 def resolve(profile: Dict[str, Any], session: Dict[str, Any], track: Dict[str, Any]) -> Dict[str, Any]:
     token = session.get("access_token", "")
     user_id = session.get("user_id", "")
+    detail = jellyfin_provider.item_detail(profile, session, track.get("id", ""))
     return {
         "url": f"{base_url(profile)}/Audio/{track['id']}/stream.mp3?static=true&UserId={urllib.parse.quote(user_id)}&api_key={urllib.parse.quote(token)}",
         "headers": [],
         "seekable": True,
+        **jellyfin_provider.stream_diagnostics(detail),
     }

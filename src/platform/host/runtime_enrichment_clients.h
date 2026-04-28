@@ -57,6 +57,7 @@ public:
     ChromaprintFingerprintProvider();
     [[nodiscard]] bool available() const;
     [[nodiscard]] AudioFingerprintResult fingerprint(const fs::path& path) const;
+    [[nodiscard]] AudioFingerprintResult fingerprintInput(std::string_view input) const;
 
 private:
     std::optional<fs::path> executable_path_{};
@@ -67,6 +68,10 @@ public:
     AcoustIdIdentityClient();
     [[nodiscard]] bool available() const;
     [[nodiscard]] app::TrackIdentity lookup(const fs::path& path, const app::TrackMetadata& seed_metadata = {}) const;
+    [[nodiscard]] app::TrackIdentity lookupInput(
+        std::string_view input,
+        std::string_view log_label,
+        const app::TrackMetadata& seed_metadata = {}) const;
 
 private:
     std::optional<fs::path> curl_path_{};

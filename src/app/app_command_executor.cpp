@@ -19,9 +19,8 @@ constexpr std::array<AppPage, 6> kMainMenuPages{
 };
 constexpr int kEqMinGainDb = -12;
 constexpr int kEqMaxGainDb = 12;
-constexpr int kSettingsRemoteMediaIndex = 5;
-constexpr int kSettingsRemoteCredentialsIndex = 6;
-constexpr int kSettingsAboutIndex = 7;
+constexpr int kSettingsRemoteSetupIndex = 5;
+constexpr int kSettingsAboutIndex = 6;
 
 void clampListSelection(AppCommandTarget& target)
 {
@@ -48,14 +47,14 @@ void commandPlayFromMenu(AppCommandTarget& target)
     auto& playback_controller = target.playbackController();
     auto& library_controller = target.libraryController();
     const auto& session = playback_controller.session();
-    if (session.status == PlaybackStatus::Paused && session.current_track_id) {
+    if (session.status == PlaybackStatus::Paused && (session.current_track_id || !session.current_stream_title.empty())) {
         playback_controller.resume();
         return;
     }
     if (session.status == PlaybackStatus::Playing) {
         return;
     }
-    if (session.current_track_id) {
+    if (session.current_track_id || !session.current_stream_title.empty()) {
         playback_controller.resume();
         return;
     }
@@ -63,7 +62,7 @@ void commandPlayFromMenu(AppCommandTarget& target)
     const auto ids = library_controller.allSongIdsSorted();
     if (!ids.empty()) {
         library_controller.setSongsContextAll();
-        (void)playback_controller.startTrack(library_controller, ids.front());
+        (void)target.startLibraryTrack(ids.front());
     }
 }
 
@@ -83,6 +82,11 @@ void commandCycleMainMenuPlaybackMode(AppCommandTarget& target)
     const auto& session = playback_controller.session();
     if (session.shuffle_enabled) {
         playback_controller.setShuffleEnabled(false);
+        playback_controller.setRepeatAll(true);
+        return;
+    }
+    if (session.repeat_all) {
+        playback_controller.setRepeatAll(false);
         playback_controller.setRepeatOne(true);
         return;
     }
@@ -94,6 +98,26 @@ void commandCycleMainMenuPlaybackMode(AppCommandTarget& target)
     playback_controller.setRepeatOne(false);
     playback_controller.setRepeatAll(false);
     playback_controller.setShuffleEnabled(true);
+}
+
+void commandToggleRepeatAll(AppCommandTarget& target)
+{
+    auto& playback_controller = target.playbackController();
+    const bool enabled = !playback_controller.session().repeat_all;
+    playback_controller.setRepeatAll(enabled);
+    if (!enabled) {
+        playback_controller.setRepeatOne(false);
+    }
+}
+
+void commandToggleRepeatOne(AppCommandTarget& target)
+{
+    auto& playback_controller = target.playbackController();
+    const bool enabled = !playback_controller.session().repeat_one;
+    playback_controller.setRepeatOne(enabled);
+    if (!enabled) {
+        playback_controller.setRepeatAll(false);
+    }
 }
 
 void commandMoveMainMenuSelection(AppCommandTarget& target, int delta)
@@ -159,19 +183,35 @@ void commandMoveSelection(AppCommandTarget& target, int delta)
     target.navigationState().moveSelection(delta, static_cast<int>(model.rows.size()), model.max_visible_rows);
 }
 
+void commandMoveSelectionPage(AppCommandTarget& target, int delta_pages)
+{
+    const auto model = target.pageModel();
+    const int count = static_cast<int>(model.rows.size());
+    auto& navigation = target.navigationState();
+    if (count <= 0) {
+        navigation.list_selection = {};
+        return;
+    }
+    const int step = std::max(1, model.max_visible_rows - 1);
+    navigation.list_selection.selected = std::clamp(
+        navigation.list_selection.selected + (delta_pages * step),
+        0,
+        count - 1);
+    navigation.clampListSelection(count, model.max_visible_rows);
+}
+
 void commandConfirmListPage(AppCommandTarget& target)
 {
     const int selected = target.navigationState().list_selection.selected;
     const auto page = target.currentPage();
     auto& library_controller = target.libraryController();
-    auto& playback_controller = target.playbackController();
     const auto library_result = library_controller.openSelectedListItem(page, selected);
     switch (library_result.kind) {
     case LibraryOpenResult::Kind::PushPage:
         commandPushPage(target, library_result.page);
         return;
     case LibraryOpenResult::Kind::StartTrack:
-        if (playback_controller.startTrack(library_controller, library_result.track_id) && target.currentPage() != AppPage::NowPlaying) {
+        if (target.startLibraryTrack(library_result.track_id) && target.currentPage() != AppPage::NowPlaying) {
             commandPushPage(target, AppPage::NowPlaying);
         }
         return;
@@ -183,8 +223,13 @@ void commandConfirmListPage(AppCommandTarget& target)
         return;
     }
 
-    if (page == AppPage::Settings && (selected == kSettingsRemoteMediaIndex || selected == kSettingsRemoteCredentialsIndex)) {
-        commandPushPage(target, AppPage::SourceManager);
+    if (page == AppPage::Settings && selected == kSettingsRemoteSetupIndex) {
+        (void)target.handleSettingsRemoteConfirm(selected);
+        return;
+    }
+
+    if (page == AppPage::RemoteSetup) {
+        (void)target.handleRemoteSetupConfirm(selected);
         return;
     }
 
@@ -195,10 +240,13 @@ void commandConfirmListPage(AppCommandTarget& target)
         return;
     }
 
+    if (page == AppPage::RemoteProfileSettings) {
+        (void)target.handleRemoteProfileSettingsConfirm(selected);
+        return;
+    }
+
     if (page == AppPage::RemoteBrowse && selected >= 0) {
-        if (!target.handleRemoteBrowseConfirm(selected)) {
-            commandPushPage(target, AppPage::StreamDetail);
-        }
+        (void)target.handleRemoteBrowseConfirm(selected);
         return;
     }
 

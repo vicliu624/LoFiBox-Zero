@@ -90,14 +90,16 @@ Supported contexts:
 
 - `F1` `MUST` open a modal shortcut-help window on top of the list.
 - The modal `MUST` include:
-  - `DEL`: delete song
-  - `ENTER`: play
+  - `OK`: play
+  - `UP` / `DOWN`: move one row
+  - `PGUP` / `PGDN`: move by one page
   - `BACKSPACE`: return to parent page
-  - `F2`: search
-  - `F3`: sort
+  - `T`: sort
+  - `F2` through `F8`: global playback controls
+  - `F9`: search
 - The modal `MUST NOT` show the active sort mode as extra explanatory text; users should perceive sorting from the list order itself.
 - `BACKSPACE` `MUST` close the modal before navigating away.
-- `F3` sort order `MUST` cycle through:
+- `T` sort order `MUST` cycle through:
   - song title ascending
   - song title descending
   - artist name ascending

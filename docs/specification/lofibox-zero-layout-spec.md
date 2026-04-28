@@ -56,6 +56,10 @@ The current UI implementation uses six layout templates:
 
 These are ownership zones, not necessarily literal widget bounding boxes.
 
+The standard top bar left zone `MUST` render `F1:HELP` on every non-boot page that uses the standard top bar.
+Back-navigation state belongs to input handling and the navigation stack; it `MUST NOT` replace the left-zone help label with a raw back glyph.
+All textual content in the top bar zones `MUST` be vertically centered within the `20` pixel topbar, including the left help label, centered title, right status/source label, and the Main Menu playback summary strip.
+
 ## 5. Template T0: Boot
 
 ### Geometry
@@ -302,6 +306,8 @@ Five evenly distributed slots inside `transport-row`:
 | Now Playing | `T3` | dedicated playback layout |
 | Equalizer | `T4` | dedicated EQ layout |
 | Settings | `T2-D` | icon plus value/chevron |
+| Remote Setup | `T2-A` | supported remote source kinds before profile fields |
+| Remote Profile Settings | `T2-B` | concrete selected-kind profile fields |
 | About | `T5` | dedicated information card |
 
 ## 12. Layout Prohibitions

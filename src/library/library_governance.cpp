@@ -12,6 +12,9 @@ std::vector<LibraryFileChange> LibraryGovernanceService::incrementalChanges(cons
 {
     std::unordered_set<std::string> known{};
     for (const auto& track : before.tracks) {
+        if (track.remote) {
+            continue;
+        }
         known.insert(track.path.lexically_normal().string());
     }
     std::unordered_set<std::string> current{};
@@ -24,6 +27,9 @@ std::vector<LibraryFileChange> LibraryGovernanceService::incrementalChanges(cons
         }
     }
     for (const auto& track : before.tracks) {
+        if (track.remote) {
+            continue;
+        }
         const auto normalized = track.path.lexically_normal().string();
         if (!current.contains(normalized)) {
             changes.push_back({LibraryChangeKind::Removed, track.path, 0, 0});

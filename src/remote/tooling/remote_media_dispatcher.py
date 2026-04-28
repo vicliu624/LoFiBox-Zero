@@ -6,8 +6,12 @@ from typing import Any, Dict, List
 
 from remote.emby import emby_provider
 from remote.jellyfin import jellyfin_provider
+from remote.common.media_contract import nodes_response, stream_response, tracks_response
+from remote.dlna import dlna_provider
 from remote.navidrome import navidrome_provider
 from remote.opensubsonic import opensubsonic_provider
+from remote.playlist import playlist_provider
+from remote.shares import share_provider
 
 
 def _provider(kind: str):
@@ -19,6 +23,12 @@ def _provider(kind: str):
         return navidrome_provider
     if kind == "opensubsonic":
         return opensubsonic_provider
+    if kind == "playlist-manifest":
+        return playlist_provider
+    if kind in ("webdav", "ftp", "sftp", "smb", "nfs"):
+        return share_provider
+    if kind == "dlna-upnp":
+        return dlna_provider
     raise ValueError(f"Unsupported kind: {kind}")
 
 
@@ -39,8 +49,8 @@ def _search(payload: Dict[str, Any]) -> Dict[str, Any]:
     limit = int(payload.get("limit", 20))
     kind = _normalized_kind(profile)
     if kind in ("opensubsonic", "navidrome"):
-        return {"tracks": _provider(kind).search(profile, query, limit)}
-    return {"tracks": _provider(kind).search(profile, session, query, limit)}
+        return tracks_response(profile, _provider(kind).search(profile, query, limit))
+    return tracks_response(profile, _provider(kind).search(profile, session, query, limit))
 
 
 def _recent(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -49,8 +59,8 @@ def _recent(payload: Dict[str, Any]) -> Dict[str, Any]:
     limit = int(payload.get("limit", 20))
     kind = _normalized_kind(profile)
     if kind in ("opensubsonic", "navidrome"):
-        return {"tracks": _provider(kind).recent(profile, limit)}
-    return {"tracks": _provider(kind).recent(profile, session, limit)}
+        return tracks_response(profile, _provider(kind).recent(profile, limit))
+    return tracks_response(profile, _provider(kind).recent(profile, session, limit))
 
 
 def _library_tracks(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -59,8 +69,8 @@ def _library_tracks(payload: Dict[str, Any]) -> Dict[str, Any]:
     limit = int(payload.get("limit", 50))
     kind = _normalized_kind(profile)
     if kind in ("opensubsonic", "navidrome"):
-        return {"tracks": _provider(kind).library_tracks(profile, limit)}
-    return {"tracks": _provider(kind).library_tracks(profile, session, limit)}
+        return tracks_response(profile, _provider(kind).library_tracks(profile, limit))
+    return tracks_response(profile, _provider(kind).library_tracks(profile, session, limit))
 
 
 def _browse(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -70,8 +80,8 @@ def _browse(payload: Dict[str, Any]) -> Dict[str, Any]:
     limit = int(payload.get("limit", 50))
     kind = _normalized_kind(profile)
     if kind in ("opensubsonic", "navidrome"):
-        return {"nodes": _provider(kind).browse(profile, parent, limit)}
-    return {"nodes": _provider(kind).browse(profile, session, parent, limit)}
+        return nodes_response(profile, _provider(kind).browse(profile, parent, limit))
+    return nodes_response(profile, _provider(kind).browse(profile, session, parent, limit))
 
 
 def _resolve(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -80,8 +90,8 @@ def _resolve(payload: Dict[str, Any]) -> Dict[str, Any]:
     track = payload["track"]
     kind = _normalized_kind(profile)
     if kind in ("opensubsonic", "navidrome"):
-        return _provider(kind).resolve(profile, track)
-    return _provider(kind).resolve(profile, session, track)
+        return stream_response(profile, _provider(kind).resolve(profile, track))
+    return stream_response(profile, _provider(kind).resolve(profile, session, track))
 
 
 def run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -108,3 +118,7 @@ def main(argv: List[str]) -> int:
         payload = json.load(handle)
     sys.stdout.write(json.dumps(run_payload(payload), separators=(",", ":")))
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

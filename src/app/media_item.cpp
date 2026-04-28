@@ -16,9 +16,10 @@ MediaItem mediaItemFromTrackRecord(const TrackRecord& track)
     item.artist = track.artist;
     item.album = track.album;
     item.duration_seconds = track.duration_seconds;
-    item.source.kind = MediaItemSourceKind::LocalFile;
-    item.source.source_id = "local";
-    item.source.provider_family = "local";
+    item.source.kind = track.remote ? MediaItemSourceKind::RemoteServer : MediaItemSourceKind::LocalFile;
+    item.source.source_id = track.remote ? track.remote_profile_id : "local";
+    item.source.source_label = track.remote ? track.source_label : "LOCAL";
+    item.source.provider_family = track.remote ? "remote" : "local";
     return item;
 }
 
@@ -33,6 +34,7 @@ MediaItem mediaItemFromRemoteTrack(const RemoteServerProfile& profile, const Rem
     item.duration_seconds = track.duration_seconds;
     item.source.kind = MediaItemSourceKind::RemoteServer;
     item.source.source_id = profile.id;
+    item.source.source_label = track.source_label.empty() ? profile.name : track.source_label;
     item.source.provider_family = std::string(remote::remoteProviderFamily(profile.kind));
     return item;
 }

@@ -69,10 +69,28 @@ struct RunningProcess {
     bool active{false};
 };
 
+struct RunningPipeProcess {
+#if defined(_WIN32)
+    PROCESS_INFORMATION process_info{};
+    HANDLE read_handle{nullptr};
+#elif defined(__linux__)
+    pid_t pid{-1};
+    int read_fd{-1};
+#endif
+    bool active{false};
+};
+
 bool spawnAudioProcess(RunningProcess& process, const fs::path& executable, const std::vector<std::string>& args);
 void stopAudioProcess(RunningProcess& process);
+void pauseAudioProcess(RunningProcess& process);
+void resumeAudioProcess(RunningProcess& process);
 bool audioProcessRunning(RunningProcess& process);
 bool audioProcessFinished(RunningProcess& process);
+bool spawnPipeProcess(RunningPipeProcess& process, const fs::path& executable, const std::vector<std::string>& args);
+int readPipeProcess(RunningPipeProcess& process, char* buffer, int max_bytes);
+void stopPipeProcess(RunningPipeProcess& process);
+void pausePipeProcess(RunningPipeProcess& process);
+void resumePipeProcess(RunningPipeProcess& process);
 bool probeConnectivity();
 bool metadataCompatibleWithFilename(const fs::path& path, const app::TrackMetadata& metadata);
 

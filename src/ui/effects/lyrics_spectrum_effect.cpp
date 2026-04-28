@@ -78,16 +78,16 @@ void renderFoamSide(core::Canvas& canvas, const SpectrumFrame& frame, double ela
     constexpr int bottom = 148;
     constexpr int edge_margin = 4;
     constexpr int min_width = 4;
-    constexpr int max_width = 34;
+    constexpr int max_width = 42;
     const int edge_x = left_side ? edge_margin : (core::kDisplayWidth - edge_margin - 1);
     const int direction = left_side ? 1 : -1;
     const float side_phase = left_side ? 0.0f : 7.3f;
     for (int y = top; y <= bottom; ++y) {
         const float rise = static_cast<float>(bottom - y) / static_cast<float>(bottom - top);
         const float raw_energy = frame.available ? adjacentEnergy(frame, rise) : 0.0f;
-        const float shaped_energy = std::pow(std::clamp(raw_energy, 0.0f, 1.0f), 0.54f);
-        const float vertical_fade = 0.30f + (std::pow(1.0f - rise, 0.52f) * 0.70f);
-        const float slow_swell = 0.70f + (0.30f * std::sin((elapsed_seconds * 0.72) + (rise * 5.4f) + side_phase));
+        const float shaped_energy = static_cast<float>(std::pow(std::clamp(raw_energy * 1.45f, 0.0f, 1.0f), 0.46f));
+        const float vertical_fade = 0.30f + (static_cast<float>(std::pow(1.0f - rise, 0.52f)) * 0.70f);
+        const float slow_swell = 0.70f + (0.30f * static_cast<float>(std::sin((elapsed_seconds * 0.72) + (rise * 5.4f) + side_phase)));
         const float wave = foamWave(static_cast<float>(y), elapsed_seconds, side_phase);
         const float crest = std::max(0.0f, foamWave(static_cast<float>(y) + 9.0f, elapsed_seconds, side_phase + 2.2f));
         const float width_float = static_cast<float>(min_width) + (shaped_energy * slow_swell * static_cast<float>(max_width - min_width)) + (wave * (2.2f + shaped_energy * 5.4f));
@@ -98,8 +98,8 @@ void renderFoamSide(core::Canvas& canvas, const SpectrumFrame& frame, double ela
             const float body = std::pow(1.0f - inward, 1.78f);
             const float boundary = std::exp(-std::pow((inward - 0.82f) * 4.2f, 2.0f));
             const float spray = std::max(0.0f, static_cast<float>(std::sin((static_cast<float>(y) * 0.31f) + (offset * 0.73f) + (elapsed_seconds * 2.4) + side_phase)));
-            const float opacity_float = shaped_energy * vertical_fade * ((body * 70.0f) + (boundary * crest * 48.0f) + (spray * boundary * 16.0f));
-            const auto opacity = static_cast<std::uint8_t>(std::clamp(opacity_float, 0.0f, 116.0f));
+            const float opacity_float = shaped_energy * vertical_fade * ((body * 82.0f) + (boundary * crest * 56.0f) + (spray * boundary * 18.0f));
+            const auto opacity = static_cast<std::uint8_t>(std::clamp(opacity_float, 0.0f, 132.0f));
             if (opacity == 0) {
                 continue;
             }

@@ -4,6 +4,7 @@ import json
 import urllib.parse
 from typing import Any, Dict, List
 
+from remote.common import media_contract
 from remote.tooling.http_json import base_url, json_request
 
 
@@ -40,39 +41,156 @@ def probe(profile: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def parse_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def parse_items(items: List[Dict[str, Any]], profile: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
     tracks = []
+    active_profile = profile or {}
     for item in items:
         artists = item.get("Artists") or []
-        tracks.append({
-            "id": item.get("Id", ""),
-            "title": item.get("Name", ""),
-            "artist": artists[0] if artists else "",
-            "album": item.get("Album", ""),
-            "album_id": item.get("AlbumId", ""),
-            "duration_seconds": int((item.get("RunTimeTicks") or 0) / 10000000),
-        })
+        item_id = item.get("Id", "")
+        tracks.append(
+            media_contract.track(
+                active_profile,
+                item_id,
+                item.get("Name", ""),
+                artists[0] if artists else "",
+                item.get("Album", ""),
+                item.get("AlbumId", ""),
+                int((item.get("RunTimeTicks") or 0) / 10000000),
+                media_contract.item_artwork_key(item),
+                media_contract.tokenless_item_artwork_url(active_profile, item_id) if active_profile else "",
+            )
+        )
     return tracks
 
 
-def node(kind: str, item_id: str, title: str, subtitle: str = "", playable: bool = False, browsable: bool = True) -> Dict[str, Any]:
-    return {
-        "kind": kind,
-        "id": item_id,
-        "title": title,
-        "subtitle": subtitle,
-        "playable": playable,
-        "browsable": browsable,
-    }
+def node(
+    kind: str,
+    item_id: str,
+    title: str,
+    subtitle: str = "",
+    playable: bool = False,
+    browsable: bool = True,
+    artist: str = "",
+    album: str = "",
+    duration_seconds: int = 0,
+    album_id: str = "",
+    artwork_key: str = "",
+    artwork_url: str = "",
+    profile: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    return media_contract.node(
+        profile or {},
+        kind,
+        item_id,
+        title,
+        subtitle,
+        playable,
+        browsable,
+        artist,
+        album,
+        duration_seconds,
+        album_id,
+        artwork_key,
+        artwork_url,
+    )
 
 
-def parse_nodes(items: List[Dict[str, Any]], kind: str, playable: bool = False) -> List[Dict[str, Any]]:
+def count_label(item: Dict[str, Any]) -> str:
+    for key in ("SongCount", "RecursiveItemCount", "ChildCount", "AlbumCount", "ItemCount"):
+        try:
+            value = int(item.get(key) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return str(value)
+    return ""
+
+
+def parse_nodes(items: List[Dict[str, Any]], kind: str, playable: bool = False, profile: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
     nodes: List[Dict[str, Any]] = []
+    active_profile = profile or {}
     for item in items:
         title = item.get("Name") or item.get("Title") or item.get("Id", "")
         item_id = item.get("Id", "")
+        artists = item.get("Artists") or []
+        artist = artists[0] if artists else item.get("Artist", "") or ""
+        album = item.get("Album", "")
+        duration_seconds = int((item.get("RunTimeTicks") or 0) / 10000000)
         if title or item_id:
-            nodes.append(node(kind, item_id, title, item.get("Album", ""), playable=playable, browsable=not playable))
+            nodes.append(
+                node(
+                    kind,
+                    item_id,
+                    title,
+                    album if playable else count_label(item),
+                    playable=playable,
+                    browsable=not playable,
+                    artist=artist,
+                    album=album,
+                    duration_seconds=duration_seconds,
+                    album_id=item.get("AlbumId", ""),
+                    artwork_key=media_contract.item_artwork_key(item),
+                    artwork_url=media_contract.tokenless_item_artwork_url(active_profile, item_id) if active_profile else "",
+                    profile=active_profile,
+                )
+            )
+    return nodes
+
+
+def parse_mixed_folder_nodes(items: List[Dict[str, Any]], profile: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
+    nodes: List[Dict[str, Any]] = []
+    active_profile = profile or {}
+    for item in items:
+        item_id = item.get("Id", "")
+        title = item.get("Name") or item.get("Title") or item_id
+        item_type = item.get("Type") or ""
+        media_type = item.get("MediaType") or ""
+        artists = item.get("Artists") or []
+        artist = artists[0] if artists else item.get("Artist", "") or ""
+        album = item.get("Album", "")
+        duration_seconds = int((item.get("RunTimeTicks") or 0) / 10000000)
+        artwork_key = media_contract.item_artwork_key(item)
+        artwork_url = media_contract.tokenless_item_artwork_url(active_profile, item_id) if active_profile else ""
+
+        if media_type.lower() == "audio" or item_type.lower() == "audio":
+            nodes.append(
+                node(
+                    "tracks",
+                    item_id,
+                    title,
+                    artist or album,
+                    playable=True,
+                    browsable=False,
+                    artist=artist,
+                    album=album,
+                    duration_seconds=duration_seconds,
+                    album_id=item.get("AlbumId", ""),
+                    artwork_key=artwork_key,
+                    artwork_url=artwork_url,
+                    profile=active_profile,
+                )
+            )
+            continue
+
+        if bool(item.get("IsFolder")) or item_type in ("Folder", "CollectionFolder", "AggregateFolder", "MusicAlbum", "Playlist"):
+            child_kind = "album" if item_type == "MusicAlbum" else ("playlist" if item_type == "Playlist" else "folder")
+            nodes.append(
+                node(
+                    child_kind,
+                    item_id,
+                    title,
+                    item_type or "Folder",
+                    playable=False,
+                    browsable=True,
+                    artist=artist,
+                    album=album,
+                    duration_seconds=duration_seconds,
+                    album_id=item.get("AlbumId", ""),
+                    artwork_key=artwork_key,
+                    artwork_url=artwork_url,
+                    profile=active_profile,
+                )
+            )
     return nodes
 
 
@@ -82,6 +200,38 @@ def items_path(user_id: str) -> str:
 
 def latest_path(user_id: str) -> str:
     return f"/Users/{urllib.parse.quote(user_id)}/Items/Latest" if user_id else "/Items/Latest"
+
+
+def item_detail(profile: Dict[str, Any], session: Dict[str, Any], item_id: str) -> Dict[str, Any]:
+    if not item_id:
+        return {}
+    base = base_url(profile)
+    user_id = session.get("user_id", "")
+    token = session.get("access_token", "")
+    path = f"/Users/{urllib.parse.quote(user_id)}/Items/{urllib.parse.quote(item_id)}" if user_id else f"/Items/{urllib.parse.quote(item_id)}"
+    params = urllib.parse.urlencode({"Fields": "MediaSources,MediaStreams", "api_key": token})
+    try:
+        return json_request(f"{base}{path}?{params}")
+    except Exception:
+        return {}
+
+
+def stream_diagnostics(item: Dict[str, Any]) -> Dict[str, Any]:
+    media_sources = item.get("MediaSources") or []
+    source = media_sources[0] if media_sources else {}
+    streams = source.get("MediaStreams") or item.get("MediaStreams") or []
+    audio_stream = next((stream for stream in streams if (stream.get("Type") or "").lower() == "audio"), {})
+    bitrate = source.get("Bitrate") or audio_stream.get("BitRate") or audio_stream.get("Bitrate") or 0
+    codec = audio_stream.get("Codec") or source.get("Container") or ""
+    return {
+        "bitrate_kbps": int((bitrate or 0) / 1000),
+        "codec": str(codec or ""),
+        "sample_rate_hz": int(audio_stream.get("SampleRate") or audio_stream.get("SampleRateHz") or 0),
+        "channel_count": int(audio_stream.get("Channels") or audio_stream.get("ChannelCount") or 0),
+        "live": bool(source.get("IsInfiniteStream") or item.get("IsLive")),
+        "connected": True,
+        "connection_status": "READY",
+    }
 
 
 def item_query(
@@ -107,7 +257,7 @@ def item_query(
     if query:
         params_dict["SearchTerm"] = query
     data = json_request(f"{base}{items_path(user_id)}?{urllib.parse.urlencode(params_dict)}")
-    return parse_items(data.get("Items", []))
+    return parse_items(data.get("Items", []), profile)
 
 
 def search(profile: Dict[str, Any], session: Dict[str, Any], query: str, limit: int) -> List[Dict[str, Any]]:
@@ -119,11 +269,43 @@ def recent(profile: Dict[str, Any], session: Dict[str, Any], limit: int) -> List
     user_id = session.get("user_id", "")
     token = session.get("access_token", "")
     params = urllib.parse.urlencode({"IncludeItemTypes": "Audio", "Limit": str(limit), "api_key": token})
-    return parse_items(json_request(f"{base}{latest_path(user_id)}?{params}"))
+    return parse_items(json_request(f"{base}{latest_path(user_id)}?{params}"), profile)
 
 
 def library_tracks(profile: Dict[str, Any], session: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
     return item_query(profile, session, limit)
+
+
+def item_count(profile: Dict[str, Any], session: Dict[str, Any], params_dict: Dict[str, str]) -> int:
+    base = base_url(profile)
+    user_id = session.get("user_id", "")
+    token = session.get("access_token", "")
+    request_params = {**params_dict, "Limit": "1", "api_key": token}
+    try:
+        data = json_request(f"{base}{items_path(user_id)}?{urllib.parse.urlencode(request_params)}")
+    except Exception:
+        return 0
+    try:
+        return int(data.get("TotalRecordCount", len(data.get("Items", []) or [])) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def root_count_nodes(profile: Dict[str, Any], session: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def count(params_dict: Dict[str, str]) -> str:
+        return str(item_count(profile, session, params_dict))
+
+    return [
+        node("artists", "artists", "ARTISTS", count({"IncludeItemTypes": "MusicArtist", "Recursive": "true"}), profile=profile),
+        node("albums", "albums", "ALBUMS", count({"IncludeItemTypes": "MusicAlbum", "Recursive": "true"}), profile=profile),
+        node("tracks", "tracks", "TRACKS", count({"IncludeItemTypes": "Audio", "Recursive": "true"}), profile=profile),
+        node("genres", "genres", "GENRES", count({"IncludeItemTypes": "MusicGenre", "Recursive": "true"}), profile=profile),
+        node("playlists", "playlists", "PLAYLISTS", count({"IncludeItemTypes": "Playlist", "Recursive": "true"}), profile=profile),
+        node("folders", "folders", "FOLDERS", count({"Recursive": "false"}), profile=profile),
+        node("favorites", "favorites", "FAVORITES", count({"IncludeItemTypes": "Audio", "Recursive": "true", "Filters": "IsFavorite"}), profile=profile),
+        node("recently-added", "recently-added", "RECENT ADD", count({"IncludeItemTypes": "Audio", "Recursive": "true"}), profile=profile),
+        node("recently-played", "recently-played", "RECENT PLAY", count({"IncludeItemTypes": "Audio", "Recursive": "true", "SortBy": "DatePlayed", "SortOrder": "Descending"}), profile=profile),
+    ]
 
 
 def browse(profile: Dict[str, Any], session: Dict[str, Any], parent: Dict[str, Any], limit: int) -> List[Dict[str, Any]]:
@@ -134,60 +316,104 @@ def browse(profile: Dict[str, Any], session: Dict[str, Any], parent: Dict[str, A
     parent_id = parent.get("id", "")
 
     if kind in ("root", ""):
-        return [
-            node("artists", "artists", "ARTISTS", "Server artists"),
-            node("albums", "albums", "ALBUMS", "Server albums"),
-            node("tracks", "tracks", "TRACKS", "All audio tracks"),
-            node("genres", "genres", "GENRES", "Server genres"),
-            node("playlists", "playlists", "PLAYLISTS", "Server playlists"),
-            node("folders", "folders", "FOLDERS", "Folder view"),
-            node("favorites", "favorites", "FAVORITES", "Favorite tracks"),
-            node("recently-added", "recently-added", "RECENT ADD", "Recently added"),
-            node("recently-played", "recently-played", "RECENT PLAY", "Recently played"),
-        ]
+        return root_count_nodes(profile, session)
 
     common = {"Limit": str(limit), "api_key": token}
     if kind == "artists":
-        params = urllib.parse.urlencode({**common, "IncludeItemTypes": "MusicArtist", "Recursive": "true", "SortBy": "SortName"})
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "artist")
+        params = urllib.parse.urlencode({**common, "IncludeItemTypes": "MusicArtist", "Recursive": "true", "SortBy": "SortName", "Fields": "ChildCount,RecursiveItemCount,SongCount"})
+        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "artist", profile=profile)
     if kind == "albums":
-        params = urllib.parse.urlencode({**common, "IncludeItemTypes": "MusicAlbum", "Recursive": "true", "SortBy": "SortName"})
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "album")
+        params = urllib.parse.urlencode({**common, "IncludeItemTypes": "MusicAlbum", "Recursive": "true", "SortBy": "SortName", "Fields": "ChildCount,RecursiveItemCount,SongCount"})
+        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "album", profile=profile)
     if kind == "genres":
-        params = urllib.parse.urlencode({**common, "IncludeItemTypes": "MusicGenre", "Recursive": "true", "SortBy": "SortName"})
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "genre")
+        params = urllib.parse.urlencode({**common, "IncludeItemTypes": "MusicGenre", "Recursive": "true", "SortBy": "SortName", "Fields": "ChildCount,RecursiveItemCount,SongCount"})
+        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "genre", profile=profile)
     if kind == "playlists":
         params = urllib.parse.urlencode({**common, "IncludeItemTypes": "Playlist", "Recursive": "true", "SortBy": "SortName"})
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "playlist")
+        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "playlist", profile=profile)
     if kind == "folders":
         params = urllib.parse.urlencode({**common, "Recursive": "false", "SortBy": "SortName"})
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "folder")
+        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "folder", profile=profile)
     if kind == "favorites":
         params = urllib.parse.urlencode({**common, "IncludeItemTypes": "Audio", "Recursive": "true", "Filters": "IsFavorite", "Fields": "RunTimeTicks,MediaSources"})
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "tracks", playable=True)
+        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "tracks", playable=True, profile=profile)
     if kind == "recently-added":
-        return [node("tracks", item["id"], item["title"], item.get("artist", ""), playable=True, browsable=False) for item in recent(profile, session, limit)]
+        return [
+            node(
+                "tracks",
+                item["id"],
+                item["title"],
+                item.get("artist", ""),
+                playable=True,
+                browsable=False,
+                artist=item.get("artist", ""),
+                album=item.get("album", ""),
+                duration_seconds=int(item.get("duration_seconds", 0) or 0),
+                album_id=item.get("album_id", ""),
+                artwork_key=item.get("artwork_key", ""),
+                artwork_url=item.get("artwork_url", ""),
+                profile=profile,
+            )
+            for item in recent(profile, session, limit)
+        ]
     if kind == "recently-played":
         params = urllib.parse.urlencode({**common, "IncludeItemTypes": "Audio", "Recursive": "true", "SortBy": "DatePlayed", "SortOrder": "Descending", "Fields": "RunTimeTicks,MediaSources"})
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "tracks", playable=True)
-    if kind in ("artist", "album", "genre", "playlist", "folder"):
+        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "tracks", playable=True, profile=profile)
+    if kind in ("artist", "album", "genre", "playlist"):
         params_dict = {**common, "IncludeItemTypes": "Audio", "Recursive": "true", "Fields": "RunTimeTicks,MediaSources"}
         if kind == "album":
             params_dict["ParentId"] = parent_id
         elif kind == "playlist":
             params_dict["ParentId"] = parent_id
-        elif kind == "folder":
+        elif kind == "artist" and parent_id:
             params_dict["ParentId"] = parent_id
-            params_dict["Recursive"] = "false"
+        elif kind == "genre" and parent_id:
+            params_dict["GenreIds"] = parent_id
         else:
             params_dict["SearchTerm"] = parent.get("title", "")
         params = urllib.parse.urlencode(params_dict)
-        return parse_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), "tracks", playable=True)
+        items = json_request(f"{base}{items_path(user_id)}?{params}").get("Items", [])
+        if not items and kind == "artist" and parent_id:
+            for artist_key in ("ArtistIds", "AlbumArtistIds"):
+                fallback_params = {**common, "IncludeItemTypes": "Audio", "Recursive": "true", "Fields": "RunTimeTicks,MediaSources", artist_key: parent_id}
+                items = json_request(f"{base}{items_path(user_id)}?{urllib.parse.urlencode(fallback_params)}").get("Items", [])
+                if items:
+                    break
+        if not items and kind in ("artist", "genre"):
+            fallback_params = {**common, "IncludeItemTypes": "Audio", "Recursive": "true", "Fields": "RunTimeTicks,MediaSources", "SearchTerm": parent.get("title", "")}
+            items = json_request(f"{base}{items_path(user_id)}?{urllib.parse.urlencode(fallback_params)}").get("Items", [])
+        return parse_nodes(items, "tracks", playable=True, profile=profile)
+    if kind == "folder":
+        params = urllib.parse.urlencode({**common, "ParentId": parent_id, "Recursive": "false", "Fields": "RunTimeTicks,MediaSources,ImageTags,AlbumPrimaryImageTag,PrimaryImageAspectRatio,Path"})
+        return parse_mixed_folder_nodes(json_request(f"{base}{items_path(user_id)}?{params}").get("Items", []), profile=profile)
     if kind == "tracks":
-        return [node("tracks", item["id"], item["title"], item.get("artist", ""), playable=True, browsable=False) for item in library_tracks(profile, session, limit)]
+        return [
+            node(
+                "tracks",
+                item["id"],
+                item["title"],
+                item.get("artist", ""),
+                playable=True,
+                browsable=False,
+                artist=item.get("artist", ""),
+                album=item.get("album", ""),
+                duration_seconds=int(item.get("duration_seconds", 0) or 0),
+                album_id=item.get("album_id", ""),
+                artwork_key=item.get("artwork_key", ""),
+                artwork_url=item.get("artwork_url", ""),
+                profile=profile,
+            )
+            for item in library_tracks(profile, session, limit)
+        ]
     return []
 
 
 def resolve(profile: Dict[str, Any], session: Dict[str, Any], track: Dict[str, Any]) -> Dict[str, Any]:
     token = session.get("access_token", "")
-    return {"url": f"{base_url(profile)}/Audio/{track['id']}/stream?static=true&api_key={urllib.parse.quote(token)}", "headers": [], "seekable": True}
+    detail = item_detail(profile, session, track.get("id", ""))
+    return {
+        "url": f"{base_url(profile)}/Audio/{track['id']}/stream?static=true&api_key={urllib.parse.quote(token)}",
+        "headers": [],
+        "seekable": True,
+        **stream_diagnostics(detail),
+    }

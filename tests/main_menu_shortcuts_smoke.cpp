@@ -71,21 +71,35 @@ int main()
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F6, "F6", '\0'});
     snapshot = app.snapshot();
     if (!snapshot.shuffle_enabled || snapshot.repeat_one || snapshot.repeat_all) {
-        std::cerr << "Expected first Main Menu F6 press to enable shuffle mode.\n";
+        std::cerr << "Expected Main Menu F6 to toggle shuffle mode.\n";
         return 1;
     }
 
-    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F6, "F6", '\0'});
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F7, "F7", '\0'});
     snapshot = app.snapshot();
-    if (snapshot.shuffle_enabled || !snapshot.repeat_one) {
-        std::cerr << "Expected second Main Menu F6 press to enable single-track repeat.\n";
+    if (!snapshot.shuffle_enabled || snapshot.repeat_one || !snapshot.repeat_all) {
+        std::cerr << "Expected Main Menu F7 to enable loop mode without changing shuffle.\n";
+        return 1;
+    }
+
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F8, "F8", '\0'});
+    snapshot = app.snapshot();
+    if (!snapshot.shuffle_enabled || snapshot.repeat_all || !snapshot.repeat_one) {
+        std::cerr << "Expected Main Menu F8 to enable single-track repeat without changing shuffle.\n";
+        return 1;
+    }
+
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F8, "F8", '\0'});
+    snapshot = app.snapshot();
+    if (!snapshot.shuffle_enabled || snapshot.repeat_one || snapshot.repeat_all) {
+        std::cerr << "Expected second Main Menu F8 press to disable single-track repeat.\n";
         return 1;
     }
 
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F6, "F6", '\0'});
     snapshot = app.snapshot();
     if (snapshot.shuffle_enabled || snapshot.repeat_one || snapshot.repeat_all) {
-        std::cerr << "Expected third Main Menu F6 press to return to sequential mode.\n";
+        std::cerr << "Expected second Main Menu F6 press to disable shuffle mode.\n";
         return 1;
     }
 

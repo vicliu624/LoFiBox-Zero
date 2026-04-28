@@ -20,7 +20,7 @@ Before adding a dependency, verify:
 
 Use system libraries discovered through CMake `find_package` or `pkg-config`.
 
-Dependencies such as FFmpeg, GStreamer, TagLib, SQLite, libcurl, libsmbclient, libssh/libssh2, libnfs, libxml2, libupnp, Qt, GTK, or SDL2 must not be hidden behind build scripts.
+Dependencies such as FFmpeg, GStreamer, TagLib, SQLite, libcurl, libsmbclient, libssh/libssh2, libnfs, libxml2, libupnp, Qt, or GTK must not be hidden behind build scripts.
 
 ## Runtime Helper Dependencies
 

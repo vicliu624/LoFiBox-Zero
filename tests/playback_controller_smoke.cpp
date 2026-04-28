@@ -5,10 +5,13 @@
 #include <iostream>
 #include <memory>
 #include <set>
+#include <thread>
+#include <chrono>
 
 #include "app/library_controller.h"
 #include "playback/playback_controller.h"
 #include "app/runtime_services.h"
+#include "cache/cache_manager.h"
 
 namespace fs = std::filesystem;
 
@@ -87,6 +90,109 @@ public:
     fs::path last_path{};
 };
 
+class StartingThenPlayingBackend final : public lofibox::app::AudioPlaybackBackend {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "START-GATE-TEST"; }
+    bool playFile(const fs::path& path, double) override
+    {
+        last_path = path;
+        state_value = lofibox::app::AudioPlaybackState::Starting;
+        return true;
+    }
+    void stop() override { state_value = lofibox::app::AudioPlaybackState::Finished; }
+    [[nodiscard]] bool isPlaying() override { return state_value == lofibox::app::AudioPlaybackState::Playing; }
+    [[nodiscard]] bool isFinished() override { return state_value == lofibox::app::AudioPlaybackState::Finished; }
+    [[nodiscard]] lofibox::app::AudioPlaybackState state() override { return state_value; }
+    [[nodiscard]] lofibox::app::AudioVisualizationFrame visualizationFrame() const override
+    {
+        lofibox::app::AudioVisualizationFrame frame{};
+        if (state_value == lofibox::app::AudioPlaybackState::Playing) {
+            frame.available = true;
+            frame.bands[3] = 0.8f;
+        }
+        return frame;
+    }
+
+    lofibox::app::AudioPlaybackState state_value{lofibox::app::AudioPlaybackState::Idle};
+    fs::path last_path{};
+};
+
+class RemoteAudioBackend final : public lofibox::app::AudioPlaybackBackend {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "REMOTE-AUDIO-TEST"; }
+    bool playFile(const fs::path&, double) override { return false; }
+    bool playUri(const std::string& uri, double) override
+    {
+        played_uri = uri;
+        finished = false;
+        return true;
+    }
+    void stop() override { finished = true; }
+    [[nodiscard]] bool isPlaying() override { return !played_uri.empty() && !finished; }
+    [[nodiscard]] bool isFinished() override { return finished; }
+
+    std::string played_uri{};
+    bool finished{false};
+};
+
+class RemoteIdentityProvider final : public lofibox::app::TrackIdentityProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "REMOTE-IDENTITY-TEST"; }
+    [[nodiscard]] lofibox::app::TrackIdentity resolve(const fs::path&, const lofibox::app::TrackMetadata&) const override
+    {
+        lofibox::app::TrackIdentity identity{};
+        identity.found = true;
+        identity.source = "MUSICBRAINZ";
+        identity.confidence = 0.92;
+        identity.metadata.title = "Governed Song";
+        identity.metadata.artist = "Governed Artist";
+        identity.metadata.album = "Governed Album";
+        identity.metadata.duration_seconds = 211;
+        identity.fingerprint = "remote-fingerprint-123";
+        return identity;
+    }
+};
+
+class RemoteLyricsProvider final : public lofibox::app::LyricsProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "REMOTE-LYRICS-TEST"; }
+    [[nodiscard]] lofibox::app::TrackLyrics fetch(const fs::path&, const lofibox::app::TrackMetadata& metadata) const override
+    {
+        lofibox::app::TrackLyrics lyrics{};
+        if (metadata.title && *metadata.title == "Governed Song") {
+            lyrics.plain = "governed remote lyric";
+            lyrics.source = "LRCLIB";
+        }
+        return lyrics;
+    }
+};
+
+class FingerprintOnlyRemoteIdentityProvider final : public lofibox::app::TrackIdentityProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "REMOTE-FINGERPRINT-ONLY-TEST"; }
+    [[nodiscard]] lofibox::app::TrackIdentity resolve(const fs::path&, const lofibox::app::TrackMetadata&) const override
+    {
+        lofibox::app::TrackIdentity identity{};
+        identity.fingerprint = "fingerprint-without-online-identity";
+        return identity;
+    }
+    [[nodiscard]] lofibox::app::TrackIdentity resolveRemoteStream(
+        std::string_view,
+        std::string_view,
+        const fs::path&,
+        const lofibox::app::TrackMetadata&) const override
+    {
+        lofibox::app::TrackIdentity identity{};
+        identity.fingerprint = "fingerprint-without-online-identity";
+        return identity;
+    }
+};
+
 } // namespace
 
 int main()
@@ -128,6 +234,10 @@ int main()
     playback.update(2.5, library);
     if (playback.session().elapsed_seconds < 2.0) {
         std::cerr << "Expected playback update to advance elapsed time while playing.\n";
+        return 1;
+    }
+    if (playback.session().visualization_frame.available) {
+        std::cerr << "Expected playback runtime not to synthesize fake visualization without backend audio samples.\n";
         return 1;
     }
 
@@ -302,6 +412,138 @@ int main()
         std::cerr << "Expected playback backend failure to pause the current session.\n";
         return 1;
     }
+
+    auto starting_services = lofibox::app::withNullRuntimeServices();
+    auto starting_backend = std::make_shared<StartingThenPlayingBackend>();
+    starting_services.playback.audio_backend = starting_backend;
+    lofibox::app::PlaybackController starting_playback{};
+    starting_playback.setServices(starting_services);
+    if (!starting_playback.startTrack(library, ids.front())) {
+        std::cerr << "Expected starting backend test to start a track request.\n";
+        return 1;
+    }
+    starting_playback.update(12.0, library);
+    if (starting_playback.session().elapsed_seconds > 0.01 || starting_playback.session().visualization_frame.available) {
+        std::cerr << "Expected elapsed time and visualization to wait until backend audio is actually playing.\n";
+        return 1;
+    }
+    starting_backend->state_value = lofibox::app::AudioPlaybackState::Playing;
+    starting_playback.update(1.25, library);
+    if (starting_playback.session().elapsed_seconds < 1.0 || !starting_playback.session().visualization_frame.available) {
+        std::cerr << "Expected elapsed time and visualization to start after backend audio enters Playing.\n";
+        return 1;
+    }
+
+    const fs::path remote_cache_root = fs::temp_directory_path() / "lofibox_zero_remote_governance_smoke";
+    fs::remove_all(remote_cache_root, ec);
+    auto remote_services = lofibox::app::withNullRuntimeServices();
+    auto remote_backend = std::make_shared<RemoteAudioBackend>();
+    remote_services.playback.audio_backend = remote_backend;
+    remote_services.metadata.track_identity_provider = std::make_shared<RemoteIdentityProvider>();
+    remote_services.metadata.lyrics_provider = std::make_shared<RemoteLyricsProvider>();
+    remote_services.cache.cache_manager = std::make_shared<lofibox::cache::CacheManager>(remote_cache_root);
+    lofibox::app::LibraryController remote_library{};
+    const lofibox::app::RemoteServerProfile remote_profile{
+        lofibox::app::RemoteServerKind::DirectUrl,
+        "direct",
+        "Remote Source",
+        "https://example.test/audio.mp3"};
+    const lofibox::app::RemoteTrack remote_track{
+        "remote-track-1",
+        "UNKNOWN",
+        "UNKNOWN",
+        "",
+        "",
+        0,
+        "direct",
+        "Remote Source"};
+    remote_library.mergeRemoteTracks(remote_profile, {remote_track});
+    const auto remote_ids = remote_library.allSongIdsSorted();
+    if (remote_ids.empty()) {
+        std::cerr << "Expected remote governance test track to enter Library.\n";
+        return 1;
+    }
+    auto* remote_record = remote_library.findMutableTrack(remote_ids.front());
+    if (remote_record == nullptr) {
+        std::cerr << "Expected remote governance test track to be mutable.\n";
+        return 1;
+    }
+    lofibox::app::PlaybackController remote_playback{};
+    remote_playback.setServices(remote_services);
+    lofibox::app::ResolvedRemoteStream remote_stream{};
+    remote_stream.url = "https://example.test/audio.mp3";
+    remote_stream.diagnostics.connected = true;
+    remote_stream.diagnostics.connection_status = "READY";
+    if (!remote_playback.startRemoteLibraryTrack(remote_stream, *remote_record, remote_profile, remote_track, "Remote Source", true)) {
+        std::cerr << "Expected remote Library playback to start.\n";
+        return 1;
+    }
+    for (int attempt = 0; attempt < 50; ++attempt) {
+        remote_playback.update(0.02, remote_library);
+        const auto* governed = remote_library.findTrack(remote_ids.front());
+        if (governed != nullptr && governed->title == "Governed Song") {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+    const auto* governed = remote_library.findTrack(remote_ids.front());
+    if (governed == nullptr
+        || governed->title != "Governed Song"
+        || governed->artist != "Governed Artist"
+        || governed->album != "Governed Album"
+        || governed->lyrics_plain != "governed remote lyric"
+        || governed->fingerprint != "remote-fingerprint-123") {
+        std::cerr << "Expected read-only remote playback to govern metadata and lyrics locally.\n";
+        return 1;
+    }
+    const auto cached_remote = remote_services.cache.cache_manager->getText(
+        lofibox::cache::CacheBucket::Metadata,
+        "remote-media-direct-url-direct-remote-track-1");
+    if (!cached_remote
+        || cached_remote->find("Governed Song") == std::string::npos
+        || cached_remote->find("remote-fingerprint-123") == std::string::npos) {
+        std::cerr << "Expected governed remote metadata to persist in the local cache bucket.\n";
+        return 1;
+    }
+
+    auto fingerprint_only_services = lofibox::app::withNullRuntimeServices();
+    fingerprint_only_services.playback.audio_backend = std::make_shared<RemoteAudioBackend>();
+    fingerprint_only_services.metadata.track_identity_provider = std::make_shared<FingerprintOnlyRemoteIdentityProvider>();
+    fingerprint_only_services.cache.cache_manager = std::make_shared<lofibox::cache::CacheManager>(remote_cache_root);
+    lofibox::app::LibraryController fingerprint_library{};
+    const lofibox::app::RemoteTrack fingerprint_track{
+        "remote-track-2",
+        "Already Named",
+        "Already Known Artist",
+        "Known Album",
+        "",
+        200,
+        "direct",
+        "Remote Source"};
+    fingerprint_library.mergeRemoteTracks(remote_profile, {fingerprint_track});
+    const auto fingerprint_ids = fingerprint_library.allSongIdsSorted();
+    auto* fingerprint_record = fingerprint_ids.empty() ? nullptr : fingerprint_library.findMutableTrack(fingerprint_ids.front());
+    lofibox::app::PlaybackController fingerprint_playback{};
+    fingerprint_playback.setServices(fingerprint_only_services);
+    if (fingerprint_record == nullptr
+        || !fingerprint_playback.startRemoteLibraryTrack(remote_stream, *fingerprint_record, remote_profile, fingerprint_track, "Remote Source", true)) {
+        std::cerr << "Expected fingerprint-only remote playback to start.\n";
+        return 1;
+    }
+    for (int attempt = 0; attempt < 50; ++attempt) {
+        fingerprint_playback.update(0.02, fingerprint_library);
+        const auto* updated = fingerprint_library.findTrack(fingerprint_ids.front());
+        if (updated != nullptr && updated->fingerprint == "fingerprint-without-online-identity") {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+    const auto* fingerprint_governed = fingerprint_library.findTrack(fingerprint_ids.front());
+    if (fingerprint_governed == nullptr || fingerprint_governed->fingerprint != "fingerprint-without-online-identity") {
+        std::cerr << "Expected remote audio fingerprint to persist even when online identity lookup misses.\n";
+        return 1;
+    }
+    fs::remove_all(remote_cache_root, ec);
 
     fs::remove_all(root, ec);
     return 0;

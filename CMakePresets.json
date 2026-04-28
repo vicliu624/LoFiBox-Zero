@@ -42,6 +42,24 @@
       }
     },
     {
+      "name": "linux-x11-debug",
+      "displayName": "Linux X11 Desktop Widget",
+      "description": "Configure the real Linux X11 desktop-widget presentation target.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/x11",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "LOFIBOX_BUILD_DEVICE": "OFF",
+        "LOFIBOX_BUILD_X11": "ON",
+        "BUILD_TESTING": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
       "name": "linux-test-debug",
       "displayName": "Linux Debug Tests",
       "description": "Configure shared-layer tests on Linux.",
@@ -77,12 +95,17 @@
       ]
     },
     {
+      "name": "linux-x11-debug-build",
+      "displayName": "Build Linux X11 Desktop Widget",
+      "configurePreset": "linux-x11-debug",
+      "targets": [
+        "lofibox_zero_x11"
+      ]
+    },
+    {
       "name": "linux-test-debug-build",
       "displayName": "Build Linux Tests",
-      "configurePreset": "linux-test-debug",
-      "targets": [
-        "hello_app_smoke"
-      ]
+      "configurePreset": "linux-test-debug"
     }
   ],
   "testPresets": [

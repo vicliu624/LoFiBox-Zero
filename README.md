@@ -9,6 +9,7 @@ The repository intentionally keeps one product runtime path:
 - shared product code in `src/app` and `src/core`
 - Linux runtime adapters in `src/platform/host` and `src/platform/device`
 - a single Linux device executable: `lofibox_zero_device`
+- a direct Linux X11 desktop-widget executable: `lofibox_zero_x11`
 - a containerized Linux build environment for repeatable builds
 
 There is no SDL desktop simulator in this project. The app should be validated through the Linux device target, a real framebuffer/input environment, or a container wired to those Linux devices.
@@ -76,6 +77,38 @@ Run:
 LOFIBOX_MEDIA_ROOT="$HOME/Music" \
 ./build/device/lofibox_zero_device --fbdev /dev/fb0 --input-dev /dev/input/event0
 ```
+
+Build the direct Linux X11 desktop-widget target:
+
+```bash
+cmake --preset linux-x11-debug
+cmake --build --preset linux-x11-debug-build
+```
+
+Run:
+
+```bash
+LOFIBOX_MEDIA_ROOT="$HOME/Music" \
+./build/x11/lofibox
+```
+
+This is a real Linux presentation target using the same app, playback, library, remote-source, metadata, DSP, persistence, and credential semantics as the device target.
+
+## Optional Host Fingerprinting
+
+The development container already installs `libchromaprint-tools`. For direct host runs, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\ensure-host-fpcalc.ps1
+```
+
+To let the script install Chromaprint/fpcalc through a supported package manager:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\ensure-host-fpcalc.ps1 -Install
+```
+
+The runtime also honors `FPCALC_PATH` when `fpcalc` is installed outside `PATH`.
 
 ## Tests
 

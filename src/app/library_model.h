@@ -66,6 +66,16 @@ struct TrackRecord {
     int duration_seconds{180};
     int play_count{0};
     std::int64_t last_played{0};
+    bool remote{false};
+    std::string remote_profile_id{};
+    std::string remote_track_id{};
+    std::string source_label{};
+    std::string artwork_key{};
+    std::string artwork_url{};
+    std::string lyrics_plain{};
+    std::string lyrics_synced{};
+    std::string lyrics_source{};
+    std::string fingerprint{};
 };
 
 struct AlbumRecord {

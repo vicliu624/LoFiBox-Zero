@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "app/library_mutation_service.h"
+#include "app/remote_media_contract.h"
 
 namespace lofibox::app {
 
@@ -37,25 +38,102 @@ void PlaybackController::update(double delta_seconds, LibraryController& library
     });
 }
 
+void PlaybackController::update(double delta_seconds, LibraryController& library_controller, const RemoteTrackStarter& remote_starter)
+{
+    enrichment_.applyPending(library_controller, session_);
+    runtime_.tick(session_, queue_, library_controller, delta_seconds, [this, &library_controller, &remote_starter](int index) {
+        return playQueueIndex(library_controller, index, remote_starter);
+    });
+}
+
 bool PlaybackController::startTrack(LibraryController& library_controller, int track_id)
 {
     rebuildQueueForCurrentSongs(library_controller, track_id);
     return playQueueIndex(library_controller, queue_.active_index);
 }
 
-bool PlaybackController::startRemoteStream(const ResolvedRemoteStream& stream, std::string title, std::string source)
+void PlaybackController::prepareQueueForTrack(const LibraryController& library_controller, int track_id)
+{
+    rebuildQueueForCurrentSongs(library_controller, track_id);
+}
+
+bool PlaybackController::startRemoteStream(const ResolvedRemoteStream& stream, const RemoteTrack& track, const std::string& source)
 {
     queue_ = {};
     session_.current_track_id.reset();
-    session_.current_stream_title = std::move(title);
-    session_.current_stream_source = std::move(source);
+    session_.current_stream_title = track.title.empty() ? std::string("UNKNOWN") : track.title;
+    session_.current_stream_source = source;
+    session_.current_stream_artist = track.artist;
+    session_.current_stream_album = track.album;
+    session_.current_stream_duration_seconds = track.duration_seconds;
     session_.current_stream_url_redacted = stream.diagnostics.resolved_url_redacted;
+    session_.current_stream_artwork_url = track.artwork_url;
     session_.current_stream_live = stream.diagnostics.live;
     session_.status = PlaybackStatus::Playing;
     runtime_.beginTrack(session_);
+    session_.current_artwork.reset();
+    session_.lyrics_lookup_pending = false;
+    if (!track.lyrics_plain.empty()) {
+        session_.current_lyrics.plain = track.lyrics_plain;
+    }
+    if (!track.lyrics_synced.empty()) {
+        session_.current_lyrics.synced = track.lyrics_synced;
+    }
+    session_.current_lyrics.source = track.lyrics_source.empty() ? source : track.lyrics_source;
     const bool started = runtime_.startBackendUri(stream.url, session_);
     if (!started) {
         session_.status = PlaybackStatus::Paused;
+    }
+    return started;
+}
+
+bool PlaybackController::startRemoteLibraryTrack(
+    const ResolvedRemoteStream& stream,
+    TrackRecord& track,
+    const RemoteServerProfile& profile,
+    const RemoteTrack& remote_track,
+    const std::string& source,
+    bool cache_remote_facts)
+{
+    session_.current_track_id = track.id;
+    session_.current_stream_title.clear();
+    session_.current_stream_source = source;
+    session_.current_stream_artist.clear();
+    session_.current_stream_album.clear();
+    session_.current_stream_duration_seconds = 0;
+    session_.current_stream_url_redacted = stream.diagnostics.resolved_url_redacted;
+    session_.current_stream_artwork_url = remote_track.artwork_url;
+    session_.current_stream_live = stream.diagnostics.live;
+    session_.status = PlaybackStatus::Playing;
+    runtime_.beginTrack(session_);
+    session_.current_artwork.reset();
+    const bool needs_remote_governance = remoteTrackNeedsLocalMetadataGovernance(remote_track);
+    session_.lyrics_lookup_pending = needs_remote_governance
+        && remote_track.lyrics_plain.empty()
+        && remote_track.lyrics_synced.empty()
+        && track.lyrics_plain.empty()
+        && track.lyrics_synced.empty();
+    if (!remote_track.lyrics_plain.empty()) {
+        session_.current_lyrics.plain = remote_track.lyrics_plain;
+    } else if (!track.lyrics_plain.empty()) {
+        session_.current_lyrics.plain = track.lyrics_plain;
+    }
+    if (!remote_track.lyrics_synced.empty()) {
+        session_.current_lyrics.synced = remote_track.lyrics_synced;
+    } else if (!track.lyrics_synced.empty()) {
+        session_.current_lyrics.synced = track.lyrics_synced;
+    }
+    session_.current_lyrics.source = !remote_track.lyrics_source.empty()
+        ? remote_track.lyrics_source
+        : (!track.lyrics_source.empty() ? track.lyrics_source : source);
+    const bool started = runtime_.startBackendUri(stream.url, session_);
+    if (!started) {
+        session_.status = PlaybackStatus::Paused;
+    } else {
+        LibraryMutationService{}.recordPlaybackStarted(track);
+        if (needs_remote_governance) {
+            enrichment_.requestRemote(profile, remote_track, track.id, stream.url, cache_remote_facts);
+        }
     }
     return started;
 }
@@ -75,7 +153,11 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     session_.current_track_id = track->id;
     session_.current_stream_title.clear();
     session_.current_stream_source.clear();
+    session_.current_stream_artist.clear();
+    session_.current_stream_album.clear();
+    session_.current_stream_duration_seconds = 0;
     session_.current_stream_url_redacted.clear();
+    session_.current_stream_artwork_url.clear();
     session_.current_stream_live = false;
     session_.status = PlaybackStatus::Playing;
     runtime_.beginTrack(session_);
@@ -87,6 +169,21 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     return true;
 }
 
+bool PlaybackController::playQueueIndex(LibraryController& library_controller, int queue_index, const RemoteTrackStarter& remote_starter)
+{
+    if (queue_index < 0 || queue_index >= static_cast<int>(queue_.active_ids.size())) {
+        return false;
+    }
+
+    if (const auto* track = library_controller.findTrack(queue_.active_ids[static_cast<std::size_t>(queue_index)]);
+        track && track->remote && remote_starter) {
+        queue_.active_index = queue_index;
+        return remote_starter(track->id);
+    }
+
+    return playQueueIndex(library_controller, queue_index);
+}
+
 void PlaybackController::stepQueue(LibraryController& library_controller, int delta)
 {
     if (queue_.active_ids.empty()) {
@@ -94,6 +191,16 @@ void PlaybackController::stepQueue(LibraryController& library_controller, int de
     }
     runtime_.stepQueue(queue_, session_, delta, [this, &library_controller](int index) {
         return playQueueIndex(library_controller, index);
+    });
+}
+
+void PlaybackController::stepQueue(LibraryController& library_controller, int delta, const RemoteTrackStarter& remote_starter)
+{
+    if (queue_.active_ids.empty()) {
+        return;
+    }
+    runtime_.stepQueue(queue_, session_, delta, [this, &library_controller, &remote_starter](int index) {
+        return playQueueIndex(library_controller, index, remote_starter);
     });
 }
 

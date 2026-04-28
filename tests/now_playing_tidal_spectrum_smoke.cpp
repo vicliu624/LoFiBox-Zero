@@ -23,6 +23,18 @@ int main()
     lofibox::ui::drawListPageFrame(canvas);
     lofibox::ui::drawTopBar(canvas, "NOW PLAYING", true);
 
+    lofibox::core::Canvas no_back_canvas{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
+    lofibox::ui::drawListPageFrame(no_back_canvas);
+    lofibox::ui::drawTopBar(no_back_canvas, "NOW PLAYING", false);
+    for (int y = 4; y < 16; ++y) {
+        for (int x = 4; x < 58; ++x) {
+            if (canvas.pixel(x, y) != no_back_canvas.pixel(x, y)) {
+                std::cerr << "Expected standard topbar left corner to stay F1:HELP even on back-capable pages.\n";
+                return 1;
+            }
+        }
+    }
+
     lofibox::ui::pages::renderNowPlayingPage(
         canvas,
         lofibox::ui::pages::NowPlayingView{

@@ -553,8 +553,8 @@ fs::path helperScriptPath(std::string_view script_name)
     if (const char* helper_dir = std::getenv("LOFIBOX_HELPER_DIR"); helper_dir != nullptr && *helper_dir != '\0') {
         candidates.emplace_back(fs::path(helper_dir) / script_name);
     }
-    candidates.emplace_back(fs::path(LOFIBOX_INSTALLED_HELPER_DIR) / script_name);
     candidates.emplace_back(projectRoot() / "scripts" / script_name);
+    candidates.emplace_back(fs::path(LOFIBOX_INSTALLED_HELPER_DIR) / script_name);
 
     for (const auto& candidate : candidates) {
         std::error_code ec{};

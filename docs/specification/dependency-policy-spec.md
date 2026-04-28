@@ -23,7 +23,7 @@ Before adding a dependency, the change must check:
 
 - C++ dependencies should use system libraries.
 - Archive-available large third-party libraries must not be vendored.
-- Dependencies such as `FFmpeg`, `GStreamer`, `TagLib`, `SQLite`, `libcurl`, `libsmbclient`, `libssh` or `libssh2`, `libnfs`, `libxml2`, `libupnp`, `Qt`, `GTK`, or `SDL2` must be discovered through CMake `find_package` or `pkg-config`.
+- Dependencies such as `FFmpeg`, `GStreamer`, `TagLib`, `SQLite`, `libcurl`, `libsmbclient`, `libssh` or `libssh2`, `libnfs`, `libxml2`, `libupnp`, `Qt`, or `GTK` must be discovered through CMake `find_package` or `pkg-config`.
 - Protocol-specific dependencies must be localized to their provider or module.
 - One optional protocol provider must not pollute the entire project dependency surface.
 

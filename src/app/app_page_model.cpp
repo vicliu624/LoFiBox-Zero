@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "app/settings_projection_builder.h"
+#include "remote/common/remote_source_registry.h"
 #include "ui/ui_primitives.h"
 
 namespace lofibox::app {
@@ -28,7 +29,10 @@ std::string_view pageTitleDefault(AppPage page) noexcept
     case AppPage::Lyrics: return "LYRICS";
     case AppPage::Equalizer: return "EQUALIZER";
     case AppPage::Settings: return "SETTINGS";
+    case AppPage::RemoteSetup: return "REMOTE SETUP";
     case AppPage::SourceManager: return "SOURCES";
+    case AppPage::RemoteProfileSettings: return "PROFILE SETUP";
+    case AppPage::RemoteFieldEditor: return "EDIT REMOTE";
     case AppPage::Search: return "SEARCH";
     case AppPage::Queue: return "UP NEXT";
     case AppPage::RemoteBrowse: return "REMOTE";
@@ -47,7 +51,8 @@ std::vector<std::pair<std::string, std::string>> settingsRows(const AppPageModel
         input.metadata_display_name,
         input.settings.sleep_timer_index,
         input.settings.backlight_index,
-        true});
+        true,
+        static_cast<int>(remote::RemoteSourceRegistry{}.manifests().size())});
 }
 
 } // namespace
@@ -65,6 +70,9 @@ bool isBrowseListPage(AppPage page) noexcept
     case AppPage::Playlists:
     case AppPage::PlaylistDetail:
     case AppPage::SourceManager:
+    case AppPage::RemoteSetup:
+    case AppPage::RemoteProfileSettings:
+    case AppPage::RemoteFieldEditor:
     case AppPage::Search:
     case AppPage::Queue:
     case AppPage::RemoteBrowse:
@@ -98,8 +106,13 @@ AppPageModel buildAppPageModel(const AppPageModelInput& input)
     if (input.page == AppPage::SourceManager && input.source_manager_rows) {
         model.rows = *input.source_manager_rows;
     }
+    if (input.page == AppPage::RemoteSetup) {
+        for (const auto& manifest : remote::RemoteSourceRegistry{}.manifests()) {
+            model.rows.emplace_back(manifest.display_name, manifest.family);
+        }
+    }
     if (input.page == AppPage::Search) {
-        model.rows = {{"TYPE QUERY", "F2"}, {"LOCAL + REMOTE", "GROUPED"}, {"RESULT SOURCE", "VISIBLE"}};
+        model.rows = {{"TYPE QUERY", "F9"}, {"LOCAL + REMOTE", "GROUPED"}, {"RESULT SOURCE", "VISIBLE"}};
     }
     if (input.page == AppPage::Queue) {
         model.rows = {{"CURRENT QUEUE", "MIXED"}, {"LOCAL TRACKS", "OK"}, {"REMOTE TRACKS", "OK"}};
@@ -114,7 +127,7 @@ AppPageModel buildAppPageModel(const AppPageModelInput& input)
         model.rows = {{"SOURCE", "REMOTE"}, {"URL", "REDACTED"}, {"BUFFER", "VISIBLE"}, {"QUALITY", "AUTO"}, {"CODEC", "UNKNOWN"}};
     }
     if (input.page == AppPage::PlaylistEditor) {
-        model.rows = {{"ADD TRACK", "ENTER"}, {"REMOVE", "DEL"}, {"REORDER", "UP/DOWN"}, {"SAVE", "F2"}};
+        model.rows = {{"ADD TRACK", "OK"}, {"REMOVE", "DEL"}, {"REORDER", "UP/DOWN"}, {"SAVE", "OK"}};
     }
 
     return model;

@@ -12,6 +12,7 @@
 #include "app/library_list_context.h"
 #include "app/library_model.h"
 #include "app/library_repository.h"
+#include "app/remote_media_services.h"
 #include "app/runtime_services.h"
 
 namespace lofibox::app {
@@ -38,6 +39,8 @@ public:
 
     void startLoading() noexcept;
     void refreshLibrary(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider);
+    void mergeRemoteTracks(const RemoteServerProfile& profile, const std::vector<RemoteTrack>& tracks);
+    bool applyRemoteTrackFacts(const RemoteServerProfile& profile, const RemoteTrack& remote_track);
 
     [[nodiscard]] const TrackRecord* findTrack(int id) const noexcept;
     [[nodiscard]] TrackRecord* findMutableTrack(int id) noexcept;
@@ -49,6 +52,7 @@ public:
     void cycleSongSortMode();
 
     void setSongsContextAll();
+    void setSongsContextTrackIds(std::string label, std::vector<int> ids);
     [[nodiscard]] std::optional<std::string> titleOverrideForPage(AppPage page) const;
     [[nodiscard]] std::optional<std::vector<std::pair<std::string, std::string>>> rowsForPage(AppPage page) const;
     [[nodiscard]] LibraryOpenResult openSelectedListItem(AppPage page, int selected);

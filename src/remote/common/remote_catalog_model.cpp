@@ -7,16 +7,16 @@ namespace lofibox::remote {
 std::vector<app::RemoteCatalogNode> RemoteCatalogMap::rootNodes()
 {
     return {
-        {app::RemoteCatalogNodeKind::Artists, "artists", "ARTISTS", "Server artists", false, true},
-        {app::RemoteCatalogNodeKind::Albums, "albums", "ALBUMS", "Server albums", false, true},
-        {app::RemoteCatalogNodeKind::Tracks, "tracks", "TRACKS", "All remote tracks", false, true},
-        {app::RemoteCatalogNodeKind::Genres, "genres", "GENRES", "Server genres", false, true},
-        {app::RemoteCatalogNodeKind::Playlists, "playlists", "PLAYLISTS", "Server playlists", false, true},
-        {app::RemoteCatalogNodeKind::Folders, "folders", "FOLDERS", "Folder view", false, true},
-        {app::RemoteCatalogNodeKind::Favorites, "favorites", "FAVORITES", "Favorite media", false, true},
-        {app::RemoteCatalogNodeKind::RecentlyAdded, "recently-added", "RECENT ADD", "Recently added", false, true},
-        {app::RemoteCatalogNodeKind::RecentlyPlayed, "recently-played", "RECENT PLAY", "Recently played", false, true},
-        {app::RemoteCatalogNodeKind::Stations, "stations", "STATIONS", "Radio and live entries", false, true},
+        {app::RemoteCatalogNodeKind::Artists, "artists", "ARTISTS", "0", false, true},
+        {app::RemoteCatalogNodeKind::Albums, "albums", "ALBUMS", "0", false, true},
+        {app::RemoteCatalogNodeKind::Tracks, "tracks", "TRACKS", "0", false, true},
+        {app::RemoteCatalogNodeKind::Genres, "genres", "GENRES", "0", false, true},
+        {app::RemoteCatalogNodeKind::Playlists, "playlists", "PLAYLISTS", "0", false, true},
+        {app::RemoteCatalogNodeKind::Folders, "folders", "FOLDERS", "0", false, true},
+        {app::RemoteCatalogNodeKind::Favorites, "favorites", "FAVORITES", "0", false, true},
+        {app::RemoteCatalogNodeKind::RecentlyAdded, "recently-added", "RECENT ADD", "0", false, true},
+        {app::RemoteCatalogNodeKind::RecentlyPlayed, "recently-played", "RECENT PLAY", "0", false, true},
+        {app::RemoteCatalogNodeKind::Stations, "stations", "STATIONS", "0", false, true},
     };
 }
 

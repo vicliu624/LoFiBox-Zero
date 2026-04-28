@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "app/audio_visualization.h"
@@ -37,6 +38,7 @@ struct TrackIdentity {
     std::string recording_mbid{};
     std::string release_mbid{};
     std::string release_group_mbid{};
+    std::string fingerprint{};
     std::string source{};
     double confidence{0.0};
     bool found{false};
@@ -78,6 +80,16 @@ public:
     [[nodiscard]] virtual bool available() const = 0;
     [[nodiscard]] virtual std::string displayName() const = 0;
     [[nodiscard]] virtual TrackIdentity resolve(const std::filesystem::path& path, const TrackMetadata& seed_metadata = {}) const = 0;
+    [[nodiscard]] virtual TrackIdentity resolveRemoteStream(
+        std::string_view stable_cache_key,
+        std::string_view stream_uri,
+        const std::filesystem::path& lookup_path,
+        const TrackMetadata& seed_metadata = {}) const
+    {
+        (void)stable_cache_key;
+        (void)stream_uri;
+        return resolve(lookup_path, seed_metadata);
+    }
 };
 
 class ArtworkProvider {
@@ -87,6 +99,14 @@ public:
     [[nodiscard]] virtual bool available() const = 0;
     [[nodiscard]] virtual std::string displayName() const = 0;
     [[nodiscard]] virtual std::optional<core::Canvas> read(const std::filesystem::path& path, ArtworkReadMode mode = ArtworkReadMode::AllowOnline) const = 0;
+    [[nodiscard]] virtual std::optional<core::Canvas> readRemoteIdentity(
+        std::string_view stable_cache_key,
+        const std::filesystem::path& lookup_path,
+        ArtworkReadMode mode = ArtworkReadMode::AllowOnline) const
+    {
+        (void)stable_cache_key;
+        return read(lookup_path, mode);
+    }
 };
 
 enum class AudioPlaybackState {

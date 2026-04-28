@@ -12,7 +12,9 @@ bool PlaybackStabilityPolicy::suppressStartOrEndJitter(const PlaybackStabilitySa
     if (sample.backend_starting && sample.position < std::chrono::milliseconds{250}) {
         return true;
     }
-    if (sample.duration > std::chrono::milliseconds{0} && sample.duration - sample.position < std::chrono::milliseconds{250}) {
+    if (sample.duration > std::chrono::milliseconds{0}
+        && sample.position < sample.duration
+        && sample.duration - sample.position < std::chrono::milliseconds{250}) {
         return true;
     }
     return false;

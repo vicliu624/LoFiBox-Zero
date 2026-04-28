@@ -107,6 +107,9 @@ void storeMetadataCache(const SharedRuntimeCache& cache, std::string_view key, c
         if (!entry.identity.release_group_mbid.empty()) {
             output << "identity_release_group_mbid=" << entry.identity.release_group_mbid << '\n';
         }
+        if (!entry.identity.fingerprint.empty()) {
+            output << "identity_fingerprint=" << entry.identity.fingerprint << '\n';
+        }
     }
     output << "online_metadata_attempted=" << (entry.online_metadata_attempted ? "1" : "0") << '\n';
     output << "online_artwork_attempted=" << (entry.online_artwork_attempted ? "1" : "0") << '\n';
@@ -176,6 +179,8 @@ CacheEntry loadMetadataCache(const SharedRuntimeCache& cache, std::string_view k
             entry.identity.release_mbid = value;
         } else if (key_name == "identity_release_group_mbid") {
             entry.identity.release_group_mbid = value;
+        } else if (key_name == "identity_fingerprint") {
+            entry.identity.fingerprint = value;
         } else if (key_name == "online_metadata_attempted") {
             entry.online_metadata_attempted = value == "1";
         } else if (key_name == "online_artwork_attempted") {

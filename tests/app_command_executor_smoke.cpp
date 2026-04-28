@@ -58,6 +58,18 @@ int main()
         return 1;
     }
 
+    target.navigation.list_selection.selected = 0;
+    lofibox::app::commandMoveSelection(target, -1);
+    if (target.navigation.list_selection.selected != 5) {
+        std::cerr << "Expected list navigation to wrap upward from first row to last row.\n";
+        return 1;
+    }
+    lofibox::app::commandMoveSelection(target, 1);
+    if (target.navigation.list_selection.selected != 0) {
+        std::cerr << "Expected list navigation to wrap downward from last row to first row.\n";
+        return 1;
+    }
+
     lofibox::app::commandMoveMainMenuSelection(target, -1);
     if (target.menu_index != 0) {
         std::cerr << "Expected main menu selection to wrap left.\n";
@@ -65,7 +77,7 @@ int main()
     }
 
     target.navigation.replaceStack({lofibox::app::AppPage::Settings});
-    target.navigation.list_selection.selected = 7;
+    target.navigation.list_selection.selected = 6;
     lofibox::app::commandConfirmListPage(target);
     if (target.currentPage() != lofibox::app::AppPage::About) {
         std::cerr << "Expected Settings About row to open About.\n";
@@ -110,8 +122,13 @@ int main()
         return 1;
     }
     lofibox::app::commandCycleMainMenuPlaybackMode(target);
-    if (target.playback.session().shuffle_enabled || !target.playback.session().repeat_one) {
-        std::cerr << "Expected menu playback mode cycle to move from shuffle to repeat-one.\n";
+    if (target.playback.session().shuffle_enabled || !target.playback.session().repeat_all || target.playback.session().repeat_one) {
+        std::cerr << "Expected menu playback mode cycle to move from shuffle to repeat-all.\n";
+        return 1;
+    }
+    lofibox::app::commandCycleMainMenuPlaybackMode(target);
+    if (target.playback.session().shuffle_enabled || target.playback.session().repeat_all || !target.playback.session().repeat_one) {
+        std::cerr << "Expected menu playback mode cycle to move from repeat-all to repeat-one.\n";
         return 1;
     }
 

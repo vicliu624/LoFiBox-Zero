@@ -41,7 +41,8 @@ int main()
     {
         std::ofstream output(server_script, std::ios::binary | std::ios::trunc);
         output <<
-R"(import json
+R"(import html
+import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -54,10 +55,29 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+    def _write_bytes(self, payload, content_type='application/octet-stream'):
+        self.send_response(200)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+    def _host(self):
+        return self.headers.get('Host') or ('127.0.0.1:' + str(self.server.server_port))
 
     def do_POST(self):
         if self.path.endswith('/Users/AuthenticateByName'):
             self._write({'AccessToken':'token-123','User':{'Id':'user-1'}})
+            return
+        if self.path.endswith('/dlna/control'):
+            body = self.rfile.read(int(self.headers.get('Content-Length', '0') or 0)).decode('utf-8', errors='replace')
+            if '<ObjectID>dlna-song-1</ObjectID>' in body:
+                didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="dlna-song-1" parentID="folder1"><dc:title>DLNA Song</dc:title><upnp:artist>DLNA Artist</upnp:artist><upnp:album>DLNA Album</upnp:album><res protocolInfo="http-get:*:audio/mpeg:*">http://""" + self._host() + """/media/dlna-song.mp3</res></item></DIDL-Lite>"""
+            elif '<ObjectID>folder1</ObjectID>' in body:
+                didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="dlna-song-1" parentID="folder1"><dc:title>DLNA Song</dc:title><upnp:artist>DLNA Artist</upnp:artist><upnp:album>DLNA Album</upnp:album><res protocolInfo="http-get:*:audio/mpeg:*">http://""" + self._host() + """/media/dlna-song.mp3</res></item></DIDL-Lite>"""
+            else:
+                didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/"><container id="folder1" parentID="0" childCount="1"><dc:title>DLNA Folder</dc:title></container></DIDL-Lite>"""
+            response = """<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>""" + html.escape(didl) + """</Result><NumberReturned>1</NumberReturned><TotalMatches>1</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse></s:Body></s:Envelope>"""
+            self._write_bytes(response.encode('utf-8'), 'text/xml')
             return
         self.send_response(404); self.end_headers()
 
@@ -66,9 +86,19 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.endswith('/System/Info/Public'):
             self._write({'ServerName':'TestServer'})
         elif parsed.path.endswith('/Users/user-1/Items'):
-            self._write({'Items':[{'Id':'trk1','Name':'Song A','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000}]})
+            query = parse_qs(parsed.query)
+            include_types = query.get('IncludeItemTypes', [''])[0]
+            parent_id = query.get('ParentId', [''])[0]
+            if include_types == 'MusicArtist':
+                self._write({'Items':[{'Id':'artist-1','Name':'Artist A','Type':'MusicArtist','RecursiveItemCount':1,'ChildCount':0}]})
+            elif include_types == 'Audio' and parent_id == 'artist-1':
+                self._write({'Items':[{'Id':'trk1','Name':'Song A','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000}]})
+            else:
+                self._write({'Items':[{'Id':'trk1','Name':'Song A','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000}]})
+        elif parsed.path.endswith('/Users/user-1/Items/trk1'):
+            self._write({'Id':'trk1','MediaSources':[{'Bitrate':1411000,'Container':'flac','MediaStreams':[{'Type':'Audio','Codec':'flac','SampleRate':44100,'Channels':2}]}]})
         elif parsed.path.endswith('/Users/user-1/Items/Latest'):
-            self._write([{'Id':'trk1','Name':'Song A','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000}])
+            self._write([{'Id':'trk1','Name':'\u00c7\u00fa\u00c4\u00bf 1','Album':'Album A','AlbumId':'alb1','Artists':['\u00ce\u00b4\u00d6\u00aa\u00d2\u00d5\u00ca\u00f5\u00bc\u00d2'],'RunTimeTicks':1200000000}])
         elif parsed.path.endswith('/rest/ping.view'):
             self._write({'subsonic-response':{'status':'ok'}})
         elif parsed.path.endswith('/rest/search3.view'):
@@ -77,6 +107,29 @@ class Handler(BaseHTTPRequestHandler):
             self._write({'subsonic-response':{'albumList2':{'album':[{'id':'alb2','name':'Album B'}]}}})
         elif parsed.path.endswith('/rest/getAlbum.view'):
             self._write({'subsonic-response':{'album':{'song':[{'id':'trk2','title':'Song B','artist':'Artist B','album':'Album B','parent':'alb2','duration':123}]}}})
+        elif parsed.path.endswith('/playlist.m3u'):
+            text = '#EXTM3U\n#EXTINF:120,Playlist Song\nhttp://' + self._host() + '/media/playlist-song.mp3\n'
+            self._write_bytes(text.encode('utf-8'), 'audio/x-mpegurl')
+        elif parsed.path.endswith('/dlna/root.xml'):
+            text = """<?xml version="1.0"?><root xmlns="urn:schemas-upnp-org:device-1-0"><device><friendlyName>Mock DLNA</friendlyName><serviceList><service><serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType><controlURL>/dlna/control</controlURL></service></serviceList></device></root>"""
+            self._write_bytes(text.encode('utf-8'), 'text/xml')
+        elif parsed.path.startswith('/media/'):
+            self._write_bytes(b'\0' * 32, 'audio/mpeg')
+        else:
+            self.send_response(404); self.end_headers()
+
+    def do_PROPFIND(self):
+        parsed = urlparse(self.path)
+        host = self._host()
+        if parsed.path.rstrip('/') == '/webdav':
+            xml = """<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/webdav/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response><d:response><d:href>/webdav/Artist/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response></d:multistatus>"""
+            self._write_bytes(xml.encode('utf-8'), 'application/xml')
+        elif parsed.path.rstrip('/') == '/webdav/Artist':
+            xml = """<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/webdav/Artist/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response><d:response><d:href>/webdav/Artist/Album/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response></d:multistatus>"""
+            self._write_bytes(xml.encode('utf-8'), 'application/xml')
+        elif parsed.path.rstrip('/') == '/webdav/Artist/Album':
+            xml = """<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/webdav/Artist/Album/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response><d:response><d:href>http://""" + host + """/webdav/Artist/Album/WebDAV%20Song.mp3</d:href><d:propstat><d:prop><d:resourcetype/></d:prop></d:propstat></d:response></d:multistatus>"""
+            self._write_bytes(xml.encode('utf-8'), 'application/xml')
         else:
             self.send_response(404); self.end_headers()
 
@@ -160,9 +213,56 @@ server.serve_forever()
         std::cerr << "Expected Jellyfin library catalog to return a track.\n";
         return 1;
     }
+    const auto jf_browse_tracks = services.remote.remote_catalog_provider->browse(
+        jellyfin_profile,
+        jf_session,
+        lofibox::app::RemoteCatalogNode{lofibox::app::RemoteCatalogNodeKind::Tracks, "tracks", "TRACKS", "", false, true},
+        5);
+    if (jf_browse_tracks.empty()
+        || jf_browse_tracks.front().artist != "Artist A"
+        || jf_browse_tracks.front().album != "Album A"
+        || jf_browse_tracks.front().duration_seconds != 120) {
+        std::cerr << "Expected Jellyfin browse nodes to preserve artist, album, and duration.\n";
+        return 1;
+    }
+    const auto jf_browse_artists = services.remote.remote_catalog_provider->browse(
+        jellyfin_profile,
+        jf_session,
+        lofibox::app::RemoteCatalogNode{lofibox::app::RemoteCatalogNodeKind::Artists, "artists", "ARTISTS", "", false, true},
+        5);
+    if (jf_browse_artists.empty()
+        || jf_browse_artists.front().kind != lofibox::app::RemoteCatalogNodeKind::Artist
+        || jf_browse_artists.front().title != "Artist A"
+        || jf_browse_artists.front().subtitle != "1") {
+        std::cerr << "Expected Jellyfin artist browse rows to expose normalized song counts.\n";
+        return 1;
+    }
+    const auto jf_artist_tracks = services.remote.remote_catalog_provider->browse(
+        jellyfin_profile,
+        jf_session,
+        jf_browse_artists.front(),
+        5);
+    if (jf_artist_tracks.empty()
+        || !jf_artist_tracks.front().playable
+        || jf_artist_tracks.front().title != "Song A") {
+        std::cerr << "Expected Jellyfin artist selection to list playable songs, not an empty technical page.\n";
+        return 1;
+    }
     const auto jf_stream = services.remote.remote_stream_resolver->resolveTrack(jellyfin_profile, jf_session, jf_tracks.front());
-    if (!jf_stream || jf_stream->url.find("/Audio/trk1/stream") == std::string::npos) {
+    if (!jf_stream
+        || jf_stream->url.find("/Audio/trk1/stream") == std::string::npos
+        || jf_stream->diagnostics.bitrate_kbps != 1411
+        || jf_stream->diagnostics.codec != "flac"
+        || jf_stream->diagnostics.sample_rate_hz != 44100
+        || jf_stream->diagnostics.channel_count != 2) {
         std::cerr << "Expected Jellyfin resolver to build stream URL.\n";
+        return 1;
+    }
+    const auto jf_recent = services.remote.remote_catalog_provider->recentTracks(jellyfin_profile, jf_session, 5);
+    if (jf_recent.empty()
+        || jf_recent.front().title != "\xE6\x9B\xB2\xE7\x9B\xAE 1"
+        || jf_recent.front().artist != "\xE6\x9C\xAA\xE7\x9F\xA5\xE8\x89\xBA\xE6\x9C\xAF\xE5\xAE\xB6") {
+        std::cerr << "Expected remote provider contract to repair mojibake metadata before app consumption.\n";
         return 1;
     }
 
@@ -181,6 +281,18 @@ server.serve_forever()
     const auto sub_library = services.remote.remote_catalog_provider->libraryTracks(subsonic_profile, sub_session, 5);
     if (sub_library.empty() || sub_library.front().id != "trk2") {
         std::cerr << "Expected OpenSubsonic library catalog to return a track.\n";
+        return 1;
+    }
+    const auto sub_browse_tracks = services.remote.remote_catalog_provider->browse(
+        subsonic_profile,
+        sub_session,
+        lofibox::app::RemoteCatalogNode{lofibox::app::RemoteCatalogNodeKind::Tracks, "tracks", "TRACKS", "", false, true},
+        5);
+    if (sub_browse_tracks.empty()
+        || sub_browse_tracks.front().artist != "Artist B"
+        || sub_browse_tracks.front().album != "Album B"
+        || sub_browse_tracks.front().duration_seconds != 123) {
+        std::cerr << "Expected OpenSubsonic browse nodes to preserve artist, album, and duration.\n";
         return 1;
     }
     const auto sub_stream = services.remote.remote_stream_resolver->resolveTrack(subsonic_profile, sub_session, sub_tracks.front());
@@ -220,8 +332,77 @@ server.serve_forever()
         return 1;
     }
     const auto emby_stream = services.remote.remote_stream_resolver->resolveTrack(emby_profile, emby_session, emby_tracks.front());
-    if (!emby_stream || emby_stream->url.find("/Audio/trk1/stream.mp3") == std::string::npos) {
+    if (!emby_stream
+        || emby_stream->url.find("/Audio/trk1/stream.mp3") == std::string::npos
+        || emby_stream->diagnostics.bitrate_kbps != 1411
+        || emby_stream->diagnostics.codec != "flac") {
         std::cerr << "Expected Emby resolver to build stream URL.\n";
+        return 1;
+    }
+
+    const auto playlist_profile = lofibox::app::RemoteServerProfile{
+        lofibox::app::RemoteServerKind::PlaylistManifest, "m3u", "M3U Playlist", "http://127.0.0.1:" + std::to_string(port) + "/playlist.m3u", "", "", ""};
+    const auto playlist_session = services.remote.remote_source_provider->probe(playlist_profile);
+    if (!playlist_session.available) {
+        std::cerr << "Expected Playlist manifest probe to parse entries.\n";
+        return 1;
+    }
+    const auto playlist_tracks = services.remote.remote_catalog_provider->libraryTracks(playlist_profile, playlist_session, 5);
+    if (playlist_tracks.empty() || playlist_tracks.front().title != "Playlist Song") {
+        std::cerr << "Expected Playlist manifest provider to expose normalized tracks.\n";
+        return 1;
+    }
+    const auto playlist_stream = services.remote.remote_stream_resolver->resolveTrack(playlist_profile, playlist_session, playlist_tracks.front());
+    if (!playlist_stream || playlist_stream->url.find("/media/playlist-song.mp3") == std::string::npos) {
+        std::cerr << "Expected Playlist manifest resolver to return the entry URL.\n";
+        return 1;
+    }
+
+    const auto webdav_profile = lofibox::app::RemoteServerProfile{
+        lofibox::app::RemoteServerKind::WebDav, "dav", "WebDAV", "http://127.0.0.1:" + std::to_string(port) + "/webdav/", "", "", ""};
+    const auto webdav_session = services.remote.remote_source_provider->probe(webdav_profile);
+    if (!webdav_session.available) {
+        std::cerr << "Expected WebDAV probe to list the remote root.\n";
+        return 1;
+    }
+    const auto webdav_library = services.remote.remote_catalog_provider->libraryTracks(webdav_profile, webdav_session, 5);
+    if (webdav_library.empty()
+        || webdav_library.front().title != "WebDAV Song"
+        || webdav_library.front().artist != "Artist"
+        || webdav_library.front().album != "Album") {
+        std::cerr << "Expected WebDAV provider to recursively expose remote audio files as tracks.\n";
+        return 1;
+    }
+    const auto webdav_stream = services.remote.remote_stream_resolver->resolveTrack(webdav_profile, webdav_session, webdav_library.front());
+    if (!webdav_stream || webdav_stream->url.find("/webdav/Artist/Album/WebDAV%20Song.mp3") == std::string::npos) {
+        std::cerr << "Expected WebDAV resolver to return the file URL.\n";
+        return 1;
+    }
+
+    const auto dlna_profile = lofibox::app::RemoteServerProfile{
+        lofibox::app::RemoteServerKind::DlnaUpnp, "dlna", "DLNA", "http://127.0.0.1:" + std::to_string(port) + "/dlna/root.xml", "", "", ""};
+    const auto dlna_session = services.remote.remote_source_provider->probe(dlna_profile);
+    if (!dlna_session.available) {
+        std::cerr << "Expected DLNA probe to find a ContentDirectory service.\n";
+        return 1;
+    }
+    const auto dlna_nodes = services.remote.remote_catalog_provider->browse(
+        dlna_profile,
+        dlna_session,
+        lofibox::app::RemoteCatalogNode{},
+        5);
+    if (dlna_nodes.empty() || dlna_nodes.front().kind != lofibox::app::RemoteCatalogNodeKind::Folder) {
+        std::cerr << "Expected DLNA browse to expose server containers.\n";
+        return 1;
+    }
+    const auto dlna_library = services.remote.remote_catalog_provider->libraryTracks(dlna_profile, dlna_session, 5);
+    if (dlna_library.empty() || dlna_library.front().title != "DLNA Song") {
+        std::cerr << "Expected DLNA provider to expose playable items as tracks.\n";
+        return 1;
+    }
+    const auto dlna_stream = services.remote.remote_stream_resolver->resolveTrack(dlna_profile, dlna_session, dlna_library.front());
+    if (!dlna_stream || dlna_stream->url.find("/media/dlna-song.mp3") == std::string::npos) {
+        std::cerr << "Expected DLNA resolver to return the item resource URL.\n";
         return 1;
     }
 

@@ -23,6 +23,56 @@ namespace fs = std::filesystem;
 namespace lofibox::app {
 namespace {
 
+std::string expandHomeToken(std::string value)
+{
+    if (value.size() >= 2 && value[0] == '~' && (value[1] == '/' || value[1] == '\\')) {
+        const char* home = std::getenv("HOME");
+        if (home == nullptr || *home == '\0') {
+            return value;
+        }
+        return std::string(home) + value.substr(1);
+    }
+    return value;
+}
+
+std::vector<fs::path> parsePathList(std::string_view raw)
+{
+    std::vector<fs::path> values{};
+    if (raw.empty()) {
+        return values;
+    }
+
+    std::string current{};
+    const auto push = [&](std::string candidate) {
+        if (candidate.empty()) {
+            return;
+        }
+        auto expanded = expandHomeToken(candidate);
+        if (!expanded.empty()) {
+            values.emplace_back(std::move(expanded));
+        }
+    };
+
+    auto isPathSeparator = [](char ch) {
+#if defined(_WIN32)
+        return ch == ';';
+#else
+        return ch == ';' || ch == ':';
+#endif
+    };
+
+    for (const char ch : raw) {
+        if (isPathSeparator(ch)) {
+            push(current);
+            current.clear();
+        } else {
+            current.push_back(ch);
+        }
+    }
+    push(current);
+    return values;
+}
+
 std::string upperText(std::string_view text)
 {
     std::string result{};
@@ -166,20 +216,13 @@ std::vector<fs::path> defaultRoots(const std::vector<fs::path>& requested_roots)
     }
 #endif
 
-    if (!env_value.empty()) {
-        std::string current{};
-        for (const char ch : env_value) {
-            if (ch == ';') {
-                if (!current.empty()) {
-                    roots.emplace_back(current);
-                    current.clear();
-                }
-                continue;
-            }
-            current.push_back(ch);
-        }
-        if (!current.empty()) {
-            roots.emplace_back(current);
+    for (const auto& path : parsePathList(env_value)) {
+        roots.emplace_back(path);
+    }
+
+    if (roots.empty()) {
+        if (const char* home = std::getenv("HOME")) {
+            roots.emplace_back(std::string(home) + "/Music");
         }
     }
 
@@ -256,6 +299,13 @@ LibraryModel scanLibrary(const std::vector<fs::path>& requested_roots, const Met
         }
     }
 
+    rebuildLibraryIndexes(model);
+
+    return model;
+}
+
+void rebuildLibraryIndexes(LibraryModel& model)
+{
     std::sort(model.tracks.begin(), model.tracks.end(), [](const TrackRecord& lhs, const TrackRecord& rhs) {
         if (lhs.artist != rhs.artist) {
             return lhs.artist < rhs.artist;
@@ -263,8 +313,17 @@ LibraryModel scanLibrary(const std::vector<fs::path>& requested_roots, const Met
         if (lhs.album != rhs.album) {
             return lhs.album < rhs.album;
         }
-        return lhs.title < rhs.title;
+        if (lhs.title != rhs.title) {
+            return lhs.title < rhs.title;
+        }
+        return lhs.id < rhs.id;
     });
+
+    model.artists.clear();
+    model.albums.clear();
+    model.genres.clear();
+    model.composers.clear();
+    model.compilations.clear();
 
     std::set<std::string> artist_set{};
     std::set<std::string> genre_set{};
@@ -305,8 +364,6 @@ LibraryModel scanLibrary(const std::vector<fs::path>& requested_roots, const Met
     std::sort(model.compilations.begin(), model.compilations.end(), [](const CompilationRecord& lhs, const CompilationRecord& rhs) {
         return lhs.album < rhs.album;
     });
-
-    return model;
 }
 
 } // namespace lofibox::app

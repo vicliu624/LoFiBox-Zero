@@ -75,6 +75,8 @@ This means:
 
 The X11 desktop-widget shell must choose window behavior from physical display capability rather than board names. If the active physical display cannot provide free space beyond the minimum `320x170` product surface, the shell may present a fixed device-like surface. If the display is larger than the minimum surface, the shell must open centered and remain movable without requiring a traditional menu bar.
 
+The X11 desktop-widget shell `MUST` remain chromeless without a traditional menu bar while still being managed by the desktop window manager where one is available. It `MUST NOT` use unmanaged-window behavior as the mechanism for removing window chrome when that would prevent normal desktop actions such as minimize. `Super+H` is reserved by the X11 presentation adapter as a shell-level minimize shortcut; it must iconify/minimize the LoFiBox window and must not be forwarded into the shared app input router as a product command.
+
 The application icon must be installed through the hicolor icon theme under the desktop id `io.github.vicliu624.lofibox`, including the SVG metadata icon and a product-logo PNG fallback where available.
 
 ## 7. XDG Runtime Paths

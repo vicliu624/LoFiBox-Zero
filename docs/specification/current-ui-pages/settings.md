@@ -31,9 +31,9 @@ The current `Settings` page `MUST` contain exactly these rows, in this order:
 1. `Network`
 2. `Metadata Service`
 3. `Sleep Timer`
-4. `Shuffle Songs`
-5. `Backlight`
-6. `Language`
+4. `Backlight`
+5. `Language`
+6. `Remote Setup`
 7. `About`
 
 ## 6. Required Elements
@@ -62,6 +62,7 @@ The current `Settings` page `MUST` contain exactly these rows, in this order:
 - `STATE_SETTINGS_READY + EVT_NAV_DOWN [guard: selection is not last row]` -> effect: move selection down -> `STATE_SETTINGS_READY`
 - `STATE_SETTINGS_READY + EVT_CONFIRM [guard: selected row = Network]` -> effect: no-op because connectivity is system-managed and read-only in the current implementation -> `STATE_SETTINGS_READY`
 - `STATE_SETTINGS_READY + EVT_CONFIRM [guard: selected row = Metadata Service]` -> effect: no-op because service is read-only in the current implementation -> `STATE_SETTINGS_READY`
+- `STATE_SETTINGS_READY + EVT_CONFIRM [guard: selected row = Remote Setup]` -> effect: open the Remote Setup page that lists supported remote source kinds -> `Remote Setup`
 - `STATE_SETTINGS_READY + EVT_CONFIRM [guard: selected row = About]` -> effect: open about page -> `About`
 - `STATE_SETTINGS_READY + EVT_CONFIRM [guard: selected row is not About]` -> effect: perform row's truthful current behavior or no-op -> `STATE_SETTINGS_READY`
 - `STATE_SETTINGS_READY + EVT_BACK` -> effect: return to main menu -> `Main Menu`
@@ -89,4 +90,5 @@ The current `Settings` page `MUST` contain exactly these rows, in this order:
 - Advanced system administration
 - Developer/debug settings
 - Account or cloud settings
+- Top-level server login, credential, TLS, or permission rows before a remote source kind is selected
 - App-managed Wi-Fi configuration

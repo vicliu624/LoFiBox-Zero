@@ -3,13 +3,16 @@
 #include "platform/host/runtime_host_internal.h"
 
 #include <array>
+#include <chrono>
 #include <cctype>
 #include <cstdlib>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -22,6 +25,7 @@
 #elif defined(__linux__)
 #include <fcntl.h>
 #include <csignal>
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -257,6 +261,23 @@ void stopAudioProcess(RunningProcess& process)
     process.active = false;
 }
 
+void pauseAudioProcess(RunningProcess& process)
+{
+    if (!process.active || process.process_info.hThread == nullptr) {
+        return;
+    }
+    SuspendThread(process.process_info.hThread);
+}
+
+void resumeAudioProcess(RunningProcess& process)
+{
+    if (!process.active || process.process_info.hThread == nullptr) {
+        return;
+    }
+    while (ResumeThread(process.process_info.hThread) > 1) {
+    }
+}
+
 bool audioProcessRunning(RunningProcess& process)
 {
     if (!process.active) {
@@ -284,6 +305,105 @@ bool audioProcessFinished(RunningProcess& process)
     }
     stopAudioProcess(process);
     return true;
+}
+
+bool spawnPipeProcess(RunningPipeProcess& process, const fs::path& executable, const std::vector<std::string>& args)
+{
+    SECURITY_ATTRIBUTES security{};
+    security.nLength = sizeof(security);
+    security.bInheritHandle = TRUE;
+
+    HANDLE read_handle = nullptr;
+    HANDLE write_handle = nullptr;
+    if (!CreatePipe(&read_handle, &write_handle, &security, 0)) {
+        return false;
+    }
+    SetHandleInformation(read_handle, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdOutput = write_handle;
+    startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+    PROCESS_INFORMATION process_info{};
+    std::wstring command = buildWindowsCommandLine(executable, args);
+    const BOOL created = CreateProcessW(
+        executable.wstring().c_str(),
+        command.data(),
+        nullptr,
+        nullptr,
+        TRUE,
+        CREATE_NO_WINDOW,
+        nullptr,
+        nullptr,
+        &startup,
+        &process_info);
+    CloseHandle(write_handle);
+    if (!created) {
+        CloseHandle(read_handle);
+        return false;
+    }
+
+    process.process_info = process_info;
+    process.read_handle = read_handle;
+    process.active = true;
+    return true;
+}
+
+int readPipeProcess(RunningPipeProcess& process, char* buffer, int max_bytes)
+{
+    if (!process.active || process.read_handle == nullptr || buffer == nullptr || max_bytes <= 0) {
+        return 0;
+    }
+    DWORD read_bytes = 0;
+    if (!ReadFile(process.read_handle, buffer, static_cast<DWORD>(max_bytes), &read_bytes, nullptr)) {
+        return 0;
+    }
+    return static_cast<int>(read_bytes);
+}
+
+void stopPipeProcess(RunningPipeProcess& process)
+{
+    if (!process.active) {
+        return;
+    }
+    DWORD exit_code = STILL_ACTIVE;
+    if (GetExitCodeProcess(process.process_info.hProcess, &exit_code) && exit_code == STILL_ACTIVE) {
+        TerminateProcess(process.process_info.hProcess, 0);
+        WaitForSingleObject(process.process_info.hProcess, 1000);
+    }
+    if (process.read_handle) {
+        CloseHandle(process.read_handle);
+        process.read_handle = nullptr;
+    }
+    if (process.process_info.hThread) {
+        CloseHandle(process.process_info.hThread);
+        process.process_info.hThread = nullptr;
+    }
+    if (process.process_info.hProcess) {
+        CloseHandle(process.process_info.hProcess);
+        process.process_info.hProcess = nullptr;
+    }
+    process.active = false;
+}
+
+void pausePipeProcess(RunningPipeProcess& process)
+{
+    if (!process.active || process.process_info.hThread == nullptr) {
+        return;
+    }
+    SuspendThread(process.process_info.hThread);
+}
+
+void resumePipeProcess(RunningPipeProcess& process)
+{
+    if (!process.active || process.process_info.hThread == nullptr) {
+        return;
+    }
+    while (ResumeThread(process.process_info.hThread) > 1) {
+    }
 }
 
 bool probeConnectivity()
@@ -417,6 +537,50 @@ bool runProcess(const fs::path& executable, const std::vector<std::string>& args
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
+bool waitForChildExit(pid_t pid, std::chrono::milliseconds timeout)
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        int status = 0;
+        const pid_t result = waitpid(pid, &status, WNOHANG);
+        if (result == pid || result < 0) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
+    return false;
+}
+
+void signalProcessGroup(pid_t pid, int signal)
+{
+    if (pid <= 0) {
+        return;
+    }
+    kill(-pid, signal);
+    kill(pid, signal);
+}
+
+void terminateChildProcess(pid_t pid)
+{
+    if (pid <= 0) {
+        return;
+    }
+    signalProcessGroup(pid, SIGTERM);
+    if (waitForChildExit(pid, std::chrono::milliseconds{450})) {
+        return;
+    }
+    signalProcessGroup(pid, SIGKILL);
+    (void)waitForChildExit(pid, std::chrono::milliseconds{450});
+}
+
+void bindChildToParentDeath()
+{
+    (void)prctl(PR_SET_PDEATHSIG, SIGTERM);
+    if (getppid() == 1) {
+        _exit(128 + SIGTERM);
+    }
+}
+
 bool spawnAudioProcess(RunningProcess& process, const fs::path& executable, const std::vector<std::string>& args)
 {
     const pid_t child = fork();
@@ -424,6 +588,7 @@ bool spawnAudioProcess(RunningProcess& process, const fs::path& executable, cons
         return false;
     }
     if (child == 0) {
+        bindChildToParentDeath();
         setsid();
         std::vector<std::string> owned_args{};
         owned_args.reserve(args.size() + 1);
@@ -448,10 +613,25 @@ void stopAudioProcess(RunningProcess& process)
     if (!process.active || process.pid <= 0) {
         return;
     }
-    kill(process.pid, SIGTERM);
-    waitpid(process.pid, nullptr, 0);
+    terminateChildProcess(process.pid);
     process.pid = -1;
     process.active = false;
+}
+
+void pauseAudioProcess(RunningProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return;
+    }
+    signalProcessGroup(process.pid, SIGSTOP);
+}
+
+void resumeAudioProcess(RunningProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return;
+    }
+    signalProcessGroup(process.pid, SIGCONT);
 }
 
 bool audioProcessRunning(RunningProcess& process)
@@ -482,6 +662,104 @@ bool audioProcessFinished(RunningProcess& process)
     process.pid = -1;
     process.active = false;
     return true;
+}
+
+bool spawnPipeProcess(RunningPipeProcess& process, const fs::path& executable, const std::vector<std::string>& args)
+{
+    int pipe_fds[2]{-1, -1};
+    if (pipe(pipe_fds) != 0) {
+        return false;
+    }
+
+    const pid_t child = fork();
+    if (child < 0) {
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        return false;
+    }
+
+    if (child == 0) {
+        bindChildToParentDeath();
+        setsid();
+        dup2(pipe_fds[1], STDOUT_FILENO);
+        const int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+
+        std::vector<std::string> owned_args{};
+        owned_args.reserve(args.size() + 1);
+        owned_args.push_back(executable.filename().string());
+        owned_args.insert(owned_args.end(), args.begin(), args.end());
+
+        std::vector<char*> argv{};
+        argv.reserve(owned_args.size() + 1);
+        for (auto& arg : owned_args) {
+            argv.push_back(arg.data());
+        }
+        argv.push_back(nullptr);
+        execv(executable.string().c_str(), argv.data());
+        _exit(127);
+    }
+
+    close(pipe_fds[1]);
+    process.pid = child;
+    process.read_fd = pipe_fds[0];
+    const int flags = fcntl(process.read_fd, F_GETFL, 0);
+    if (flags >= 0) {
+        (void)fcntl(process.read_fd, F_SETFL, flags | O_NONBLOCK);
+    }
+    process.active = true;
+    return true;
+}
+
+int readPipeProcess(RunningPipeProcess& process, char* buffer, int max_bytes)
+{
+    if (!process.active || process.read_fd < 0 || buffer == nullptr || max_bytes <= 0) {
+        return 0;
+    }
+    const ssize_t bytes = read(process.read_fd, buffer, static_cast<std::size_t>(max_bytes));
+    if (bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return -1;
+    }
+    return bytes > 0 ? static_cast<int>(bytes) : 0;
+}
+
+void stopPipeProcess(RunningPipeProcess& process)
+{
+    if (!process.active) {
+        return;
+    }
+    if (process.pid > 0) {
+        terminateChildProcess(process.pid);
+        process.pid = -1;
+    }
+    if (process.read_fd >= 0) {
+        close(process.read_fd);
+        process.read_fd = -1;
+    }
+    process.active = false;
+}
+
+void pausePipeProcess(RunningPipeProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return;
+    }
+    kill(-process.pid, SIGSTOP);
+    kill(process.pid, SIGSTOP);
+}
+
+void resumePipeProcess(RunningPipeProcess& process)
+{
+    if (!process.active || process.pid <= 0) {
+        return;
+    }
+    kill(-process.pid, SIGCONT);
+    kill(process.pid, SIGCONT);
 }
 
 bool probeConnectivity()

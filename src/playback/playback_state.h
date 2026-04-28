@@ -32,7 +32,11 @@ struct PlaybackSession {
     std::optional<int> current_track_id{};
     std::string current_stream_title{};
     std::string current_stream_source{};
+    std::string current_stream_artist{};
+    std::string current_stream_album{};
+    int current_stream_duration_seconds{0};
     std::string current_stream_url_redacted{};
+    std::string current_stream_artwork_url{};
     bool current_stream_live{false};
     bool shuffle_enabled{false};
     bool repeat_all{false};
@@ -51,9 +55,14 @@ struct PlaybackEnrichmentResult {
     int track_id{0};
     std::filesystem::path path{};
     TrackMetadata metadata{};
+    TrackIdentity identity{};
     std::optional<core::Canvas> artwork{};
     TrackLyrics lyrics{};
     std::uint64_t generation{0};
+    bool remote{false};
+    RemoteServerProfile remote_profile{};
+    RemoteTrack remote_track{};
+    bool cache_remote_facts{false};
 };
 
 } // namespace lofibox::app

@@ -93,11 +93,12 @@ void drawShortcutHelpModal(core::Canvas& canvas)
         std::string_view key;
         std::string_view action;
     } rows[] = {
-        {"DEL", "DELETE SONG"},
-        {"ENTER", "PLAY"},
+        {"OK", "OPEN / PLAY"},
+        {"PGUP", "PAGE UP"},
+        {"PGDN", "PAGE DOWN"},
         {"BACKSPACE", "BACK"},
-        {"F2", "SEARCH"},
-        {"F3", "SORT"},
+        {"F2-F8", "PLAYBACK"},
+        {"F9", "SEARCH"},
     };
 
     int text_y = y + 30;

@@ -30,6 +30,8 @@ Use `project-architecture-spec.md` for enduring architecture rules.
 - desktop runtime integration state for MPRIS/D-Bus/media-key/notification availability and desktop open-file/open-URL requests
 - credential lifecycle and permission model for system-keyring-facing storage, token validity/revocation, read/write source capabilities, and safe status reporting
 - host single-instance startup guard for the Linux device executable
+- direct Linux X11 desktop-widget target, with `linux-x11-debug` and `linux-x11-debug-build` CMake presets
+- host-machine Chromaprint/fpcalc provisioning through `scripts/ensure-host-fpcalc.ps1`; the current Windows host has `fpcalc` 1.6.0 installed through winget
 
 ## 3. Current Device-Side Scope
 
@@ -38,13 +40,18 @@ Use `project-architecture-spec.md` for enduring architecture rules.
 - direct Linux framebuffer output adapter
 - host runtime capability adapters injected behind app-facing interfaces
 
-## 4. Still Not Implemented
+## 4. Still Not Locally Completable
 
-- host-machine provisioning outside the development container for optional fingerprint dependency `fpcalc`
-- direct on-host desktop simulator support
-- LAN share and DLNA/UPnP provider families now resolve configured stream URLs through the unified remote stream path; richer native directory discovery still depends on optional backend/platform adapters.\n- pointer-facing or large-screen final UI surfaces for advanced/professional DSP editing; the domain model and runtime chain state now exist, while current small-screen page still exposes the compact 10-band surface
+- LAN share and DLNA/UPnP provider families now resolve configured stream URLs through the unified remote stream path; richer native directory discovery still depends on optional backend/platform adapters.
+- pointer-facing or large-screen final UI surfaces for advanced/professional DSP editing require an accepted non-small-screen device profile. The domain model and runtime chain state exist; the current required small-screen profile exposes the compact 10-band surface.
+- Real Linux-session MPRIS service, D-Bus service registration, global media-key capture, and notification delivery remain platform-adapter work beyond the current app-side desktop projection/state boundary.
+- Debian archive upload readiness still requires external maintainer identity, release tag, ITP/changelog closure, and sponsor-style clean chroot proof as tracked in `docs/engineering-check-report.md`.
 
-## 5. Rule
+## 5. Explicitly Excluded
+
+- SDL or mock desktop simulator support is not a missing implementation item. `project-architecture-spec.md` removes that product/runtime distinction; direct host visual validation belongs to the real Linux X11 desktop-widget target.
+
+## 6. Rule
 
 Nothing in this file may be treated as the final product definition merely because it reflects what is implemented today.
 
@@ -59,9 +66,12 @@ This update records implementation, not just domain modeling:
 - Search is now an interactive page: typed characters build the query, local and active remote results are grouped by source, and confirming a result starts local or remote playback.
 - Stream Detail is now actionable: it shows resolved diagnostics and `ENTER` starts the resolved stream.
 - Queue / Up Next is reachable from Now Playing with `Q` and displays current local or remote playback state.
-- Playlist Editor is reachable from playlist pages with `F4` and has its own page identity/help ownership.
+- Playlist Editor is reachable from playlist pages with `E` or `INS` so `F4` remains the global previous-track transport key, and the editor has its own page identity/help ownership.
 - Desktop-open positional file/URL arguments are accepted by CLI targets and routed into local library startup playback or direct remote stream playback.
 - Library rescan now records incremental change facts and migration planning in `LibraryRepository` rather than leaving governance only as a standalone model.
 - Metadata governance now supports a persistent fingerprint index path in addition to in-memory lookup.
 - Playback runtime now consumes the stability policy for transition preparation and start/end jitter suppression.
 - `lofibox_remote_browse_playback_flow_smoke` covers Source Manager -> Remote Browse -> Stream Detail -> Now Playing remote URI playback.
+- Remote browse/search playback now carries remote title, artist, album, and duration into Now Playing/Lyrics projections, and read-only remote items can reuse accepted local metadata cache records keyed by stable source identity plus item id.
+- Host fingerprint provisioning is now executable outside the container: `scripts/ensure-host-fpcalc.ps1` detects `FPCALC_PATH` or `fpcalc`, can install Chromaprint through supported package managers, and was verified on this Windows host through winget.
+- Direct Linux desktop-widget builds are no longer implicit knowledge: `linux-x11-debug` configures the real X11 presentation target.

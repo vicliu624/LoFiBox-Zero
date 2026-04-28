@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "app/app_page.h"
@@ -37,6 +38,9 @@ struct AppRuntimeState {
     std::vector<RemoteCatalogNode> remote_browse_nodes{};
     std::optional<RemoteCatalogNode> selected_remote_node{};
     std::optional<ResolvedRemoteStream> selected_remote_stream{};
+    int remote_profile_edit_field{-1};
+    std::string remote_profile_edit_buffer{};
+    std::string remote_profile_status{};
     std::string search_query{};
     clock::time_point last_update{clock::now()};
     clock::time_point last_status_refresh{};

@@ -18,7 +18,7 @@ cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -G Ninja \
 cmake --build "$BUILD_DIR" --target lofibox_zero_x11 -j "${LOFIBOX_POCKETFRAME_BUILD_JOBS:-4}"
 
 mkdir -p "$BIN_DIR" "$ASSET_DIR" "$HOME/.local/bin" "$STATE_DIR" "$CACHE_DIR"
-cp "$BUILD_DIR/lofibox_zero_x11" "$BIN_DIR/lofibox-zero-x11.new"
+cp "$BUILD_DIR/lofibox" "$BIN_DIR/lofibox-zero-x11.new"
 mv -f "$BIN_DIR/lofibox-zero-x11.new" "$BIN_DIR/lofibox-zero-x11"
 rm -rf "$ASSET_DIR/ui"
 cp -R "$ROOT_DIR/assets/ui" "$ASSET_DIR/ui"

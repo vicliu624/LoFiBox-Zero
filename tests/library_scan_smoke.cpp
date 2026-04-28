@@ -92,18 +92,22 @@ int main()
         return 1;
     }
 
-    for (int index = 0; index < 20; ++index) {
-        app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
-    }
-
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Up, "UP", '\0'});
     snapshot = app.snapshot();
     if (snapshot.list_selected_index != 11) {
-        std::cerr << "Expected Songs selection to reach the final track.\n";
+        std::cerr << "Expected Songs selection to wrap upward from the first track to the final track.\n";
         return 1;
     }
 
     if (snapshot.list_scroll_offset != 6) {
         std::cerr << "Expected Songs scroll offset to reveal the final page.\n";
+        return 1;
+    }
+
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
+    snapshot = app.snapshot();
+    if (snapshot.list_selected_index != 0 || snapshot.list_scroll_offset != 0) {
+        std::cerr << "Expected Songs selection to wrap downward from the final track back to the first track.\n";
         return 1;
     }
 

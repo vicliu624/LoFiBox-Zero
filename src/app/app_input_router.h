@@ -25,6 +25,13 @@ public:
     virtual void pausePlayback() = 0;
     virtual void stepTrack(int delta) = 0;
     virtual void cycleMainMenuPlaybackMode() = 0;
+    virtual void toggleRepeatAll() = 0;
+    virtual void toggleRepeatOne() = 0;
+    virtual void openSearchPage() = 0;
+    virtual void openLibraryPage() = 0;
+    virtual void openQueuePage() = 0;
+    virtual void openSettingsPage() = 0;
+    virtual void showMainMenuPage() = 0;
     virtual void moveMainMenuSelection(int delta) = 0;
     virtual void resetMainMenuSelection() = 0;
     virtual void confirmMainMenu() = 0;
@@ -38,9 +45,13 @@ public:
 
     virtual void cycleSongSortModeAndClamp() = 0;
     virtual void moveSelection(int delta) = 0;
+    virtual void moveSelectionPage(int delta_pages) = 0;
     virtual void confirmListPage() = 0;
     virtual void appendSearchCharacter(char ch) { (void)ch; }
     virtual void backspaceSearchQuery() {}
+    virtual void appendRemoteProfileEditCharacter(char ch) { (void)ch; }
+    virtual void backspaceRemoteProfileEdit() {}
+    virtual void commitRemoteProfileEdit() {}
 };
 
 void routeInput(AppInputTarget& target, const InputEvent& event);

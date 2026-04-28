@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -53,12 +54,27 @@ bool ChromaprintFingerprintProvider::available() const
 
 AudioFingerprintResult ChromaprintFingerprintProvider::fingerprint(const fs::path& path) const
 {
+    if (path.empty()) {
+        return {};
+    }
+    const auto input = pathUtf8String(path);
+    if (input.find("://") == std::string::npos) {
+        std::error_code ec{};
+        if (!fs::exists(path, ec) || ec) {
+            return {};
+        }
+    }
+    return fingerprintInput(input);
+}
+
+AudioFingerprintResult ChromaprintFingerprintProvider::fingerprintInput(std::string_view input) const
+{
     AudioFingerprintResult result{};
-    if (!available() || !fs::exists(path)) {
+    if (!available() || input.empty()) {
         return result;
     }
 
-    const auto output = captureProcessOutput(*executable_path_, {pathUtf8String(path)});
+    const auto output = captureProcessOutput(*executable_path_, {std::string(input)});
     if (!output) {
         return result;
     }
@@ -116,6 +132,14 @@ bool AcoustIdIdentityClient::available() const
 
 app::TrackIdentity AcoustIdIdentityClient::lookup(const fs::path& path, const app::TrackMetadata& seed_metadata) const
 {
+    return lookupInput(pathUtf8String(path), pathUtf8String(path), seed_metadata);
+}
+
+app::TrackIdentity AcoustIdIdentityClient::lookupInput(
+    std::string_view input,
+    std::string_view log_label,
+    const app::TrackMetadata& seed_metadata) const
+{
     app::TrackIdentity identity{};
     if (!available()) {
         if (api_key_.empty()) {
@@ -126,13 +150,15 @@ app::TrackIdentity AcoustIdIdentityClient::lookup(const fs::path& path, const ap
         return identity;
     }
 
-    const auto fingerprint = fingerprint_provider_.fingerprint(path);
+    const auto fingerprint = fingerprint_provider_.fingerprintInput(input);
     if (!fingerprint.found) {
-        logRuntime(RuntimeLogLevel::Warn, "identity", "Chromaprint fingerprint failed for " + pathUtf8String(path));
+        logRuntime(RuntimeLogLevel::Warn, "identity", "Chromaprint fingerprint failed for " + std::string(log_label));
         return identity;
     }
+    identity.fingerprint = fingerprint.fingerprint;
+    identity.metadata.duration_seconds = fingerprint.duration_seconds;
 
-    logRuntime(RuntimeLogLevel::Debug, "identity", "AcoustID lookup started for " + pathUtf8String(path));
+    logRuntime(RuntimeLogLevel::Debug, "identity", "AcoustID lookup started for " + std::string(log_label));
     const std::vector<std::pair<std::string, std::string>> fields{
         {"client", api_key_},
         {"meta", "recordings releasegroups releases"},
@@ -140,16 +166,17 @@ app::TrackIdentity AcoustIdIdentityClient::lookup(const fs::path& path, const ap
         {"fingerprint", fingerprint.fingerprint}};
     if (const auto json = captureFormPost(curl_path_, "https://api.acoustid.org/v2/lookup", fields)) {
         identity = parseBestAcoustIdIdentity(*json, seed_metadata);
+        identity.fingerprint = fingerprint.fingerprint;
         if (identity.found) {
             if (!identity.metadata.duration_seconds) {
                 identity.metadata.duration_seconds = fingerprint.duration_seconds;
             }
-            logRuntime(RuntimeLogLevel::Info, "identity", "AcoustID identity hit for " + pathUtf8String(path));
+            logRuntime(RuntimeLogLevel::Info, "identity", "AcoustID identity hit for " + std::string(log_label));
         } else {
-            logRuntime(RuntimeLogLevel::Warn, "identity", "AcoustID identity miss for " + pathUtf8String(path));
+            logRuntime(RuntimeLogLevel::Warn, "identity", "AcoustID identity miss for " + std::string(log_label));
         }
     } else {
-        logRuntime(RuntimeLogLevel::Warn, "identity", "AcoustID request failed for " + pathUtf8String(path));
+        logRuntime(RuntimeLogLevel::Warn, "identity", "AcoustID request failed for " + std::string(log_label));
     }
     return identity;
 }

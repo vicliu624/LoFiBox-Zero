@@ -14,9 +14,14 @@ int main()
         "BUILT-IN",
         0,
         1,
-        true});
-    if (settings_rows.size() != 8 || settings_rows[0].second != "ONLINE" || settings_rows[5].second != "PROFILES" || settings_rows[6].second != "XDG STATE") {
-        std::cerr << "Expected Settings projection rows to expose network and remote source state.\n";
+        true,
+        15});
+    if (settings_rows.size() != 7
+        || settings_rows[0].second != "ONLINE"
+        || settings_rows[5].first != "REMOTE SETUP"
+        || settings_rows[5].second != "15 TYPES"
+        || settings_rows[6].first != "ABOUT") {
+        std::cerr << "Expected Settings projection rows to expose one Remote Setup entry before source-specific fields.\n";
         return 1;
     }
 

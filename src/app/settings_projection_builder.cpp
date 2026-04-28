@@ -12,8 +12,7 @@ std::vector<std::pair<std::string, std::string>> buildSettingsProjectionRows(con
         {"SLEEP TIMER", input.sleep_timer_index == 0 ? "OFF" : "ON"},
         {"BACKLIGHT", std::to_string(input.backlight_index + 1)},
         {"LANGUAGE", "EN"},
-        {"REMOTE MEDIA", input.remote_sources_available ? "PROFILES" : "UNAVAILABLE"},
-        {"REMOTE CREDS", input.remote_sources_available ? "XDG STATE" : "NONE"},
+        {"REMOTE SETUP", input.remote_sources_available ? std::to_string(input.remote_source_type_count) + " TYPES" : "UNAVAILABLE"},
         {"ABOUT", "INFO"},
     };
 }

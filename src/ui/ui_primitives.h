@@ -16,9 +16,24 @@ namespace lofibox::ui {
 [[nodiscard]] std::string fitText(std::string_view text, std::size_t max_chars);
 [[nodiscard]] std::string fitUpper(std::string_view text, std::size_t max_chars);
 [[nodiscard]] int centeredX(std::string_view text, int scale) noexcept;
+[[nodiscard]] int centeredTextY(int region_y, int region_height, int scale = 1) noexcept;
 
 void drawText(core::Canvas& canvas, std::string_view text, int x, int y, core::Color color, int scale = 1);
-void drawTopBar(core::Canvas& canvas, std::string_view title, bool show_back, std::string_view left_hint = {}) noexcept;
+void drawFadedTextWindow(
+    core::Canvas& canvas,
+    std::string_view text,
+    int x,
+    int y,
+    int width,
+    int scroll_px,
+    core::Color color,
+    bool right_align_when_fits = true);
+void drawTopBar(
+    core::Canvas& canvas,
+    std::string_view title,
+    bool show_back,
+    std::string_view left_hint = {},
+    std::string_view right_hint = {}) noexcept;
 void drawListPageFrame(core::Canvas& canvas);
 void drawPageHelpModal(core::Canvas& canvas, std::string_view title, const std::vector<std::pair<std::string_view, std::string_view>>& rows);
 void drawGlassListFocus(core::Canvas& canvas, int x, int y, int width, int height);

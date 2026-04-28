@@ -31,6 +31,7 @@ enum class RemoteProviderCapability {
     QualitySelection,
     TranscodingPolicy,
     WritableFavorites,
+    WritableMetadata,
     ReadOnly,
 };
 

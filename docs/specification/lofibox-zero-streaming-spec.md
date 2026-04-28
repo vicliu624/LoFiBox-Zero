@@ -153,6 +153,13 @@ That model should support:
 - selecting a default server
 - distinguishing read-only versus writable capabilities when the source exposes them
 
+The small-screen Settings flow must present this connection model in two levels:
+
+- first, a Remote Setup page listing every supported remote source kind, including server providers, direct URL, radio, playlist manifests, adaptive streams, LAN shares, and DLNA/UPnP
+- second, a source-kind-specific profile/settings page for address, username, credential reference or secret entry, TLS policy, permission status, connectivity test, and save behavior
+
+Settings must not expose separate top-level rows such as server login, credential, TLS, or permission fields before the user chooses a remote source kind.
+
 Persisted server connection profiles and saved-source rules belong to `docs/specification/lofibox-zero-persistence-spec.md`.
 
 ### 6.2.1 First-Batch Real Provider Requirements
@@ -198,6 +205,42 @@ Search should be able to cover:
 - folder or path keywords
 
 When local and remote search are merged, results should remain grouped or otherwise explain their source.
+
+### 6.3.1 Remote Provider Data Contract
+
+App-facing code must consume remote media through normalized provider output, not raw server protocol fields.
+Provider scripts own protocol translation.
+They must convert Jellyfin, Emby, OpenSubsonic/Navidrome, DLNA, share, URL, radio, and future provider responses into the shared app contract before `AppRuntimeContext`, playback, search, queue, lyrics, or page projection code sees the data.
+
+The normalized remote track contract must carry:
+
+- stable remote item id
+- title
+- artist
+- album
+- album id when known
+- duration when known
+- source id
+- source label for UI display, such as `Emby`, `Jellyfin`, or a saved profile name
+- artwork key or non-secret artwork URL when the provider exposes one
+- local-cacheable lyrics fields when the provider exposes lyrics
+- local-cacheable audio fingerprint or recording identity hint when the provider exposes one
+
+The normalized remote catalog-node contract must carry the same metadata where applicable, plus:
+
+- node kind, such as artists, artist, albums, album, playlists, folders, favorites, recently-added, recently-played, stations, or tracks
+- title and subtitle
+- playable flag
+- browsable flag
+
+Application code may cache, display, queue, and resolve these normalized objects.
+It must not parse server-specific field names such as Jellyfin `RunTimeTicks`, Emby media-source structures, OpenSubsonic `song`, or provider-specific image tags outside provider/tooling code.
+
+Remote Now Playing parity follows the same rule:
+
+- title, artist, album, duration, lyrics, artwork placeholder/cache behavior, visualization, play/pause, seekability, and DSP attachment must be driven by the shared playback session
+- the only required visible difference from local playback is source attribution, shown as the remote source label in the Now Playing top bar
+- raw stream URLs and credentials must stay out of Now Playing and may only appear redacted in Stream Detail or diagnostics pages
 
 ### 6.4 Playback And Buffering
 
@@ -298,6 +341,12 @@ The manager owns cache buckets for playback buffers, recent browse items, artwor
 Each bucket exposes capacity policy, age policy, usage reporting, and garbage collection rather than scattering expiration logic inside protocol clients or UI pages.
 Remote directory caches, station-list caches, recent-browse caches, offline track saves, album offline sync plans, and playlist offline sync plans are part of this same cache/offline domain.
 Host implementations must place runtime cache material under the XDG cache root and must not write offline or cache data into the installation tree.
+
+Read-only remote libraries are not writeback failures.
+If a remote provider cannot mutate server-side track tags, or if the server item lacks metadata that LoFiBox later obtains from a trusted catalog, LoFiBox must persist the accepted metadata locally under the metadata cache bucket and match it back by stable remote source identity plus item id on later playback.
+Lyrics accepted for a read-only remote item must be persisted locally under the lyrics/cache domain rather than discarded merely because the server item cannot be tagged.
+When an audio fingerprint can be obtained for a remote item, LoFiBox must keep it in the persistent local fingerprint index or equivalent stable metadata cache so future identity, lyrics, and artwork decisions can be made without server-side writeback authority.
+This local metadata, lyrics, and fingerprint cache is a display/playback continuity fact, not a server truth override, and must not be written into the remote server unless the provider explicitly declares writable metadata authority.
 
 ### 6.8 Accounts, Authentication, And Security
 

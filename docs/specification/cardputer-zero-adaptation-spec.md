@@ -60,7 +60,7 @@ The product surface must:
 The profile is hardware-keyboard-first.
 
 Linux input truth still comes from kernel input events such as `EV_KEY` and `KEY_*`.
-Printed key legends, product images, PocketFrame button labels, or simulator naming must not redefine key semantics.
+Printed key legends, product images, PocketFrame button labels, or validation-harness naming must not redefine key semantics.
 
 Profile input adapters may translate physical events into logical app commands, but that translation must stay inside the platform/device boundary.
 

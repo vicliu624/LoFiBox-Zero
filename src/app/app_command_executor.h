@@ -23,8 +23,15 @@ public:
     virtual EqState& eqState() noexcept = 0;
     virtual int& mainMenuIndex() noexcept = 0;
     virtual void closeHelpForCommand() noexcept = 0;
+    [[nodiscard]] virtual bool startLibraryTrack(int track_id)
+    {
+        return playbackController().startTrack(libraryController(), track_id);
+    }
+    virtual bool handleSettingsRemoteConfirm(int selected) { (void)selected; return false; }
+    virtual bool handleRemoteSetupConfirm(int selected) { (void)selected; return false; }
     virtual bool handleLibraryRemoteConfirm(int selected) { (void)selected; return false; }
     virtual bool handleSourceManagerConfirm(int selected) { (void)selected; return false; }
+    virtual bool handleRemoteProfileSettingsConfirm(int selected) { (void)selected; return false; }
     virtual bool handleRemoteBrowseConfirm(int selected) { (void)selected; return false; }
     virtual bool handleStreamDetailConfirm() { return false; }
     virtual bool handleSearchConfirm(int selected) { (void)selected; return false; }
@@ -36,6 +43,8 @@ void commandPlayFromMenu(AppCommandTarget& target);
 void commandPausePlayback(AppCommandTarget& target);
 void commandStepTrack(AppCommandTarget& target, int delta);
 void commandCycleMainMenuPlaybackMode(AppCommandTarget& target);
+void commandToggleRepeatAll(AppCommandTarget& target);
+void commandToggleRepeatOne(AppCommandTarget& target);
 void commandMoveMainMenuSelection(AppCommandTarget& target, int delta);
 void commandResetMainMenuSelection(AppCommandTarget& target) noexcept;
 void commandConfirmMainMenu(AppCommandTarget& target);
@@ -46,6 +55,7 @@ void commandMoveEqualizerSelection(AppCommandTarget& target, int delta);
 void commandAdjustSelectedEqualizerBand(AppCommandTarget& target, int delta);
 void commandCycleSongSortModeAndClamp(AppCommandTarget& target);
 void commandMoveSelection(AppCommandTarget& target, int delta);
+void commandMoveSelectionPage(AppCommandTarget& target, int delta_pages);
 void commandConfirmListPage(AppCommandTarget& target);
 
 } // namespace lofibox::app

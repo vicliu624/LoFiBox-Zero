@@ -2,6 +2,8 @@
 
 #include "playback/playback_runtime_coordinator.h"
 
+#include <algorithm>
+
 namespace lofibox::app {
 
 void PlaybackRuntimeCoordinator::setServices(RuntimeServices* services) noexcept
@@ -67,40 +69,31 @@ void PlaybackRuntimeCoordinator::tick(
     double delta_seconds,
     const PlayIndexCallback& play_index)
 {
-    clock_.advance(session, delta_seconds);
-    const auto duration = session.current_track_id
-        ? std::chrono::milliseconds{static_cast<int>((library_controller.findTrack(*session.current_track_id) ? library_controller.findTrack(*session.current_track_id)->duration_seconds : 0) * 1000)}
-        : std::chrono::milliseconds{0};
-    const PlaybackStabilitySample stability_sample{
-        std::chrono::milliseconds{static_cast<int>(session.elapsed_seconds * 1000.0)},
-        duration,
-        session.audio_active && session.elapsed_seconds < 0.25,
-        false,
-        false};
-    if (stability_policy_.shouldPrepareNext(stability_sample, transition_policy_)) {
-        session.visualization_pending = true;
-    }
-    if (session.audio_active) {
-        switch (audio_pipeline_.state()) {
-        case AudioPlaybackState::Finished:
-            if (stability_policy_.suppressStartOrEndJitter(PlaybackStabilitySample{
-                    std::chrono::milliseconds{static_cast<int>(session.elapsed_seconds * 1000.0)},
-                    duration,
-                    false,
-                    true,
-                    false})) {
-                return;
-            }
-            if (advanceAfterFinish(queue, session, play_index)) {
-                return;
-            }
-            session.audio_active = false;
-            session.status = PlaybackStatus::Paused;
-            if (session.current_track_id) {
-                clock_.clampToTrackDuration(session, library_controller.findTrack(*session.current_track_id));
-            }
-            session.visualization_frame = {};
+    const auto* current_track = session.current_track_id ? library_controller.findTrack(*session.current_track_id) : nullptr;
+    const int stream_duration_seconds = session.current_stream_duration_seconds > 0 ? session.current_stream_duration_seconds : 0;
+    const int duration_seconds = current_track ? current_track->duration_seconds : stream_duration_seconds;
+    const auto duration = std::chrono::milliseconds{std::max(0, duration_seconds) * 1000};
+    const auto backend_state = session.audio_active ? audio_pipeline_.state() : AudioPlaybackState::Idle;
+
+    if (session.audio_active && backend_state == AudioPlaybackState::Finished) {
+        if (advanceAfterFinish(queue, session, play_index)) {
             return;
+        }
+        session.audio_active = false;
+        session.status = PlaybackStatus::Paused;
+        if (current_track) {
+            clock_.clampToTrackDuration(session, current_track);
+        } else if (stream_duration_seconds > 0) {
+            session.elapsed_seconds = std::min(session.elapsed_seconds, static_cast<double>(stream_duration_seconds));
+        }
+        session.visualization_frame = {};
+        return;
+    }
+
+    if (session.audio_active) {
+        switch (backend_state) {
+        case AudioPlaybackState::Finished:
+            break;
         case AudioPlaybackState::Failed:
             session.audio_active = false;
             session.status = PlaybackStatus::Paused;
@@ -113,7 +106,21 @@ void PlaybackRuntimeCoordinator::tick(
             break;
         }
     }
-    session.visualization_frame = audio_pipeline_.visualizationFrame();
+
+    const bool backend_progressing = session.audio_active && backend_state == AudioPlaybackState::Playing;
+    if (backend_progressing) {
+        clock_.advance(session, delta_seconds);
+    }
+    const PlaybackStabilitySample stability_sample{
+        std::chrono::milliseconds{static_cast<int>(session.elapsed_seconds * 1000.0)},
+        duration,
+        backend_progressing && session.elapsed_seconds < 0.25,
+        false,
+        false};
+    if (stability_policy_.shouldPrepareNext(stability_sample, transition_policy_)) {
+        session.visualization_pending = true;
+    }
+    session.visualization_frame = backend_progressing ? audio_pipeline_.visualizationFrame() : AudioVisualizationFrame{};
 }
 
 } // namespace lofibox::app

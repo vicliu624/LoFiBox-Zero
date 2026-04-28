@@ -20,6 +20,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(GNUInstallDirs)
 include(CTest)
+find_package(Threads REQUIRED)
 
 set(LOFIBOX_PRIVATE_LIBDIR "lib/lofibox" CACHE PATH "Private LoFiBox runtime directory")
 set(CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DATAROOTDIR}/doc/lofibox")
@@ -57,6 +58,7 @@ add_library(lofibox_zero_core STATIC
     src/app/lofibox_app_runner.cpp
     src/app/media_item.cpp
     src/app/media_search_service.cpp
+    src/app/remote_media_contract.cpp
     src/playback/mixed_playback_queue.cpp
     src/playback/playback_enrichment_coordinator.cpp
     src/playback/playback_backend_controller.cpp
@@ -152,7 +154,7 @@ add_library(lofibox_zero_host_runtime STATIC
 )
 target_include_directories(lofibox_zero_host_runtime PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(lofibox_zero_host_runtime PUBLIC cxx_std_20)
-target_link_libraries(lofibox_zero_host_runtime PUBLIC lofibox_zero_core)
+target_link_libraries(lofibox_zero_host_runtime PUBLIC lofibox_zero_core Threads::Threads)
 target_compile_definitions(lofibox_zero_host_runtime PRIVATE
     LOFIBOX_PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     LOFIBOX_INSTALLED_HELPER_DIR="${CMAKE_INSTALL_PREFIX}/${LOFIBOX_PRIVATE_LIBDIR}"
@@ -341,6 +343,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_audio_pipeline_controller_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_audio_pipeline_controller_smoke COMMAND lofibox_audio_pipeline_controller_smoke)
 
+    add_executable(lofibox_audio_child_lifecycle_smoke tests/audio_child_lifecycle_smoke.cpp)
+    target_link_libraries(lofibox_audio_child_lifecycle_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_audio_child_lifecycle_smoke COMMAND lofibox_audio_child_lifecycle_smoke)
+
     add_executable(lofibox_equalizer_smoke tests/equalizer_smoke.cpp)
     target_link_libraries(lofibox_equalizer_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_equalizer_smoke COMMAND lofibox_equalizer_smoke)
@@ -461,6 +467,14 @@ if(BUILD_TESTING)
     add_executable(lofibox_real_emby_integration_smoke tests/real_emby_integration_smoke.cpp)
     target_link_libraries(lofibox_real_emby_integration_smoke PRIVATE lofibox_zero_host_runtime)
     add_test(NAME lofibox_real_emby_integration_smoke COMMAND lofibox_real_emby_integration_smoke)
+
+    add_executable(lofibox_real_remote_media_integration_smoke tests/real_remote_media_integration_smoke.cpp)
+    target_link_libraries(lofibox_real_remote_media_integration_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_real_remote_media_integration_smoke COMMAND lofibox_real_remote_media_integration_smoke)
+
+    add_executable(lofibox_real_remote_lab_integration_smoke tests/real_remote_lab_integration_smoke.cpp)
+    target_link_libraries(lofibox_real_remote_lab_integration_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_real_remote_lab_integration_smoke COMMAND lofibox_real_remote_lab_integration_smoke)
 
     add_executable(lofibox_remote_source_security_smoke tests/remote_source_security_smoke.cpp)
     target_link_libraries(lofibox_remote_source_security_smoke PRIVATE lofibox_zero_core)

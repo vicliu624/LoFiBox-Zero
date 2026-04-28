@@ -5,6 +5,42 @@
 #include "app/library_query_service.h"
 
 namespace lofibox::app {
+namespace {
+
+int countTracksByArtist(const LibraryModel& library, const std::string& artist)
+{
+    int count = 0;
+    for (const auto& track : library.tracks) {
+        if (track.artist == artist) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+int countTracksByGenre(const LibraryModel& library, const std::string& genre)
+{
+    int count = 0;
+    for (const auto& track : library.tracks) {
+        if (track.genre == genre) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+int countTracksByComposer(const LibraryModel& library, const std::string& composer)
+{
+    int count = 0;
+    for (const auto& track : library.tracks) {
+        if (track.composer == composer) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+} // namespace
 
 std::optional<std::string> LibraryNavigationService::titleOverrideForPage(
     AppPage page,
@@ -38,10 +74,10 @@ std::optional<std::vector<std::pair<std::string, std::string>>> LibraryNavigatio
             {"COMPILATIONS", std::to_string(library.compilations.size())},
         };
     case AppPage::Artists:
-        for (const auto& artist : library.artists) rows.emplace_back(artist, "");
+        for (const auto& artist : library.artists) rows.emplace_back(artist, std::to_string(countTracksByArtist(library, artist)));
         return rows;
     case AppPage::Albums:
-        for (const auto& album : visible_albums) rows.emplace_back(album.album, album.artist);
+        for (const auto& album : visible_albums) rows.emplace_back(album.album, std::to_string(album.track_ids.size()));
         return rows;
     case AppPage::Songs:
         for (const int id : context.songs.track_ids) {
@@ -49,10 +85,10 @@ std::optional<std::vector<std::pair<std::string, std::string>>> LibraryNavigatio
         }
         return rows;
     case AppPage::Genres:
-        for (const auto& genre : library.genres) rows.emplace_back(genre, "");
+        for (const auto& genre : library.genres) rows.emplace_back(genre, std::to_string(countTracksByGenre(library, genre)));
         return rows;
     case AppPage::Composers:
-        for (const auto& composer : library.composers) rows.emplace_back(composer, "");
+        for (const auto& composer : library.composers) rows.emplace_back(composer, std::to_string(countTracksByComposer(library, composer)));
         return rows;
     case AppPage::Compilations:
         for (const auto& compilation : library.compilations) rows.emplace_back(compilation.album, std::to_string(compilation.track_ids.size()));

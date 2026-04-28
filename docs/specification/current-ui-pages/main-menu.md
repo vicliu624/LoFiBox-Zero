@@ -72,7 +72,9 @@ Additional visual lock:
 - The topbar `MUST` show `F1:HELP` at the left edge.
 - The topbar `MUST NOT` show signal bars or battery indicators.
 - The right-side playback information region `MUST` have a fixed width.
-- If playback information exceeds the fixed width, it `MUST` scroll horizontally instead of being hard-truncated.
+- When a track or stream is active, the right-side playback information region `MUST` show current playback information: playback state plus track title and, when available, artist.
+- If the playback information fits the fixed width, it `MUST` be right-aligned inside the region.
+- If playback information exceeds the fixed width, it `MUST` scroll from right to left instead of being hard-truncated.
 - The playback information region `MUST` use soft horizontal edge fades: content disappears toward the left edge and appears from the right edge rather than clipping abruptly.
 - If no track is active, the playback information region `MAY` show a muted empty playback summary such as `NO TRACK`.
 - Pagination dots `MUST` be visible and indicate current menu position.
@@ -103,8 +105,12 @@ Additional visual lock:
   - effect: jump to previous queued track without leaving Main Menu
 - `EVT_MENU_NEXT`
   - effect: jump to next queued track without leaving Main Menu
-- `EVT_MENU_MODE_CYCLE`
-  - effect: cycle playback mode across sequential, shuffle, and single-track repeat without leaving Main Menu
+- `EVT_MENU_SHUFFLE`
+  - effect: toggle shuffle without leaving Main Menu
+- `EVT_MENU_REPEAT_ALL`
+  - effect: toggle repeat-all loop without leaving Main Menu
+- `EVT_MENU_REPEAT_ONE`
+  - effect: toggle repeat-one loop without leaving Main Menu
 
 ## 8. Transition Contract
 
@@ -122,7 +128,9 @@ Additional visual lock:
 - `STATE_MAIN_MENU_READY + EVT_MENU_PAUSE` -> effect: pause music in place -> `STATE_MAIN_MENU_READY`
 - `STATE_MAIN_MENU_READY + EVT_MENU_PREVIOUS` -> effect: previous track in place -> `STATE_MAIN_MENU_READY`
 - `STATE_MAIN_MENU_READY + EVT_MENU_NEXT` -> effect: next track in place -> `STATE_MAIN_MENU_READY`
-- `STATE_MAIN_MENU_READY + EVT_MENU_MODE_CYCLE` -> effect: cycle playback mode in place -> `STATE_MAIN_MENU_READY`
+- `STATE_MAIN_MENU_READY + EVT_MENU_SHUFFLE` -> effect: toggle shuffle in place -> `STATE_MAIN_MENU_READY`
+- `STATE_MAIN_MENU_READY + EVT_MENU_REPEAT_ALL` -> effect: toggle repeat-all in place -> `STATE_MAIN_MENU_READY`
+- `STATE_MAIN_MENU_READY + EVT_MENU_REPEAT_ONE` -> effect: toggle repeat-one in place -> `STATE_MAIN_MENU_READY`
 
 ## 8.1 Shortcut Help Modal
 
@@ -133,7 +141,13 @@ Additional visual lock:
   - `F3`: pause
   - `F4`: previous track
   - `F5`: next track
-  - `F6`: mode cycle across shuffle, sequential, and single-track repeat
+  - `F6`: shuffle
+  - `F7`: repeat all
+  - `F8`: repeat one
+  - `F9`: search
+  - `F10`: library
+  - `F11`: queue
+  - `F12`: settings
 - These shortcuts exist so the user can control playback without entering `Now Playing`.
 - `BACKSPACE`, `ENTER`, or `F1` `MUST` close the modal before any other Main Menu navigation behavior.
 

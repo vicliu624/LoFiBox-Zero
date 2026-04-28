@@ -103,6 +103,20 @@ The following words are normative in this document:
 - A page `MUST NOT` borrow another page's shortcut content merely because the page has no current shortcuts.
 - When a help modal is open, `BACKSPACE`, `ENTER`, or `F1` `MUST` close the modal before normal page navigation or page actions run.
 
+### 4.8 Device Keyboard Contract
+
+LoFiBox Zero targets the Debian/Linux handheld keyboard layout as a product input surface, not as a generic desktop keyboard accident.
+
+- `F1` is always page-local help except on `Boot`.
+- `F2` resumes or starts playback; `F3` pauses playback; `F4` selects the previous track; `F5` selects the next track.
+- `F6` toggles shuffle; `F7` toggles repeat-all loop; `F8` toggles repeat-one loop. These are separate controls and `MUST NOT` be collapsed into an ambiguous mode cycle in the runtime router or help text.
+- `F9` opens Search; `F10` opens Library; `F11` opens Up Next; `F12` opens Settings.
+- `UP` and `DOWN` move one row in list-like pages. `PGUP` and `PGDN` move by one viewport in list-like pages.
+- On the Main Menu, `LEFT` and `RIGHT` move one page preview; `PGUP` and `PGDN` jump by a larger page step; `HOME` resets to the first menu item.
+- Outside the Main Menu, `HOME` returns to the Main Menu. `BACKSPACE` returns to the previous page unless the current page is a text editor that owns backspace for editing.
+- Text-entry pages own printable character keys, `BACKSPACE`, and `OK` while editing. Global playback keys must not corrupt text buffers.
+- Page-local shortcuts such as `L` for Lyrics, `Q` for Queue, `T` for sort, and `E`/`INS` for playlist editing are valid only on pages whose help modal advertises them.
+
 ## 5. Application-Level Navigation Map
 
 The current implementation page graph is:
@@ -114,6 +128,9 @@ The current implementation page graph is:
 - `Main Menu` -> `Now Playing`
 - `Main Menu` -> `Equalizer`
 - `Main Menu` -> `Settings`
+- `Settings` -> `Remote Setup`
+- `Remote Setup` -> `Remote Profile Settings`
+- `Remote Profile Settings` -> `Remote Field Editor`
 - `Music Index` -> `Artists`
 - `Music Index` -> `Albums(All)`
 - `Music Index` -> `Songs(All)`
@@ -209,6 +226,7 @@ Each current implementation page has its own dedicated specification file:
 - `Now Playing`: `docs/specification/current-ui-pages/now-playing.md`
 - `Equalizer`: `docs/specification/current-ui-pages/equalizer.md`
 - `Settings`: `docs/specification/current-ui-pages/settings.md`
+- `Remote Setup`: `docs/specification/current-ui-pages/remote-setup.md`
 - `About`: `docs/specification/current-ui-pages/about.md`
 
 ## 7. Shared App-State Index
@@ -273,6 +291,7 @@ As of 2026-04-27, the current small-screen page model includes these product sur
 - EQ
 - Settings
 - Source Manager
+- Remote Setup
 - Search
 - Queue / Up Next
 - Remote Browse

@@ -58,9 +58,20 @@ UserAction mapInput(const InputEvent& event)
     case InputKey::F4:
     case InputKey::F5:
     case InputKey::F6:
+    case InputKey::F7:
+    case InputKey::F8:
+    case InputKey::F9:
+    case InputKey::F10:
+    case InputKey::F11:
+    case InputKey::F12:
+    case InputKey::Insert:
         return UserAction::None;
     case InputKey::Home:
         return UserAction::Home;
+    case InputKey::PageUp:
+        return UserAction::PageUp;
+    case InputKey::PageDown:
+        return UserAction::PageDown;
     case InputKey::Next:
         return UserAction::NextTrack;
     case InputKey::Character:

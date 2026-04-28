@@ -67,11 +67,14 @@ Supported playlist semantics:
 
 - `F1` `MUST` open the `Playlist Detail` page's own shortcut-help modal.
 - The current shortcut rows are:
-  - `DEL`: delete song
-  - `ENTER`: play
+  - `OK`: play
+  - `UP` / `DOWN`: move one row
+  - `PGUP` / `PGDN`: move by one page
   - `BACKSPACE`: back
-  - `F2`: search
-  - `F3`: sort
+  - `T`: sort
+  - `E` / `INS`: edit playlist
+  - `F2` through `F8`: global playback controls
+  - `F9`: search
 - The modal `MUST NOT` reuse Main Menu shortcut content.
 
 ## 9. Empty State

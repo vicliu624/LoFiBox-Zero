@@ -136,6 +136,60 @@ public:
         return std::nullopt;
     }
 
+    [[nodiscard]] std::optional<core::Canvas> readRemoteIdentity(
+        std::string_view stable_cache_key,
+        const fs::path& lookup_path,
+        app::ArtworkReadMode mode = app::ArtworkReadMode::AllowOnline) const override
+    {
+        if (!cache_ || stable_cache_key.empty()) {
+            return std::nullopt;
+        }
+
+        const std::string key{stable_cache_key};
+        const auto cache_path = artworkCachePath(*cache_, key);
+        const auto missing_marker = artworkMissingMarkerPath(*cache_, key);
+        std::error_code ec{};
+        auto& entry = cache_->entries[key];
+        if (!entry.online_metadata_attempted && fs::exists(metadataCachePath(*cache_, key), ec)) {
+            entry = loadMetadataCache(*cache_, key);
+        }
+        if (fs::exists(cache_path, ec) && !ec) {
+            logRuntime(RuntimeLogLevel::Debug, "artwork", "Remote artwork cache hit for " + pathUtf8String(lookup_path));
+            return loadPngCanvas(cache_path);
+        }
+        ec.clear();
+        const bool allow_online_artwork = mode == app::ArtworkReadMode::AllowOnline;
+        const bool can_try_online_artwork = allow_online_artwork
+            && (!entry.release_mbid.empty() || !entry.release_group_mbid.empty())
+            && !entry.online_artwork_attempted
+            && online_artwork_.available()
+            && connectivity_
+            && connectivity_->connected();
+        if (fs::exists(missing_marker, ec) && !ec && !can_try_online_artwork) {
+            return std::nullopt;
+        }
+        if (can_try_online_artwork) {
+            bool online_hit = false;
+            if (!entry.release_mbid.empty()) {
+                online_hit = online_artwork_.fetchFrontCover(entry.release_mbid, cache_path);
+            }
+            if (!online_hit && !entry.release_group_mbid.empty()) {
+                online_hit = online_artwork_.fetchReleaseGroupFrontCover(entry.release_group_mbid, cache_path);
+            }
+            entry.online_artwork_attempted = true;
+            storeMetadataCache(*cache_, key, entry);
+            if (online_hit) {
+                fs::remove(missing_marker, ec);
+                logRuntime(RuntimeLogLevel::Info, "artwork", "Remote online artwork hit for " + pathUtf8String(lookup_path));
+                return loadPngCanvas(cache_path);
+            }
+            logRuntime(RuntimeLogLevel::Warn, "artwork", "Remote online artwork miss for " + pathUtf8String(lookup_path));
+        }
+        std::ofstream marker(missing_marker, std::ios::binary | std::ios::trunc);
+        marker << "missing";
+        return std::nullopt;
+    }
+
 private:
     void writeArtworkBack(const fs::path& target_path, const fs::path& cache_path, bool only_fill_missing) const
     {

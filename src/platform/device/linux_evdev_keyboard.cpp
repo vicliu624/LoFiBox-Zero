@@ -121,8 +121,26 @@ constexpr std::uint32_t kEvdevKeycodeOffset = 8U;
         return app::InputEvent{app::InputKey::F5, "F5", '\0'};
     case KEY_F6:
         return app::InputEvent{app::InputKey::F6, "F6", '\0'};
+    case KEY_F7:
+        return app::InputEvent{app::InputKey::F7, "F7", '\0'};
+    case KEY_F8:
+        return app::InputEvent{app::InputKey::F8, "F8", '\0'};
+    case KEY_F9:
+        return app::InputEvent{app::InputKey::F9, "F9", '\0'};
+    case KEY_F10:
+        return app::InputEvent{app::InputKey::F10, "F10", '\0'};
+    case KEY_F11:
+        return app::InputEvent{app::InputKey::F11, "F11", '\0'};
+    case KEY_F12:
+        return app::InputEvent{app::InputKey::F12, "F12", '\0'};
     case KEY_HOME:
         return app::InputEvent{app::InputKey::Home, "HOME", '\0'};
+    case KEY_PAGEUP:
+        return app::InputEvent{app::InputKey::PageUp, "PGUP", '\0'};
+    case KEY_PAGEDOWN:
+        return app::InputEvent{app::InputKey::PageDown, "PGDN", '\0'};
+    case KEY_INSERT:
+        return app::InputEvent{app::InputKey::Insert, "INS", '\0'};
     case KEY_LEFT:
         return app::InputEvent{app::InputKey::Left, "LEFT", '\0'};
     case KEY_RIGHT:

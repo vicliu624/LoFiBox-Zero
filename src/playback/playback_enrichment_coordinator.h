@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -19,6 +20,12 @@ public:
 
     void setServices(RuntimeServices services);
     void request(const TrackRecord& track);
+    void requestRemote(
+        const RemoteServerProfile& profile,
+        const RemoteTrack& remote_track,
+        int track_id,
+        std::string stream_uri,
+        bool cache_remote_facts);
     void applyPending(LibraryController& library_controller, PlaybackSession& session);
 
     [[nodiscard]] static TrackMetadata metadataFromTrack(const TrackRecord& track);

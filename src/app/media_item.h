@@ -20,6 +20,7 @@ enum class MediaItemSourceKind {
 struct MediaItemSource {
     MediaItemSourceKind kind{MediaItemSourceKind::LocalFile};
     std::string source_id{};
+    std::string source_label{};
     std::string provider_family{};
 };
 

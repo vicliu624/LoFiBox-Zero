@@ -85,14 +85,50 @@ void HelloApp::handleInput(const InputEvent& event) noexcept
         status_text_ = "F1 HELP TRIGGERED";
         break;
     case InputKey::F2:
-        status_text_ = "F2 SEARCH TRIGGERED";
+        status_text_ = "F2 PLAY TRIGGERED";
         break;
     case InputKey::F3:
-        status_text_ = "F3 SORT TRIGGERED";
+        status_text_ = "F3 PAUSE TRIGGERED";
+        break;
+    case InputKey::F4:
+        status_text_ = "F4 PREVIOUS TRIGGERED";
+        break;
+    case InputKey::F5:
+        status_text_ = "F5 NEXT TRIGGERED";
+        break;
+    case InputKey::F6:
+        status_text_ = "F6 SHUFFLE TRIGGERED";
+        break;
+    case InputKey::F7:
+        status_text_ = "F7 LOOP TRIGGERED";
+        break;
+    case InputKey::F8:
+        status_text_ = "F8 REPEAT ONE TRIGGERED";
+        break;
+    case InputKey::F9:
+        status_text_ = "F9 SEARCH TRIGGERED";
+        break;
+    case InputKey::F10:
+        status_text_ = "F10 LIBRARY TRIGGERED";
+        break;
+    case InputKey::F11:
+        status_text_ = "F11 QUEUE TRIGGERED";
+        break;
+    case InputKey::F12:
+        status_text_ = "F12 SETTINGS TRIGGERED";
         break;
     case InputKey::Home:
         typed_text_.clear();
         status_text_ = "HOME CLEARED THE BUFFER";
+        break;
+    case InputKey::PageUp:
+        status_text_ = "PAGE UP TRIGGERED";
+        break;
+    case InputKey::PageDown:
+        status_text_ = "PAGE DOWN TRIGGERED";
+        break;
+    case InputKey::Insert:
+        status_text_ = "INSERT TRIGGERED";
         break;
     case InputKey::Next:
         status_text_ = "NEXT BUTTON TRIGGERED";

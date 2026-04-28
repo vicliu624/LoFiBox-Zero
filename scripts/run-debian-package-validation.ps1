@@ -3,7 +3,8 @@
 param(
     [string]$Image = "lofibox-zero/package-build:trixie",
     [string]$BuildArgs = "-us -uc",
-    [switch]$SkipOrigTarball
+    [switch]$SkipOrigTarball,
+    [switch]$AllowNetwork
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,7 +34,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "Required local Docker image '$Image' was not found. Run scripts/build-debian-package-image.ps1 first."
 }
 
-docker run --rm `
+$networkArgs = @()
+if (-not $AllowNetwork) {
+    $networkArgs = @("--network", "none")
+}
+
+& docker run --rm `
+    @networkArgs `
     -v "${parent}:/workspace" `
     -w /workspace `
     $Image `

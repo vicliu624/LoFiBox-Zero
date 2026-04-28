@@ -125,24 +125,92 @@ int centeredX(std::string_view text, int scale) noexcept
     return (core::kDisplayWidth - core::bitmap_font::measureText(text, scale)) / 2;
 }
 
+int centeredTextY(int region_y, int region_height, int scale) noexcept
+{
+    return region_y + std::max(0, (region_height - core::bitmap_font::lineHeight(scale)) / 2);
+}
+
 void drawText(core::Canvas& canvas, std::string_view text, int x, int y, core::Color color, int scale)
 {
     core::bitmap_font::drawText(canvas, text, x, y, color, scale);
 }
 
-void drawTopBar(core::Canvas& canvas, std::string_view title, bool show_back, std::string_view left_hint) noexcept
+void drawFadedTextWindow(
+    core::Canvas& canvas,
+    std::string_view text,
+    int x,
+    int y,
+    int width,
+    int scroll_px,
+    core::Color color,
+    bool right_align_when_fits)
 {
+    if (width <= 0 || text.empty()) {
+        return;
+    }
+
+    constexpr int kScale = 1;
+    constexpr int kFadeWidth = 18;
+    constexpr int kScrollGap = 28;
+    const int text_width = core::bitmap_font::measureText(text, kScale);
+    const int text_height = core::bitmap_font::lineHeight(kScale);
+    if (text_width <= 0 || text_height <= 0) {
+        return;
+    }
+
+    core::Canvas source{width, text_height + 2};
+    source.clear(rgba(0, 0, 0, 0));
+    if (text_width <= width - 4) {
+        const int text_x = right_align_when_fits ? std::max(0, width - text_width) : 0;
+        drawText(source, text, text_x, 0, color, kScale);
+    } else {
+        const int cycle_width = width + text_width + kScrollGap;
+        const int offset = ((scroll_px % cycle_width) + cycle_width) % cycle_width;
+        const int text_x = width - offset;
+        drawText(source, text, text_x, 0, color, kScale);
+        drawText(source, text, text_x + cycle_width, 0, color, kScale);
+    }
+
+    for (int row = 0; row < source.height(); ++row) {
+        for (int col = 0; col < width; ++col) {
+            const auto pixel = source.pixel(col, row);
+            if (pixel.a == 0) {
+                continue;
+            }
+
+            const float left_fade = std::clamp(static_cast<float>(col) / static_cast<float>(kFadeWidth), 0.0f, 1.0f);
+            const float right_fade = std::clamp(static_cast<float>(width - 1 - col) / static_cast<float>(kFadeWidth), 0.0f, 1.0f);
+            const float edge_fade = std::min(left_fade, right_fade);
+            const auto opacity = static_cast<std::uint8_t>(std::clamp(edge_fade * 220.0f, 0.0f, 220.0f));
+            if (opacity > 0) {
+                blendPixel(canvas, x + col, y + row, pixel, opacity);
+            }
+        }
+    }
+}
+
+void drawTopBar(
+    core::Canvas& canvas,
+    std::string_view title,
+    bool show_back,
+    std::string_view left_hint,
+    std::string_view right_hint) noexcept
+{
+    (void)show_back;
     canvas.fillRect(0, 0, core::kDisplayWidth, kTopBarHeight, kChromeTopbar0);
     canvas.fillRect(0, 12, core::kDisplayWidth, 8, kChromeTopbar1);
     canvas.fillRect(0, kTopBarHeight - 1, core::kDisplayWidth, 1, kDivider);
 
-    if (show_back) {
-        drawText(canvas, "<", 6, 6, kTextPrimary, 1);
-    } else if (!left_hint.empty()) {
-        drawText(canvas, left_hint, 6, 6, kTextSecondary, 1);
-    }
+    const int text_y = centeredTextY(0, kTopBarHeight, 1);
+    drawText(canvas, left_hint.empty() ? std::string_view{"F1:HELP"} : left_hint, 6, text_y, kTextSecondary, 1);
 
-    drawText(canvas, title, centeredX(upperText(title), 1), 6, kTextPrimary, 1);
+    drawText(canvas, title, centeredX(upperText(title), 1), text_y, kTextPrimary, 1);
+
+    if (!right_hint.empty()) {
+        const auto label = fitUpper(right_hint, 10);
+        const int width = core::bitmap_font::measureText(label, 1);
+        drawText(canvas, label, std::max(206, core::kDisplayWidth - width - 6), text_y, kTextSecondary, 1);
+    }
 }
 
 void drawListPageFrame(core::Canvas& canvas)
@@ -153,10 +221,10 @@ void drawListPageFrame(core::Canvas& canvas)
 
 void drawPageHelpModal(core::Canvas& canvas, std::string_view title, const std::vector<std::pair<std::string_view, std::string_view>>& rows)
 {
-    constexpr int x = 26;
-    constexpr int y = 28;
-    constexpr int width = 268;
-    constexpr int height = 112;
+    constexpr int x = 14;
+    constexpr int y = 22;
+    constexpr int width = 292;
+    constexpr int height = 142;
 
     canvas.fillRect(x + 4, y + 5, width, height, rgba(0, 0, 0));
     canvas.fillRect(x, y, width, height, rgba(12, 16, 22));
@@ -177,12 +245,12 @@ void drawPageHelpModal(core::Canvas& canvas, std::string_view title, const std::
         return;
     }
 
-    int row_y = y + 30;
+    int row_y = y + 24;
     for (const auto& row : rows) {
-        drawText(canvas, row.first, x + 20, row_y, kProgressStrong, 1);
-        drawText(canvas, row.second, x + 70, row_y, kTextSecondary, 1);
-        row_y += 14;
-        if (row_y > y + height - 14) {
+        drawText(canvas, fitUpper(row.first, 11), x + 16, row_y, kProgressStrong, 1);
+        drawText(canvas, fitUpper(row.second, 24), x + 90, row_y, kTextSecondary, 1);
+        row_y += 11;
+        if (row_y > y + height - 10) {
             break;
         }
     }
