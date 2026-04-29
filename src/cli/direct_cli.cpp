@@ -3,8 +3,11 @@
 #include "cli/direct_cli.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
+#include <initializer_list>
 #include <iostream>
 #include <optional>
 #include <ostream>
@@ -18,6 +21,8 @@
 #include "application/app_service_registry.h"
 #include "application/credential_command_service.h"
 #include "application/source_profile_command_service.h"
+#include "cli/cli_format.h"
+#include "remote/common/remote_catalog_model.h"
 
 namespace lofibox::cli {
 namespace {
@@ -36,6 +41,8 @@ bool isDirectCommand(std::string_view value) noexcept
 {
     return value == "source"
         || value == "library"
+        || value == "search"
+        || value == "remote"
         || value == "doctor"
         || value == "cache"
         || value == "credentials";
@@ -73,9 +80,31 @@ std::optional<std::string> optionValue(const ParsedArgs& args, std::string_view 
     return std::nullopt;
 }
 
+std::optional<std::string> optionValueAny(const ParsedArgs& args, std::initializer_list<std::string_view> names)
+{
+    for (const auto name : names) {
+        if (const auto value = optionValue(args, name)) {
+            return value;
+        }
+    }
+    return std::nullopt;
+}
+
 bool optionPresent(const ParsedArgs& args, std::string_view name)
 {
     return optionValue(args, name).has_value();
+}
+
+CliOutputOptions outputOptions(const ParsedArgs& args)
+{
+    CliOutputOptions options{};
+    options.json = optionPresent(args, "json");
+    options.porcelain = optionPresent(args, "porcelain");
+    options.quiet = optionPresent(args, "quiet");
+    if (const auto fields = optionValue(args, "fields")) {
+        options.fields = splitFields(*fields);
+    }
+    return options;
 }
 
 std::optional<std::size_t> findProfileById(const std::vector<app::RemoteServerProfile>& profiles, std::string_view id)
@@ -87,6 +116,35 @@ std::optional<std::size_t> findProfileById(const std::vector<app::RemoteServerPr
         return std::nullopt;
     }
     return static_cast<std::size_t>(std::distance(profiles.begin(), found));
+}
+
+std::optional<std::size_t> findProfileByIdOrCredentialRef(
+    const std::vector<app::RemoteServerProfile>& profiles,
+    std::string_view id_or_ref)
+{
+    const auto found = std::find_if(profiles.begin(), profiles.end(), [id_or_ref](const app::RemoteServerProfile& profile) {
+        return profile.id == id_or_ref || profile.credential_ref.id == id_or_ref;
+    });
+    if (found == profiles.end()) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(std::distance(profiles.begin(), found));
+}
+
+std::string boolLabel(bool value)
+{
+    return value ? "true" : "false";
+}
+
+bool parseBool(std::string_view value, bool fallback)
+{
+    if (value == "true" || value == "1" || value == "yes" || value == "on") {
+        return true;
+    }
+    if (value == "false" || value == "0" || value == "no" || value == "off") {
+        return false;
+    }
+    return fallback;
 }
 
 std::string stateLabel(app::LibraryIndexState state)
@@ -123,21 +181,83 @@ std::vector<std::filesystem::path> rootsFromOption(const ParsedArgs& args)
     return roots;
 }
 
+std::string stdinLine()
+{
+    std::string value{};
+    std::getline(std::cin, value);
+    return value;
+}
+
+std::string catalogNodeKindLabel(app::RemoteCatalogNodeKind kind)
+{
+    switch (kind) {
+    case app::RemoteCatalogNodeKind::Root: return "root";
+    case app::RemoteCatalogNodeKind::Artists: return "artists";
+    case app::RemoteCatalogNodeKind::Artist: return "artist";
+    case app::RemoteCatalogNodeKind::Albums: return "albums";
+    case app::RemoteCatalogNodeKind::Album: return "album";
+    case app::RemoteCatalogNodeKind::Tracks: return "tracks";
+    case app::RemoteCatalogNodeKind::Genres: return "genres";
+    case app::RemoteCatalogNodeKind::Genre: return "genre";
+    case app::RemoteCatalogNodeKind::Playlists: return "playlists";
+    case app::RemoteCatalogNodeKind::Playlist: return "playlist";
+    case app::RemoteCatalogNodeKind::Folders: return "folders";
+    case app::RemoteCatalogNodeKind::Folder: return "folder";
+    case app::RemoteCatalogNodeKind::Favorites: return "favorites";
+    case app::RemoteCatalogNodeKind::RecentlyAdded: return "recently-added";
+    case app::RemoteCatalogNodeKind::RecentlyPlayed: return "recently-played";
+    case app::RemoteCatalogNodeKind::Stations: return "stations";
+    }
+    return "unknown";
+}
+
+std::optional<app::RemoteCatalogNode> rootNodeForPath(std::string_view path)
+{
+    auto normalized = std::string{path};
+    while (!normalized.empty() && normalized.front() == '/') {
+        normalized.erase(normalized.begin());
+    }
+    if (normalized.empty()) {
+        return app::RemoteCatalogNode{};
+    }
+    for (auto node : remote::RemoteCatalogMap::rootNodes()) {
+        if (node.id == normalized) {
+            return node;
+        }
+    }
+    return std::nullopt;
+}
+
 void printDirectHelp(std::ostream& out)
 {
     out << "Direct LoFiBox commands:\n"
+        << "  Global: [--json] [--porcelain] [--fields a,b] [--quiet]\n"
         << "  lofibox source list\n"
-        << "  lofibox source add <kind> --id <id> --name <label> --url <url> [--user <user>] [--password <secret>] [--token <secret>]\n"
-        << "  lofibox source update <id> [--name <label>] [--url <url>] [--user <user>] [--password <secret>] [--token <secret>]\n"
+        << "  lofibox source show <profile-id>\n"
+        << "  lofibox source add <kind> --id <id> --name <label> --base-url <url> [--username <user>] [--password <secret>] [--token <secret>]\n"
+        << "  lofibox source update <id> [--name <label>] [--base-url <url>] [--username <user>] [--password <secret>] [--token <secret>]\n"
+        << "  lofibox source remove <profile-id>\n"
         << "  lofibox source probe <id>\n"
-        << "  lofibox credentials set <source-id> [--user <user>] [--password <secret>] [--token <secret>]\n"
-        << "  lofibox credentials status <source-id>\n"
-        << "  lofibox credentials delete <source-id>\n"
+        << "  lofibox source auth-status <profile-id>\n"
+        << "  lofibox source capabilities <profile-id>\n"
+        << "  lofibox credentials list\n"
+        << "  lofibox credentials show-ref <profile-id-or-ref>\n"
+        << "  lofibox credentials set <profile-id-or-ref> [--username <user>] [--password-stdin] [--token-stdin]\n"
+        << "  lofibox credentials status|validate <profile-id-or-ref>\n"
+        << "  lofibox credentials delete <profile-id-or-ref>\n"
         << "  lofibox library scan [path...]\n"
         << "  lofibox library status [--root <path>]\n"
+        << "  lofibox library list tracks|albums|artists|genres|composers|compilations [--root <path>]\n"
+        << "  lofibox library query tracks|albums [--artist <name>] [--album-id <id>] [--genre <name>] [--root <path>]\n"
         << "  lofibox library query <text> [--root <path>]\n"
+        << "  lofibox search <text> [--local] [--source <profile-id>] [--all]\n"
+        << "  lofibox remote browse <profile-id> [/artists|/albums|/playlists|/stations]\n"
+        << "  lofibox remote recent <profile-id>\n"
+        << "  lofibox remote search <profile-id> <text>\n"
+        << "  lofibox remote resolve|stream-info <profile-id> <item-id>\n"
         << "  lofibox cache status\n"
-        << "  lofibox cache clear\n"
+        << "  lofibox cache purge|clear\n"
+        << "  lofibox cache gc\n"
         << "  lofibox doctor\n";
 }
 
@@ -150,25 +270,36 @@ void applyProfileOptions(
     if (const auto value = optionValue(args, "name")) {
         (void)source_profiles.updateTextField(profile, application::SourceProfileTextField::Label, *value, profile_count);
     }
-    if (const auto value = optionValue(args, "url")) {
+    if (const auto value = optionValueAny(args, {"base-url", "url"})) {
         (void)source_profiles.updateTextField(profile, application::SourceProfileTextField::Address, *value, profile_count);
     }
-    if (const auto value = optionValue(args, "user")) {
+    if (const auto value = optionValueAny(args, {"username", "user"})) {
         (void)source_profiles.updateTextField(profile, application::SourceProfileTextField::Username, *value, profile_count);
+    }
+    if (const auto value = optionValue(args, "credential-ref")) {
+        profile.credential_ref.id = *value;
     }
     if (optionPresent(args, "insecure")) {
         profile.tls_policy.verify_peer = false;
     }
     if (optionPresent(args, "allow-self-signed")) {
-        profile.tls_policy.allow_self_signed = true;
-        profile.tls_policy.verify_peer = false;
+        profile.tls_policy.allow_self_signed = parseBool(*optionValue(args, "allow-self-signed"), true);
+        if (profile.tls_policy.allow_self_signed) {
+            profile.tls_policy.verify_peer = false;
+        }
+    }
+    if (const auto value = optionValue(args, "verify-peer")) {
+        profile.tls_policy.verify_peer = parseBool(*value, profile.tls_policy.verify_peer);
+        if (profile.tls_policy.verify_peer) {
+            profile.tls_policy.allow_self_signed = false;
+        }
     }
 }
 
 application::CredentialSecretPatch credentialPatchFromOptions(const ParsedArgs& args)
 {
     application::CredentialSecretPatch patch{};
-    if (const auto value = optionValue(args, "user")) {
+    if (const auto value = optionValueAny(args, {"username", "user"})) {
         patch.username = *value;
     }
     if (const auto value = optionValue(args, "password")) {
@@ -176,6 +307,12 @@ application::CredentialSecretPatch credentialPatchFromOptions(const ParsedArgs& 
     }
     if (const auto value = optionValue(args, "token")) {
         patch.api_token = *value;
+    }
+    if (optionPresent(args, "password-stdin")) {
+        patch.password = stdinLine();
+    }
+    if (optionPresent(args, "token-stdin")) {
+        patch.api_token = stdinLine();
     }
     return patch;
 }
@@ -185,6 +322,101 @@ bool hasCredentialPatch(const application::CredentialSecretPatch& patch) noexcep
     return !patch.username.empty() || !patch.password.empty() || !patch.api_token.empty();
 }
 
+CliFields profileFields(const app::RemoteServerProfile& profile, application::SourceProfileCommandService source_profiles)
+{
+    return {
+        {"id", profile.id},
+        {"kind", app::remoteServerKindToString(profile.kind)},
+        {"name", source_profiles.profileLabel(profile)},
+        {"base_url", profile.base_url.empty() ? "-" : profile.base_url},
+        {"username", source_profiles.usernameLabel(profile)},
+        {"credential_ref", profile.credential_ref.id.empty() ? "-" : profile.credential_ref.id},
+        {"readiness", source_profiles.readiness(profile)},
+        {"permission", source_profiles.permissionLabel(profile.kind)},
+        {"verify_peer", boolLabel(profile.tls_policy.verify_peer)},
+        {"allow_self_signed", boolLabel(profile.tls_policy.allow_self_signed)},
+    };
+}
+
+CliFields credentialStatusFields(const app::RemoteServerProfile& profile, const application::CredentialStatus& status)
+{
+    return {
+        {"profile_id", profile.id},
+        {"credential_ref", status.attached ? status.ref_id : "NONE"},
+        {"username", status.has_username ? "SET" : "MISSING"},
+        {"password", status.has_password ? "SET" : "MISSING"},
+        {"token", status.has_api_token ? "SET" : "MISSING"},
+    };
+}
+
+CliFields cacheStatusFields(const application::CacheStatusResult& result)
+{
+    return {
+        {"root", result.root.string()},
+        {"entries", std::to_string(result.usage.entry_count)},
+        {"bytes", std::to_string(result.usage.total_bytes)},
+        {"size", bytesLabel(result.usage.total_bytes)},
+    };
+}
+
+CliFields trackFields(const app::TrackRecord& track)
+{
+    return {
+        {"id", std::to_string(track.id)},
+        {"title", track.title},
+        {"artist", track.artist},
+        {"album", track.album},
+        {"genre", track.genre},
+        {"composer", track.composer},
+        {"duration", std::to_string(track.duration_seconds)},
+        {"play_count", std::to_string(track.play_count)},
+        {"added_time", std::to_string(track.added_time)},
+        {"last_played", std::to_string(track.last_played)},
+        {"path", track.path.string()},
+    };
+}
+
+CliFields mediaItemFields(const app::MediaItem& item, std::string_view group)
+{
+    return {
+        {"group", std::string{group}},
+        {"id", item.id},
+        {"title", item.title},
+        {"artist", item.artist},
+        {"album", item.album},
+        {"source", item.source.source_label.empty() ? "local" : item.source.source_label},
+    };
+}
+
+CliFields remoteNodeFields(const app::RemoteCatalogNode& node)
+{
+    return {
+        {"kind", catalogNodeKindLabel(node.kind)},
+        {"id", node.id},
+        {"title", node.title},
+        {"subtitle", node.subtitle},
+        {"playable", boolLabel(node.playable)},
+        {"browsable", boolLabel(node.browsable)},
+        {"artist", node.artist},
+        {"album", node.album},
+        {"duration", std::to_string(node.duration_seconds)},
+    };
+}
+
+CliFields remoteTrackFields(const app::RemoteTrack& track, std::string_view group)
+{
+    return {
+        {"group", std::string{group}},
+        {"id", track.id},
+        {"title", track.title},
+        {"artist", track.artist},
+        {"album", track.album},
+        {"album_id", track.album_id},
+        {"duration", std::to_string(track.duration_seconds)},
+        {"source", track.source_label},
+    };
+}
+
 int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out, std::ostream& err)
 {
     if (args.positional.size() < 2U || args.positional[1] == "help") {
@@ -192,23 +424,37 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
         return 0;
     }
 
+    const auto format = outputOptions(args);
     auto profiles = registry.sourceProfiles().loadProfiles();
     const auto verb = args.positional[1];
     if (verb == "list") {
+        std::vector<CliFields> rows{};
+        rows.reserve(profiles.size());
         for (const auto& profile : profiles) {
-            out << profile.id << '\t'
-                << app::remoteServerKindToString(profile.kind) << '\t'
-                << registry.sourceProfiles().profileLabel(profile) << '\t'
-                << (profile.base_url.empty() ? "-" : profile.base_url) << '\t'
-                << registry.sourceProfiles().readiness(profile) << '\n';
+            rows.push_back(profileFields(profile, registry.sourceProfiles()));
         }
+        printPorcelainRows(out, format, rows, "NO SOURCES");
+        return 0;
+    }
+
+    if (verb == "show") {
+        if (args.positional.size() < 3U) {
+            err << "source show requires a source id.\n";
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        const auto index = findProfileById(profiles, args.positional[2]);
+        if (!index) {
+            err << "source not found: " << args.positional[2] << '\n';
+            return static_cast<int>(CliExitCode::NotFound);
+        }
+        printObject(out, format, profileFields(profiles[*index], registry.sourceProfiles()));
         return 0;
     }
 
     if (verb == "add") {
         if (args.positional.size() < 3U) {
             err << "source add requires a kind.\n";
-            return 2;
+            return static_cast<int>(CliExitCode::Usage);
         }
         auto profile = registry.sourceProfiles().createProfile(app::remoteServerKindFromString(std::string{args.positional[2]}), profiles.size());
         if (const auto id = optionValue(args, "id")) {
@@ -222,27 +468,29 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
             const auto credential_result = registry.credentials().setSecret(profile, patch);
             if (!credential_result.accepted) {
                 err << credential_result.summary << '\n';
-                return 1;
+                return static_cast<int>(CliExitCode::Credential);
             }
         }
         profiles.push_back(std::move(profile));
         if (!registry.sourceProfiles().persistProfiles(profiles)) {
             err << "failed to save source profiles.\n";
-            return 1;
+            return static_cast<int>(CliExitCode::Persistence);
         }
-        out << "ADDED " << profiles.back().id << '\n';
+        auto fields = profileFields(profiles.back(), registry.sourceProfiles());
+        fields.insert(fields.begin(), {"status", "ADDED"});
+        printObject(out, format, fields);
         return 0;
     }
 
     if (verb == "update") {
         if (args.positional.size() < 3U) {
             err << "source update requires a source id.\n";
-            return 2;
+            return static_cast<int>(CliExitCode::Usage);
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
             err << "source not found: " << args.positional[2] << '\n';
-            return 1;
+            return static_cast<int>(CliExitCode::NotFound);
         }
         auto& profile = profiles[*index];
         applyProfileOptions(args, registry.sourceProfiles(), profile, profiles.size());
@@ -251,89 +499,186 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
             const auto credential_result = registry.credentials().setSecret(profile, patch);
             if (!credential_result.accepted) {
                 err << credential_result.summary << '\n';
-                return 1;
+                return static_cast<int>(CliExitCode::Credential);
             }
         }
         if (!registry.sourceProfiles().persistProfiles(profiles)) {
             err << "failed to save source profiles.\n";
-            return 1;
+            return static_cast<int>(CliExitCode::Persistence);
         }
-        out << "UPDATED " << profile.id << '\n';
+        auto fields = profileFields(profile, registry.sourceProfiles());
+        fields.insert(fields.begin(), {"status", "UPDATED"});
+        printObject(out, format, fields);
+        return 0;
+    }
+
+    if (verb == "remove") {
+        if (args.positional.size() < 3U) {
+            err << "source remove requires a source id.\n";
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        const auto index = findProfileById(profiles, args.positional[2]);
+        if (!index) {
+            err << "source not found: " << args.positional[2] << '\n';
+            return static_cast<int>(CliExitCode::NotFound);
+        }
+        const auto removed_id = profiles[*index].id;
+        profiles.erase(profiles.begin() + static_cast<std::ptrdiff_t>(*index));
+        if (!registry.sourceProfiles().persistProfiles(profiles)) {
+            err << "failed to save source profiles.\n";
+            return static_cast<int>(CliExitCode::Persistence);
+        }
+        printObject(out, format, {{"status", "REMOVED"}, {"id", removed_id}});
         return 0;
     }
 
     if (verb == "probe") {
         if (args.positional.size() < 3U) {
             err << "source probe requires a source id.\n";
-            return 2;
+            return static_cast<int>(CliExitCode::Usage);
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
             err << "source not found: " << args.positional[2] << '\n';
-            return 1;
+            return static_cast<int>(CliExitCode::NotFound);
         }
         const auto probe = registry.sourceProfiles().probe(profiles[*index], profiles.size());
-        out << profiles[*index].id << '\t'
-            << (probe.session.available ? "ONLINE" : "OFFLINE") << '\t'
-            << (probe.session.message.empty() ? probe.command.summary : probe.session.message) << '\n';
-        return probe.session.available ? 0 : 1;
+        printObject(out, format, {
+            {"id", profiles[*index].id},
+            {"status", probe.session.available ? "ONLINE" : "OFFLINE"},
+            {"server_name", probe.session.server_name},
+            {"user_id", probe.session.user_id},
+            {"message", probe.session.message.empty() ? probe.command.summary : probe.session.message},
+        });
+        return probe.session.available ? 0 : static_cast<int>(CliExitCode::Network);
+    }
+
+    if (verb == "auth-status") {
+        if (args.positional.size() < 3U) {
+            err << "source auth-status requires a source id.\n";
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        const auto index = findProfileById(profiles, args.positional[2]);
+        if (!index) {
+            err << "source not found: " << args.positional[2] << '\n';
+            return static_cast<int>(CliExitCode::NotFound);
+        }
+        const auto status = registry.credentials().status(profiles[*index]);
+        printObject(out, format, credentialStatusFields(profiles[*index], status));
+        const bool needs_secret = registry.sourceProfiles().readiness(profiles[*index]) == "NEEDS SECRET";
+        return needs_secret ? static_cast<int>(CliExitCode::Credential) : 0;
+    }
+
+    if (verb == "capabilities") {
+        if (args.positional.size() < 3U) {
+            err << "source capabilities requires a source id.\n";
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        const auto index = findProfileById(profiles, args.positional[2]);
+        if (!index) {
+            err << "source not found: " << args.positional[2] << '\n';
+            return static_cast<int>(CliExitCode::NotFound);
+        }
+        const auto& profile = profiles[*index];
+        printObject(out, format, {
+            {"id", profile.id},
+            {"kind", app::remoteServerKindToString(profile.kind)},
+            {"display_name", registry.sourceProfiles().kindDisplayName(profile.kind)},
+            {"credentials", registry.sourceProfiles().supportsCredentials(profile.kind) ? "supported" : "none"},
+            {"permission", registry.sourceProfiles().permissionLabel(profile.kind)},
+            {"keeps_local_facts", boolLabel(registry.sourceProfiles().keepsLocalFacts(profile.kind))},
+            {"verify_peer", boolLabel(profile.tls_policy.verify_peer)},
+            {"allow_self_signed", boolLabel(profile.tls_policy.allow_self_signed)},
+        });
+        return 0;
     }
 
     err << "unknown source command: " << verb << '\n';
-    return 2;
+    return static_cast<int>(CliExitCode::Usage);
 }
 
 int runCredentialsCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out, std::ostream& err)
 {
-    if (args.positional.size() < 3U || args.positional[1] == "help") {
+    if (args.positional.size() < 2U || args.positional[1] == "help") {
         printDirectHelp(out);
         return 0;
     }
+    const auto format = outputOptions(args);
     auto profiles = registry.sourceProfiles().loadProfiles();
-    const auto index = findProfileById(profiles, args.positional[2]);
+    const auto verb = args.positional[1];
+
+    if (verb == "list") {
+        std::vector<CliFields> rows{};
+        rows.reserve(profiles.size());
+        for (const auto& profile : profiles) {
+            rows.push_back(credentialStatusFields(profile, registry.credentials().status(profile)));
+        }
+        printPorcelainRows(out, format, rows, "NO CREDENTIAL REFS");
+        return 0;
+    }
+
+    if (args.positional.size() < 3U) {
+        err << "credentials " << verb << " requires a source id or credential ref.\n";
+        return static_cast<int>(CliExitCode::Usage);
+    }
+
+    const auto index = findProfileByIdOrCredentialRef(profiles, args.positional[2]);
     if (!index) {
-        err << "source not found: " << args.positional[2] << '\n';
-        return 1;
+        err << "credential ref not found: " << args.positional[2] << '\n';
+        return static_cast<int>(CliExitCode::NotFound);
     }
     auto& profile = profiles[*index];
-    const auto verb = args.positional[1];
-    if (verb == "status") {
+
+    if (verb == "status" || verb == "show-ref" || verb == "validate") {
         const auto status = registry.credentials().status(profile);
-        out << profile.id << '\t'
-            << (status.attached ? status.ref_id : "NONE") << '\t'
-            << "USER=" << (status.has_username ? "SET" : "MISSING") << '\t'
-            << "PASSWORD=" << (status.has_password ? "SET" : "MISSING") << '\t'
-            << "TOKEN=" << (status.has_api_token ? "SET" : "MISSING") << '\n';
+        printObject(out, format, credentialStatusFields(profile, status));
+        if (verb == "validate" && registry.sourceProfiles().readiness(profile) == "NEEDS SECRET") {
+            return static_cast<int>(CliExitCode::Credential);
+        }
         return 0;
     }
     if (verb == "set") {
         auto patch = credentialPatchFromOptions(args);
         if (!hasCredentialPatch(patch)) {
-            err << "credentials set requires --user, --password, or --token.\n";
-            return 2;
+            err << "credentials set requires --username, --password, --token, --password-stdin, or --token-stdin.\n";
+            return static_cast<int>(CliExitCode::Usage);
         }
         const auto result = registry.credentials().setSecret(profile, patch);
         if (!result.accepted) {
             err << result.summary << '\n';
-            return 1;
+            return static_cast<int>(CliExitCode::Credential);
         }
-        (void)registry.sourceProfiles().persistProfiles(profiles);
-        out << "SAVED " << profile.credential_ref.id << '\n';
+        if (!registry.sourceProfiles().persistProfiles(profiles)) {
+            err << "failed to save credential reference.\n";
+            return static_cast<int>(CliExitCode::Persistence);
+        }
+        printObject(out, format, {
+            {"status", "SAVED"},
+            {"profile_id", profile.id},
+            {"credential_ref", profile.credential_ref.id},
+        });
         return 0;
     }
     if (verb == "delete") {
         const auto result = registry.credentials().deleteSecret(profile);
         if (!result.accepted) {
             err << result.summary << '\n';
-            return 1;
+            return static_cast<int>(CliExitCode::Credential);
         }
-        (void)registry.sourceProfiles().persistProfiles(profiles);
-        out << "DELETED " << profile.id << '\n';
+        if (!registry.sourceProfiles().persistProfiles(profiles)) {
+            err << "failed to save credential reference.\n";
+            return static_cast<int>(CliExitCode::Persistence);
+        }
+        printObject(out, format, {
+            {"status", "DELETED"},
+            {"profile_id", profile.id},
+            {"credential_ref", profile.credential_ref.id},
+        });
         return 0;
     }
 
     err << "unknown credentials command: " << verb << '\n';
-    return 2;
+    return static_cast<int>(CliExitCode::Usage);
 }
 
 int runLibraryCommand(
@@ -346,43 +691,141 @@ int runLibraryCommand(
         printDirectHelp(out);
         return 0;
     }
+    const auto format = outputOptions(args);
     const auto verb = args.positional[1];
+    auto printStatus = [&]() {
+        const auto& model = registry.libraryQueries().model();
+        printObject(out, format, {
+            {"state", stateLabel(registry.libraryQueries().state())},
+            {"tracks", std::to_string(model.tracks.size())},
+            {"albums", std::to_string(model.albums.size())},
+            {"artists", std::to_string(model.artists.size())},
+            {"genres", std::to_string(model.genres.size())},
+            {"composers", std::to_string(model.composers.size())},
+            {"compilations", std::to_string(model.compilations.size())},
+            {"dirty", "false"},
+            {"migration_needed", "false"},
+            {"degraded", boolLabel(model.degraded || registry.libraryQueries().state() == app::LibraryIndexState::Degraded)},
+        });
+    };
+
     if (verb == "scan") {
         std::vector<std::filesystem::path> roots{};
         for (std::size_t index = 2; index < args.positional.size(); ++index) {
             roots.emplace_back(std::string{args.positional[index]});
         }
+        for (const auto& root : rootsFromOption(args)) {
+            roots.push_back(root);
+        }
         if (!registry.libraryMutations().refreshLibrary(roots)) {
             err << "library scan unavailable.\n";
-            return 1;
+            return static_cast<int>(CliExitCode::Persistence);
         }
-        const auto& model = registry.libraryQueries().model();
-        out << "STATE\t" << stateLabel(registry.libraryQueries().state()) << '\n'
-            << "TRACKS\t" << model.tracks.size() << '\n'
-            << "ALBUMS\t" << model.albums.size() << '\n'
-            << "ARTISTS\t" << model.artists.size() << '\n';
+        printStatus();
         return registry.libraryQueries().state() == app::LibraryIndexState::Degraded ? 1 : 0;
     }
 
     if (verb == "status") {
         if (!registry.libraryMutations().refreshLibrary(rootsFromOption(args))) {
             err << "library scan unavailable.\n";
-            return 1;
+            return static_cast<int>(CliExitCode::Persistence);
+        }
+        printStatus();
+        return registry.libraryQueries().state() == app::LibraryIndexState::Degraded ? 1 : 0;
+    }
+
+    if (verb == "list") {
+        if (args.positional.size() < 3U) {
+            err << "library list requires tracks, albums, artists, genres, composers, or compilations.\n";
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        if (!registry.libraryMutations().refreshLibrary(rootsFromOption(args))) {
+            err << "library scan unavailable.\n";
+            return static_cast<int>(CliExitCode::Persistence);
         }
         const auto& model = registry.libraryQueries().model();
-        out << "STATE\t" << stateLabel(registry.libraryQueries().state()) << '\n'
-            << "TRACKS\t" << model.tracks.size() << '\n'
-            << "ALBUMS\t" << model.albums.size() << '\n'
-            << "ARTISTS\t" << model.artists.size() << '\n'
-            << "GENRES\t" << model.genres.size() << '\n';
-        return registry.libraryQueries().state() == app::LibraryIndexState::Degraded ? 1 : 0;
+        std::vector<CliFields> rows{};
+        const auto noun = args.positional[2];
+        if (noun == "tracks") {
+            for (const auto& track : model.tracks) rows.push_back(trackFields(track));
+        } else if (noun == "albums") {
+            for (const auto& album : model.albums) {
+                rows.push_back({{"album", album.album}, {"artist", album.artist}, {"tracks", std::to_string(album.track_ids.size())}});
+            }
+        } else if (noun == "artists") {
+            for (const auto& artist : model.artists) rows.push_back({{"name", artist}});
+        } else if (noun == "genres") {
+            for (const auto& genre : model.genres) rows.push_back({{"name", genre}});
+        } else if (noun == "composers") {
+            for (const auto& composer : model.composers) rows.push_back({{"name", composer}});
+        } else if (noun == "compilations") {
+            for (const auto& compilation : model.compilations) {
+                rows.push_back({{"album", compilation.album}, {"tracks", std::to_string(compilation.track_ids.size())}});
+            }
+        } else {
+            err << "unknown library list noun: " << noun << '\n';
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        printPorcelainRows(out, format, rows, "NO RESULTS");
+        return 0;
     }
 
     if (verb == "query") {
         if (args.positional.size() < 3U) {
             err << "library query requires text.\n";
-            return 2;
+            return static_cast<int>(CliExitCode::Usage);
         }
+        const auto noun = args.positional[2];
+        const bool structured = noun == "tracks" || noun == "albums";
+        if (structured) {
+            if (!registry.libraryMutations().refreshLibrary(rootsFromOption(args))) {
+                err << "library scan unavailable.\n";
+                return static_cast<int>(CliExitCode::Persistence);
+            }
+            const auto& model = registry.libraryQueries().model();
+            std::vector<CliFields> rows{};
+            if (noun == "tracks") {
+                std::vector<const app::TrackRecord*> tracks{};
+                for (const auto& track : model.tracks) {
+                    if (const auto artist = optionValue(args, "artist"); artist && track.artist != *artist) continue;
+                    if (const auto genre = optionValue(args, "genre"); genre && track.genre != *genre) continue;
+                    if (const auto album = optionValueAny(args, {"album-id", "album"}); album && track.album != *album) continue;
+                    tracks.push_back(&track);
+                }
+                if (optionPresent(args, "most-played")) {
+                    std::sort(tracks.begin(), tracks.end(), [](const app::TrackRecord* left, const app::TrackRecord* right) {
+                        return left->play_count > right->play_count;
+                    });
+                } else if (optionPresent(args, "recently-played")) {
+                    std::sort(tracks.begin(), tracks.end(), [](const app::TrackRecord* left, const app::TrackRecord* right) {
+                        return left->last_played > right->last_played;
+                    });
+                } else if (optionPresent(args, "recently-added")) {
+                    std::sort(tracks.begin(), tracks.end(), [](const app::TrackRecord* left, const app::TrackRecord* right) {
+                        return left->added_time > right->added_time;
+                    });
+                }
+                for (const auto* track : tracks) {
+                    rows.push_back(trackFields(*track));
+                }
+            } else {
+                for (const auto& album : model.albums) {
+                    if (const auto artist = optionValue(args, "artist"); artist && album.artist != *artist) continue;
+                    if (const auto genre = optionValue(args, "genre")) {
+                        bool has_genre = false;
+                        for (const auto id : album.track_ids) {
+                            const auto* track = registry.libraryQueries().findTrack(id);
+                            has_genre = has_genre || (track != nullptr && track->genre == *genre);
+                        }
+                        if (!has_genre) continue;
+                    }
+                    rows.push_back({{"album", album.album}, {"artist", album.artist}, {"tracks", std::to_string(album.track_ids.size())}});
+                }
+            }
+            printPorcelainRows(out, format, rows, "NO RESULTS");
+            return 0;
+        }
+
         std::string query{};
         for (std::size_t index = 2; index < args.positional.size(); ++index) {
             if (!query.empty()) {
@@ -392,20 +835,19 @@ int runLibraryCommand(
         }
         if (!registry.libraryMutations().refreshLibrary(rootsFromOption(args))) {
             err << "library scan unavailable.\n";
-            return 1;
+            return static_cast<int>(CliExitCode::Persistence);
         }
         const auto items = registry.libraryQueries().searchLocal(query, 20);
+        std::vector<CliFields> rows{};
         for (const auto& item : items) {
-            out << item.id << '\t' << item.title << '\t' << item.artist << '\t' << item.album << '\n';
+            rows.push_back(mediaItemFields(item, "local"));
         }
-        if (items.empty()) {
-            out << "NO RESULTS\n";
-        }
+        printPorcelainRows(out, format, rows, "NO RESULTS");
         return 0;
     }
 
     err << "unknown library command: " << verb << '\n';
-    return 2;
+    return static_cast<int>(CliExitCode::Usage);
 }
 
 int runCacheCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out, std::ostream& err)
@@ -414,47 +856,295 @@ int runCacheCommand(const ParsedArgs& args, application::AppServiceRegistry& reg
         printDirectHelp(out);
         return 0;
     }
+    const auto format = outputOptions(args);
     if (args.positional[1] == "status") {
         const auto result = registry.cacheCommands().status();
         if (!result.command.accepted) {
             err << result.command.summary << '\n';
-            return 1;
+            return static_cast<int>(CliExitCode::Persistence);
         }
-        out << "ROOT\t" << result.root.string() << '\n'
-            << "ENTRIES\t" << result.usage.entry_count << '\n'
-            << "BYTES\t" << result.usage.total_bytes << '\n'
-            << "SIZE\t" << bytesLabel(result.usage.total_bytes) << '\n';
+        printObject(out, format, cacheStatusFields(result));
         return 0;
     }
-    if (args.positional[1] == "clear") {
+    if (args.positional[1] == "clear" || args.positional[1] == "purge") {
         const auto result = registry.cacheCommands().clearAll();
         if (!result.command.accepted) {
             err << result.command.summary << '\n';
-            return 1;
+            return static_cast<int>(CliExitCode::Persistence);
         }
-        out << "CLEARED\t" << result.removed_entries << '\n';
+        printObject(out, format, {
+            {"status", "CLEARED"},
+            {"removed_entries", std::to_string(result.removed_entries)},
+            {"before_entries", std::to_string(result.before.entry_count)},
+            {"after_entries", std::to_string(result.after.entry_count)},
+        });
+        return 0;
+    }
+    if (args.positional[1] == "gc") {
+        const auto result = registry.cacheCommands().collectGarbage();
+        if (!result.command.accepted) {
+            err << result.command.summary << '\n';
+            return static_cast<int>(CliExitCode::Persistence);
+        }
+        printObject(out, format, {
+            {"status", "GC"},
+            {"removed_entries", std::to_string(result.removed_entries)},
+            {"before_entries", std::to_string(result.before.entry_count)},
+            {"after_entries", std::to_string(result.after.entry_count)},
+        });
         return 0;
     }
     err << "unknown cache command: " << args.positional[1] << '\n';
-    return 2;
+    return static_cast<int>(CliExitCode::Usage);
 }
 
-int runDoctorCommand(application::AppServiceRegistry& registry, std::ostream& out)
+int runDoctorCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out)
 {
+    const auto format = outputOptions(args);
     const auto profiles = registry.sourceProfiles().loadProfiles();
     const auto snapshot = registry.diagnostics().snapshot(profiles);
-    out << "STATUS\t" << snapshot.command.summary << '\n';
+    if (format.quiet) {
+        return snapshot.degraded ? 1 : 0;
+    }
+    if (format.json) {
+        out << "{\"status\":";
+        printJsonString(out, snapshot.command.summary);
+        out << ",\"degraded\":" << (snapshot.degraded ? "true" : "false") << ",\"capabilities\":[";
+        bool first = true;
+        for (const auto& capability : snapshot.capabilities) {
+            if (!first) out << ',';
+            first = false;
+            out << "{\"name\":";
+            printJsonString(out, capability.name);
+            out << ",\"available\":" << (capability.available ? "true" : "false") << ",\"detail\":";
+            printJsonString(out, capability.detail);
+            out << '}';
+        }
+        out << "],\"sources\":[";
+        first = true;
+        for (const auto& source : snapshot.sources) {
+            if (!first) out << ',';
+            first = false;
+            out << "{\"label\":";
+            printJsonString(out, source.source_label);
+            out << ",\"connection\":";
+            printJsonString(out, source.connection_status);
+            out << ",\"permission\":";
+            printJsonString(out, source.permission);
+            out << '}';
+        }
+        out << "]}\n";
+        return snapshot.degraded ? 1 : 0;
+    }
+    if (format.porcelain) {
+        out << "STATUS\t" << snapshot.command.summary << '\n';
+    } else {
+        out << "Status: " << snapshot.command.summary << '\n';
+    }
     for (const auto& capability : snapshot.capabilities) {
-        out << "CAPABILITY\t" << capability.name << '\t'
-            << (capability.available ? "OK" : "MISSING") << '\t'
-            << capability.detail << '\n';
+        if (format.porcelain) {
+            out << "CAPABILITY\t" << capability.name << '\t'
+                << (capability.available ? "OK" : "MISSING") << '\t'
+                << capability.detail << '\n';
+        } else {
+            out << "Capability " << capability.name << ": "
+                << (capability.available ? "OK" : "MISSING")
+                << " (" << capability.detail << ")\n";
+        }
     }
     for (const auto& source : snapshot.sources) {
-        out << "SOURCE\t" << source.source_label << '\t'
-            << source.connection_status << '\t'
-            << source.permission << '\n';
+        if (format.porcelain) {
+            out << "SOURCE\t" << source.source_label << '\t'
+                << source.connection_status << '\t'
+                << source.permission << '\n';
+        } else {
+            out << "Source " << source.source_label << ": "
+                << source.connection_status << " / " << source.permission << '\n';
+        }
     }
     return snapshot.degraded ? 1 : 0;
+}
+
+int runSearchCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out, std::ostream& err)
+{
+    if (args.positional.size() < 2U || args.positional[1] == "help") {
+        printDirectHelp(out);
+        return 0;
+    }
+    const auto format = outputOptions(args);
+    std::string query{};
+    for (std::size_t index = 1; index < args.positional.size(); ++index) {
+        if (!query.empty()) query.push_back(' ');
+        query.append(args.positional[index]);
+    }
+    if (!registry.libraryMutations().refreshLibrary(rootsFromOption(args))) {
+        err << "library scan unavailable.\n";
+        return static_cast<int>(CliExitCode::Persistence);
+    }
+
+    std::vector<CliFields> rows{};
+    if (!optionPresent(args, "source")) {
+        for (const auto& item : registry.libraryQueries().searchLocal(query, 20)) {
+            rows.push_back(mediaItemFields(item, "local"));
+        }
+    }
+
+    if (!optionPresent(args, "local")) {
+        auto profiles = registry.sourceProfiles().loadProfiles();
+        std::vector<std::size_t> profile_indexes{};
+        if (const auto source = optionValue(args, "source")) {
+            const auto index = findProfileById(profiles, *source);
+            if (!index) {
+                err << "source not found: " << *source << '\n';
+                return static_cast<int>(CliExitCode::NotFound);
+            }
+            profile_indexes.push_back(*index);
+        } else if (optionPresent(args, "all")) {
+            for (std::size_t index = 0; index < profiles.size(); ++index) {
+                profile_indexes.push_back(index);
+            }
+        }
+
+        for (const auto index : profile_indexes) {
+            auto result = registry.remoteBrowseQueries().search(profiles[index], profiles.size(), query, 20);
+            if (!result.command.accepted && optionPresent(args, "source")) {
+                err << result.command.summary << '\n';
+                return static_cast<int>(CliExitCode::Network);
+            }
+            for (const auto& track : result.tracks) {
+                rows.push_back(remoteTrackFields(track, result.source_label));
+            }
+        }
+    }
+
+    printPorcelainRows(out, format, rows, "NO RESULTS");
+    return 0;
+}
+
+int runRemoteCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out, std::ostream& err)
+{
+    if (args.positional.size() < 3U || args.positional[1] == "help") {
+        printDirectHelp(out);
+        return 0;
+    }
+    const auto format = outputOptions(args);
+    auto profiles = registry.sourceProfiles().loadProfiles();
+    const auto verb = args.positional[1];
+    const auto index = findProfileById(profiles, args.positional[2]);
+    if (!index) {
+        err << "source not found: " << args.positional[2] << '\n';
+        return static_cast<int>(CliExitCode::NotFound);
+    }
+    auto& profile = profiles[*index];
+
+    if (verb == "browse") {
+        application::RemoteBrowseQueryResult result{};
+        if (args.positional.size() < 4U) {
+            result = registry.remoteBrowseQueries().browseRoot(profile, profiles.size(), 50);
+        } else {
+            const auto parent = rootNodeForPath(args.positional[3]);
+            if (!parent) {
+                err << "remote browse path is not a known root category: " << args.positional[3] << '\n';
+                return static_cast<int>(CliExitCode::NotFound);
+            }
+            if (parent->kind == app::RemoteCatalogNodeKind::Root) {
+                result = registry.remoteBrowseQueries().browseRoot(profile, profiles.size(), 50);
+            } else {
+                const auto probe = registry.sourceProfiles().probe(profile, profiles.size());
+                result = registry.remoteBrowseQueries().browseChild(profile, probe.session, *parent, 50);
+            }
+        }
+        std::vector<CliFields> rows{};
+        for (const auto& node : result.nodes) {
+            rows.push_back(remoteNodeFields(node));
+        }
+        printPorcelainRows(out, format, rows, "NO REMOTE ITEMS");
+        return result.command.accepted ? 0 : static_cast<int>(CliExitCode::Network);
+    }
+
+    if (verb == "recent") {
+        const auto parent = rootNodeForPath("/recently-played");
+        if (!parent) {
+            err << "remote recent root category unavailable.\n";
+            return static_cast<int>(CliExitCode::NotFound);
+        }
+        const auto probe = registry.sourceProfiles().probe(profile, profiles.size());
+        const auto result = registry.remoteBrowseQueries().browseChild(profile, probe.session, *parent, 50);
+        std::vector<CliFields> rows{};
+        for (const auto& node : result.nodes) {
+            rows.push_back(remoteNodeFields(node));
+        }
+        printPorcelainRows(out, format, rows, "NO RECENT ITEMS");
+        return result.command.accepted ? 0 : static_cast<int>(CliExitCode::Network);
+    }
+
+    if (verb == "search") {
+        if (args.positional.size() < 4U) {
+            err << "remote search requires text.\n";
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        std::string query{};
+        for (std::size_t query_index = 3; query_index < args.positional.size(); ++query_index) {
+            if (!query.empty()) query.push_back(' ');
+            query.append(args.positional[query_index]);
+        }
+        const auto result = registry.remoteBrowseQueries().search(profile, profiles.size(), query, 50);
+        if (!result.command.accepted) {
+            err << result.command.summary << '\n';
+            return static_cast<int>(CliExitCode::Network);
+        }
+        std::vector<CliFields> rows{};
+        for (const auto& track : result.tracks) {
+            rows.push_back(remoteTrackFields(track, result.source_label));
+        }
+        printPorcelainRows(out, format, rows, "NO RESULTS");
+        return 0;
+    }
+
+    if (verb == "resolve" || verb == "stream-info") {
+        if (args.positional.size() < 4U) {
+            err << "remote " << verb << " requires an item id.\n";
+            return static_cast<int>(CliExitCode::Usage);
+        }
+        const auto probe = registry.sourceProfiles().probe(profile, profiles.size());
+        app::RemoteTrack track{};
+        track.id = std::string{args.positional[3]};
+        track.title = track.id;
+        track.source_id = profile.id;
+        track.source_label = registry.sourceProfiles().profileLabel(profile);
+        const auto result = registry.remoteBrowseQueries().resolve(profile, probe.session, track);
+        if (verb == "resolve") {
+            printObject(out, format, {
+                {"profile_id", profile.id},
+                {"item_id", track.id},
+                {"resolved", boolLabel(result.stream.has_value())},
+                {"url", result.stream ? result.stream->diagnostics.resolved_url_redacted : "-"},
+                {"seekable", result.stream ? boolLabel(result.stream->seekable) : "false"},
+            });
+        } else {
+            const auto diagnostics = registry.remoteBrowseQueries().streamDiagnostics(profile, result.stream);
+            printObject(out, format, {
+                {"profile_id", profile.id},
+                {"item_id", track.id},
+                {"resolved", boolLabel(diagnostics.resolved)},
+                {"source", diagnostics.source_name},
+                {"url", diagnostics.redacted_url.empty() ? "-" : diagnostics.redacted_url},
+                {"connection", diagnostics.connection_status},
+                {"buffer", diagnostics.buffer_state},
+                {"recovery", diagnostics.recovery_action},
+                {"bitrate", std::to_string(diagnostics.bitrate_kbps)},
+                {"codec", diagnostics.codec.empty() ? "-" : diagnostics.codec},
+                {"sample_rate", std::to_string(diagnostics.sample_rate_hz)},
+                {"channels", std::to_string(diagnostics.channel_count)},
+                {"live", boolLabel(diagnostics.live)},
+                {"seekable", boolLabel(diagnostics.seekable)},
+            });
+        }
+        return result.stream ? 0 : static_cast<int>(CliExitCode::Network);
+    }
+
+    err << "unknown remote command: " << verb << '\n';
+    return static_cast<int>(CliExitCode::Usage);
 }
 
 } // namespace
@@ -469,12 +1159,15 @@ std::optional<int> runDirectCliCommand(
     if (argc < 2) {
         return std::nullopt;
     }
-    const std::string_view command{argv[1]};
+    auto args = parseArgs(argc, argv);
+    if (args.positional.empty()) {
+        return std::nullopt;
+    }
+    const std::string_view command{args.positional.front()};
     if (!isDirectCommand(command)) {
         return std::nullopt;
     }
 
-    auto args = parseArgs(argc, argv);
     application::AppServiceHost service_host{services};
     auto registry = service_host.registry();
 
@@ -488,10 +1181,16 @@ std::optional<int> runDirectCliCommand(
         return runCacheCommand(args, registry, out, err);
     }
     if (command == "doctor") {
-        return runDoctorCommand(registry, out);
+        return runDoctorCommand(args, registry, out);
     }
     if (command == "library") {
         return runLibraryCommand(args, registry, out, err);
+    }
+    if (command == "search") {
+        return runSearchCommand(args, registry, out, err);
+    }
+    if (command == "remote") {
+        return runRemoteCommand(args, registry, out, err);
     }
     return std::nullopt;
 }

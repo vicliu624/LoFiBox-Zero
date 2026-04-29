@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <initializer_list>
 #include <optional>
 #include <ostream>
 #include <sstream>
@@ -12,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "cli/cli_format.h"
 #include "runtime/runtime_command.h"
 #include "runtime/runtime_result.h"
 #include "runtime/runtime_snapshot.h"
@@ -20,14 +22,21 @@
 namespace lofibox::cli {
 namespace {
 
+struct CliOption {
+    std::string name{};
+    std::string value{};
+};
+
 struct ParsedRuntimeArgs {
     std::vector<std::string_view> positional{};
+    std::vector<CliOption> options{};
     std::optional<std::string> socket_path{};
 };
 
 bool isRuntimeCommand(std::string_view command) noexcept
 {
     return command == "runtime"
+        || command == "now"
         || command == "play"
         || command == "pause"
         || command == "resume"
@@ -52,9 +61,48 @@ ParsedRuntimeArgs parseArgs(int argc, char** argv)
             args.socket_path = argv[++index];
             continue;
         }
+        if (current.rfind("--", 0) == 0) {
+            const auto eq = current.find('=');
+            if (eq != std::string_view::npos) {
+                args.options.push_back({std::string{current.substr(2, eq - 2)}, std::string{current.substr(eq + 1)}});
+            } else if ((index + 1) < argc && std::string_view{argv[index + 1]}.rfind("-", 0) != 0) {
+                args.options.push_back({std::string{current.substr(2)}, argv[index + 1]});
+                ++index;
+            } else {
+                args.options.push_back({std::string{current.substr(2)}, "true"});
+            }
+            continue;
+        }
         args.positional.push_back(current);
     }
     return args;
+}
+
+std::optional<std::string> optionValue(const ParsedRuntimeArgs& args, std::string_view name)
+{
+    for (const auto& option : args.options) {
+        if (option.name == name) {
+            return option.value;
+        }
+    }
+    return std::nullopt;
+}
+
+bool optionPresent(const ParsedRuntimeArgs& args, std::string_view name)
+{
+    return optionValue(args, name).has_value();
+}
+
+CliOutputOptions outputOptions(const ParsedRuntimeArgs& args)
+{
+    CliOutputOptions options{};
+    options.json = optionPresent(args, "json");
+    options.porcelain = optionPresent(args, "porcelain");
+    options.quiet = optionPresent(args, "quiet");
+    if (const auto fields = optionValue(args, "fields")) {
+        options.fields = splitFields(*fields);
+    }
+    return options;
 }
 
 std::string correlation(std::string_view action)
@@ -85,8 +133,56 @@ std::optional<double> parseDouble(std::string_view value)
     }
 }
 
-void printResult(const lofibox::runtime::RuntimeCommandResult& result, std::ostream& out)
+std::optional<double> parseDuration(std::string_view value)
 {
+    if (value.empty()) {
+        return std::nullopt;
+    }
+    bool relative = false;
+    if (value.front() == '+') {
+        relative = true;
+        value.remove_prefix(1);
+    }
+    if (!value.empty() && value.back() == 's') {
+        value.remove_suffix(1);
+    }
+    const auto colon = value.find(':');
+    if (colon != std::string_view::npos) {
+        const auto minutes = parseDouble(value.substr(0, colon));
+        const auto seconds = parseDouble(value.substr(colon + 1));
+        if (!minutes || !seconds) {
+            return std::nullopt;
+        }
+        return (*minutes * 60.0) + *seconds;
+    }
+    (void)relative;
+    return parseDouble(value);
+}
+
+void printResult(const lofibox::runtime::RuntimeCommandResult& result, const CliOutputOptions& options, std::ostream& out)
+{
+    if (options.quiet) {
+        return;
+    }
+    if (options.json) {
+        out << '{';
+        bool first = true;
+        printJsonBoolField(out, "accepted", result.accepted, first);
+        printJsonBoolField(out, "applied", result.applied, first);
+        printJsonField(out, "code", result.code, first);
+        printJsonField(out, "message", result.message, first);
+        printJsonField(out, "correlation_id", result.correlation_id, first);
+        printJsonNumberField(out, "version_before_apply", std::to_string(result.version_before_apply), first);
+        printJsonNumberField(out, "version_after_apply", std::to_string(result.version_after_apply), first);
+        out << "}\n";
+        return;
+    }
+    if (!options.porcelain) {
+        out << "Code: " << result.code << '\n'
+            << "Applied: " << (result.applied ? "yes" : "no") << '\n'
+            << "Message: " << result.message << '\n';
+        return;
+    }
     out << result.code << '\t' << (result.applied ? "APPLIED" : "NOT_APPLIED") << '\t' << result.message << '\n';
 }
 
@@ -100,66 +196,158 @@ std::string playbackStatusLabel(lofibox::runtime::RuntimePlaybackStatus status)
     return "UNKNOWN";
 }
 
-void printPlayback(const lofibox::runtime::PlaybackRuntimeSnapshot& playback, std::ostream& out)
+std::string idsLabel(const std::vector<int>& ids)
 {
-    out << "STATUS\t" << playbackStatusLabel(playback.status) << '\n'
-        << "TRACK\t" << (playback.current_track_id ? std::to_string(*playback.current_track_id) : std::string{"-"}) << '\n'
-        << "TITLE\t" << (playback.title.empty() ? "-" : playback.title) << '\n'
-        << "SOURCE\t" << (playback.source_label.empty() ? "-" : playback.source_label) << '\n'
-        << "ELAPSED\t" << playback.elapsed_seconds << '\n'
-        << "DURATION\t" << playback.duration_seconds << '\n'
-        << "AUDIO\t" << (playback.audio_active ? "ACTIVE" : "IDLE") << '\n'
-        << "SHUFFLE\t" << (playback.shuffle_enabled ? "ON" : "OFF") << '\n'
-        << "REPEAT\t" << (playback.repeat_one ? "ONE" : (playback.repeat_all ? "ALL" : "OFF")) << '\n';
-}
-
-void printQueue(const lofibox::runtime::QueueRuntimeSnapshot& queue, std::ostream& out)
-{
-    out << "INDEX\t" << queue.active_index << '\n';
-    out << "TRACKS";
-    for (const int id : queue.active_ids) {
-        out << '\t' << id;
+    std::ostringstream out{};
+    for (std::size_t index = 0; index < ids.size(); ++index) {
+        if (index > 0U) {
+            out << ',';
+        }
+        out << ids[index];
     }
-    out << '\n';
+    return out.str();
 }
 
-void printEq(const lofibox::runtime::EqRuntimeSnapshot& eq, std::ostream& out)
+CliFields playbackFields(const lofibox::runtime::PlaybackRuntimeSnapshot& playback)
 {
-    out << "ENABLED\t" << (eq.enabled ? "ON" : "OFF") << '\n'
-        << "PRESET\t" << eq.preset_name << '\n'
-        << "BANDS";
+    return {
+        {"status", playbackStatusLabel(playback.status)},
+        {"track", playback.current_track_id ? std::to_string(*playback.current_track_id) : "-"},
+        {"title", playback.title.empty() ? "-" : playback.title},
+        {"source", playback.source_label.empty() ? "-" : playback.source_label},
+        {"elapsed", std::to_string(playback.elapsed_seconds)},
+        {"duration", std::to_string(playback.duration_seconds)},
+        {"audio", playback.audio_active ? "ACTIVE" : "IDLE"},
+        {"shuffle", playback.shuffle_enabled ? "ON" : "OFF"},
+        {"repeat", playback.repeat_one ? "ONE" : (playback.repeat_all ? "ALL" : "OFF")},
+        {"version", std::to_string(playback.version)},
+    };
+}
+
+CliFields queueFields(const lofibox::runtime::QueueRuntimeSnapshot& queue)
+{
+    return {
+        {"index", std::to_string(queue.active_index)},
+        {"tracks", idsLabel(queue.active_ids)},
+        {"shuffle", queue.shuffle_enabled ? "ON" : "OFF"},
+        {"repeat", queue.repeat_one ? "ONE" : (queue.repeat_all ? "ALL" : "OFF")},
+        {"version", std::to_string(queue.version)},
+    };
+}
+
+std::string bandsLabel(const lofibox::runtime::EqRuntimeSnapshot& eq)
+{
+    std::ostringstream out{};
+    bool first = true;
     for (const int gain : eq.bands) {
-        out << '\t' << gain;
+        if (!first) out << ',';
+        first = false;
+        out << gain;
     }
-    out << '\n';
+    return out.str();
 }
 
-void printRemote(const lofibox::runtime::RemoteSessionSnapshot& remote, std::ostream& out)
+CliFields eqFields(const lofibox::runtime::EqRuntimeSnapshot& eq)
 {
-    out << "PROFILE\t" << (remote.profile_id.empty() ? "-" : remote.profile_id) << '\n'
-        << "SOURCE\t" << remote.source_label << '\n'
-        << "CONNECTION\t" << remote.connection_status << '\n'
-        << "STREAM\t" << (remote.stream_resolved ? "RESOLVED" : "EMPTY") << '\n'
-        << "URL\t" << (remote.redacted_url.empty() ? "-" : remote.redacted_url) << '\n'
-        << "BUFFER\t" << remote.buffer_state << '\n'
-        << "RECOVERY\t" << remote.recovery_action << '\n'
-        << "BITRATE\t" << remote.bitrate_kbps << '\n'
-        << "CODEC\t" << (remote.codec.empty() ? "-" : remote.codec) << '\n'
-        << "LIVE\t" << (remote.live ? "YES" : "NO") << '\n'
-        << "SEEKABLE\t" << (remote.seekable ? "YES" : "NO") << '\n';
+    return {
+        {"enabled", eq.enabled ? "ON" : "OFF"},
+        {"preset", eq.preset_name},
+        {"bands", bandsLabel(eq)},
+        {"version", std::to_string(eq.version)},
+    };
 }
 
-void printSettings(const lofibox::runtime::SettingsRuntimeSnapshot& settings, std::ostream& out)
+CliFields remoteFields(const lofibox::runtime::RemoteSessionSnapshot& remote)
 {
-    out << "OUTPUT\t" << settings.output_mode << '\n'
-        << "NETWORK\t" << settings.network_policy << '\n'
-        << "SLEEP\t" << settings.sleep_timer << '\n';
+    return {
+        {"profile", remote.profile_id.empty() ? "-" : remote.profile_id},
+        {"source", remote.source_label},
+        {"connection", remote.connection_status},
+        {"stream", remote.stream_resolved ? "RESOLVED" : "EMPTY"},
+        {"url", remote.redacted_url.empty() ? "-" : remote.redacted_url},
+        {"buffer", remote.buffer_state},
+        {"recovery", remote.recovery_action},
+        {"bitrate", std::to_string(remote.bitrate_kbps)},
+        {"codec", remote.codec.empty() ? "-" : remote.codec},
+        {"live", remote.live ? "YES" : "NO"},
+        {"seekable", remote.seekable ? "YES" : "NO"},
+        {"version", std::to_string(remote.version)},
+    };
 }
 
-void printFull(const lofibox::runtime::RuntimeSnapshot& snapshot, std::ostream& out)
+CliFields settingsFields(const lofibox::runtime::SettingsRuntimeSnapshot& settings)
 {
-    out << "VERSION\t" << snapshot.version << '\n';
-    printPlayback(snapshot.playback, out);
+    return {
+        {"output", settings.output_mode},
+        {"network", settings.network_policy},
+        {"sleep", settings.sleep_timer},
+        {"version", std::to_string(settings.version)},
+    };
+}
+
+void printPlayback(const lofibox::runtime::PlaybackRuntimeSnapshot& playback, const CliOutputOptions& options, std::ostream& out)
+{
+    printObject(out, options, playbackFields(playback));
+}
+
+void printQueue(const lofibox::runtime::QueueRuntimeSnapshot& queue, const CliOutputOptions& options, std::ostream& out)
+{
+    printObject(out, options, queueFields(queue));
+}
+
+void printEq(const lofibox::runtime::EqRuntimeSnapshot& eq, const CliOutputOptions& options, std::ostream& out)
+{
+    printObject(out, options, eqFields(eq));
+}
+
+void printRemote(const lofibox::runtime::RemoteSessionSnapshot& remote, const CliOutputOptions& options, std::ostream& out)
+{
+    printObject(out, options, remoteFields(remote));
+}
+
+void printSettings(const lofibox::runtime::SettingsRuntimeSnapshot& settings, const CliOutputOptions& options, std::ostream& out)
+{
+    printObject(out, options, settingsFields(settings));
+}
+
+void printFull(const lofibox::runtime::RuntimeSnapshot& snapshot, const CliOutputOptions& options, std::ostream& out)
+{
+    if (options.quiet) {
+        return;
+    }
+    if (!options.json) {
+        CliFields fields = {{"version", std::to_string(snapshot.version)}};
+        const auto playback = playbackFields(snapshot.playback);
+        fields.insert(fields.end(), playback.begin(), playback.end());
+        printObject(out, options, fields);
+        return;
+    }
+    out << "{\"version\":" << snapshot.version << ",\"playback\":{";
+    bool first = true;
+    for (const auto& [name, value] : playbackFields(snapshot.playback)) {
+        if (wantsField(options, name)) printJsonField(out, name, value, first);
+    }
+    out << "},\"queue\":{";
+    first = true;
+    for (const auto& [name, value] : queueFields(snapshot.queue)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"eq\":{";
+    first = true;
+    for (const auto& [name, value] : eqFields(snapshot.eq)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"remote\":{";
+    first = true;
+    for (const auto& [name, value] : remoteFields(snapshot.remote)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"settings\":{";
+    first = true;
+    for (const auto& [name, value] : settingsFields(snapshot.settings)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "}}\n";
 }
 
 std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntimeArgs& args, std::ostream& err)
@@ -169,7 +357,41 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
         return std::nullopt;
     }
     const auto first = p[0];
-    if (first == "play") return command(lofibox::runtime::RuntimeCommandKind::PlaybackPlay);
+    if (first == "play") {
+        if (optionPresent(args, "pause")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackPause);
+        if (optionPresent(args, "resume")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackResume);
+        if (optionPresent(args, "toggle")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackToggle);
+        if (optionPresent(args, "next")) return command(lofibox::runtime::RuntimeCommandKind::QueueStep, lofibox::runtime::RuntimeCommandPayload::queueStep(1));
+        if (optionPresent(args, "prev")) return command(lofibox::runtime::RuntimeCommandKind::QueueStep, lofibox::runtime::RuntimeCommandPayload::queueStep(-1));
+        if (optionPresent(args, "stop")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackStop);
+        if (const auto id = optionValue(args, "id")) {
+            const auto track_id = parseInt(*id);
+            if (!track_id) {
+                err << "play --id requires a numeric track id.\n";
+                return std::nullopt;
+            }
+            return command(lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack, lofibox::runtime::RuntimeCommandPayload::startTrack(*track_id));
+        }
+        if (const auto seek = optionValue(args, "seek")) {
+            const auto seconds = parseDuration(*seek);
+            if (!seconds) {
+                err << "play --seek requires seconds or MM:SS.\n";
+                return std::nullopt;
+            }
+            return command(lofibox::runtime::RuntimeCommandKind::PlaybackSeek, lofibox::runtime::RuntimeCommandPayload::seek(*seconds));
+        }
+        if (const auto shuffle = optionValue(args, "shuffle")) {
+            if (*shuffle == "on" || *shuffle == "off") {
+                return command(lofibox::runtime::RuntimeCommandKind::PlaybackToggleShuffle);
+            }
+        }
+        if (const auto repeat = optionValue(args, "repeat")) {
+            if (*repeat == "all") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll, lofibox::runtime::RuntimeCommandPayload::enabled(true));
+            if (*repeat == "one") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatOne, lofibox::runtime::RuntimeCommandPayload::enabled(true));
+            if (*repeat == "off") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll, lofibox::runtime::RuntimeCommandPayload::enabled(false));
+        }
+        return command(lofibox::runtime::RuntimeCommandKind::PlaybackPlay);
+    }
     if (first == "pause") return command(lofibox::runtime::RuntimeCommandKind::PlaybackPause);
     if (first == "resume") return command(lofibox::runtime::RuntimeCommandKind::PlaybackResume);
     if (first == "toggle") return command(lofibox::runtime::RuntimeCommandKind::PlaybackToggle);
@@ -177,14 +399,25 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
     if (first == "next") return command(lofibox::runtime::RuntimeCommandKind::QueueStep, lofibox::runtime::RuntimeCommandPayload::queueStep(1));
     if (first == "prev") return command(lofibox::runtime::RuntimeCommandKind::QueueStep, lofibox::runtime::RuntimeCommandPayload::queueStep(-1));
     if (first == "seek" && p.size() >= 2) {
-        const auto seconds = parseDouble(p[1]);
+        const auto seconds = parseDuration(p[1]);
         if (!seconds) {
-            err << "seek requires numeric seconds.\n";
+            err << "seek requires seconds or MM:SS.\n";
             return std::nullopt;
         }
         return command(lofibox::runtime::RuntimeCommandKind::PlaybackSeek, lofibox::runtime::RuntimeCommandPayload::seek(*seconds));
     }
     if (first == "queue" && p.size() >= 2) {
+        if (p[1] == "next") {
+            return command(lofibox::runtime::RuntimeCommandKind::QueueStep, lofibox::runtime::RuntimeCommandPayload::queueStep(1));
+        }
+        if (p[1] == "set" && p.size() >= 3) {
+            const auto index = parseInt(p[2]);
+            if (!index) {
+                err << "queue set requires numeric index.\n";
+                return std::nullopt;
+            }
+            return command(lofibox::runtime::RuntimeCommandKind::QueueJump, lofibox::runtime::RuntimeCommandPayload::queueIndex(*index));
+        }
         if (p[1] == "jump" && p.size() >= 3) {
             const auto index = parseInt(p[2]);
             if (!index) {
@@ -240,7 +473,19 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
 std::optional<lofibox::runtime::RuntimeQuery> buildQuery(const ParsedRuntimeArgs& args)
 {
     const auto& p = args.positional;
-    if (p.empty() || p[0] != "runtime") {
+    if (p.empty()) {
+        return std::nullopt;
+    }
+    if (p[0] == "now") {
+        return lofibox::runtime::RuntimeQuery{lofibox::runtime::RuntimeQueryKind::FullSnapshot, lofibox::runtime::CommandOrigin::RuntimeCli, correlation("now")};
+    }
+    if (p[0] == "queue" && p.size() >= 2 && p[1] == "show") {
+        return lofibox::runtime::RuntimeQuery{lofibox::runtime::RuntimeQueryKind::QueueSnapshot, lofibox::runtime::CommandOrigin::RuntimeCli, correlation("queue")};
+    }
+    if (p[0] == "eq" && p.size() >= 2 && p[1] == "show") {
+        return lofibox::runtime::RuntimeQuery{lofibox::runtime::RuntimeQueryKind::EqSnapshot, lofibox::runtime::CommandOrigin::RuntimeCli, correlation("eq")};
+    }
+    if (p[0] != "runtime") {
         return std::nullopt;
     }
     if (p.size() == 1 || p[1] == "status") {
@@ -272,6 +517,11 @@ std::optional<int> runRuntimeCliCommand(int argc, char** argv, std::ostream& out
     if (args.positional.empty() || !isRuntimeCommand(args.positional.front())) {
         return std::nullopt;
     }
+    if (args.positional.front() == "remote"
+        && (args.positional.size() < 2U || args.positional[1] != "reconnect")) {
+        return std::nullopt;
+    }
+    const auto format = outputOptions(args);
 
     lofibox::runtime::UnixSocketRuntimeCommandClient client{
         args.socket_path ? std::filesystem::path{*args.socket_path} : lofibox::runtime::defaultRuntimeSocketPath()};
@@ -280,15 +530,15 @@ std::optional<int> runRuntimeCliCommand(int argc, char** argv, std::ostream& out
         const auto snapshot = client.query(*query);
         if (!client.lastError().empty()) {
             err << client.lastError() << '\n';
-            return 2;
+            return static_cast<int>(CliExitCode::Network);
         }
         switch (query->kind) {
-        case lofibox::runtime::RuntimeQueryKind::PlaybackSnapshot: printPlayback(snapshot.playback, out); break;
-        case lofibox::runtime::RuntimeQueryKind::QueueSnapshot: printQueue(snapshot.queue, out); break;
-        case lofibox::runtime::RuntimeQueryKind::EqSnapshot: printEq(snapshot.eq, out); break;
-        case lofibox::runtime::RuntimeQueryKind::RemoteSessionSnapshot: printRemote(snapshot.remote, out); break;
-        case lofibox::runtime::RuntimeQueryKind::SettingsSnapshot: printSettings(snapshot.settings, out); break;
-        case lofibox::runtime::RuntimeQueryKind::FullSnapshot: printFull(snapshot, out); break;
+        case lofibox::runtime::RuntimeQueryKind::PlaybackSnapshot: printPlayback(snapshot.playback, format, out); break;
+        case lofibox::runtime::RuntimeQueryKind::QueueSnapshot: printQueue(snapshot.queue, format, out); break;
+        case lofibox::runtime::RuntimeQueryKind::EqSnapshot: printEq(snapshot.eq, format, out); break;
+        case lofibox::runtime::RuntimeQueryKind::RemoteSessionSnapshot: printRemote(snapshot.remote, format, out); break;
+        case lofibox::runtime::RuntimeQueryKind::SettingsSnapshot: printSettings(snapshot.settings, format, out); break;
+        case lofibox::runtime::RuntimeQueryKind::FullSnapshot: printFull(snapshot, format, out); break;
         }
         return 0;
     }
@@ -296,15 +546,21 @@ std::optional<int> runRuntimeCliCommand(int argc, char** argv, std::ostream& out
     const auto command_value = buildCommand(args, err);
     if (!command_value) {
         err << "Unknown runtime command.\n";
-        return 64;
+        return static_cast<int>(CliExitCode::Usage);
     }
     const auto result = client.dispatch(*command_value);
     if (!client.lastError().empty()) {
         err << client.lastError() << '\n';
-        return 2;
+        return static_cast<int>(CliExitCode::Network);
     }
-    printResult(result, out);
-    return result.accepted ? 0 : 1;
+    printResult(result, format, out);
+    if (!result.accepted) {
+        return static_cast<int>(CliExitCode::Usage);
+    }
+    if (!result.applied && command_value->kind == lofibox::runtime::RuntimeCommandKind::PlaybackPlay) {
+        return static_cast<int>(CliExitCode::Playback);
+    }
+    return 0;
 }
 
 } // namespace lofibox::cli

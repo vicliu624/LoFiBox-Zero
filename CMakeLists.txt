@@ -354,6 +354,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_runtime_cli_smoke PRIVATE lofibox_zero_target_cli)
     add_test(NAME lofibox_runtime_cli_smoke COMMAND lofibox_runtime_cli_smoke)
 
+    add_executable(lofibox_cli_options_smoke tests/cli_options_smoke.cpp)
+    target_link_libraries(lofibox_cli_options_smoke PRIVATE lofibox_zero_target_cli)
+    add_test(NAME lofibox_cli_options_smoke COMMAND lofibox_cli_options_smoke)
+
     add_executable(lofibox_runtime_seek_stop_queueclear_smoke tests/runtime_seek_stop_queueclear_smoke.cpp)
     target_link_libraries(lofibox_runtime_seek_stop_queueclear_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_runtime_seek_stop_queueclear_smoke COMMAND lofibox_runtime_seek_stop_queueclear_smoke)

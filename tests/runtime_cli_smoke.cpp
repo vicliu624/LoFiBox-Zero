@@ -66,8 +66,8 @@ int main()
 
     std::ostringstream out{};
     std::ostringstream err{};
-    auto exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "eq", "band", "0", "7"}, out, err);
-    if (!exit_code || *exit_code != 0 || out.str().find("EQ_SET_BAND") == std::string::npos) {
+    auto exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "eq", "band", "0", "7", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0 || out.str().find("\"code\":\"EQ_SET_BAND\"") == std::string::npos) {
         std::cerr << "Expected runtime CLI to send EQ command through external transport only: " << err.str() << '\n';
         return 1;
     }
@@ -76,9 +76,19 @@ int main()
     out.clear();
     err.str({});
     err.clear();
-    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "runtime", "eq"}, out, err);
-    if (!exit_code || *exit_code != 0 || out.str().find("BANDS\t7") == std::string::npos) {
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "eq", "show", "--fields", "bands", "--porcelain"}, out, err);
+    if (!exit_code || *exit_code != 0 || out.str().find("bands\t7") == std::string::npos) {
         std::cerr << "Expected runtime CLI query to read EQ snapshot through external transport: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "now", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0 || out.str().find("\"playback\"") == std::string::npos) {
+        std::cerr << "Expected now alias to query full runtime snapshot through external transport: " << out.str() << err.str() << '\n';
         return 1;
     }
 

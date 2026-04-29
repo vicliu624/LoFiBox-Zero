@@ -133,47 +133,75 @@ int main()
 
     std::string out{};
     std::string err{};
-    auto code = run({"lofibox", "source", "add", "emby", "--id", "emby-home", "--name", "Emby", "--url", "http://remote", "--user", "vic", "--password", "secret"}, services, out, err);
+    auto code = run({"lofibox", "source", "add", "emby", "--id", "emby-home", "--name", "Emby", "--base-url", "http://remote", "--username", "vic", "--password", "secret"}, services, out, err);
     assert(code && *code == 0);
     assert(store->profiles.size() == 1U);
     assert(store->profiles.front().id == "emby-home");
     assert(store->profiles.front().password == "secret");
 
-    code = run({"lofibox", "source", "list"}, services, out, err);
+    code = run({"lofibox", "source", "list", "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"id\":\"emby-home\"") != std::string::npos);
+
+    code = run({"lofibox", "source", "show", "emby-home", "--fields", "id,readiness", "--porcelain"}, services, out, err);
     assert(code && *code == 0);
     assert(out.find("emby-home") != std::string::npos);
+
+    code = run({"lofibox", "source", "capabilities", "emby-home", "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"credentials\":\"supported\"") != std::string::npos);
 
     code = run({"lofibox", "source", "probe", "emby-home"}, services, out, err);
     assert(code && *code == 0);
     assert(out.find("ONLINE") != std::string::npos);
 
-    code = run({"lofibox", "credentials", "status", "emby-home"}, services, out, err);
+    code = run({"lofibox", "credentials", "list", "--json"}, services, out, err);
     assert(code && *code == 0);
-    assert(out.find("PASSWORD=SET") != std::string::npos);
+    assert(out.find("\"credential_ref\":\"credential/emby-home\"") != std::string::npos);
+
+    code = run({"lofibox", "credentials", "show-ref", "credential/emby-home", "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"password\":\"SET\"") != std::string::npos);
 
     code = run({"lofibox", "credentials", "delete", "emby-home"}, services, out, err);
     assert(code && *code == 0);
     assert(store->profiles.front().password.empty());
 
-    code = run({"lofibox", "library", "scan", root.string()}, services, out, err);
+    code = run({"lofibox", "library", "scan", root.string(), "--json"}, services, out, err);
     assert(code && *code == 0);
-    assert(out.find("TRACKS\t1") != std::string::npos);
+    assert(out.find("\"tracks\":\"1\"") != std::string::npos);
+
+    code = run({"lofibox", "library", "list", "tracks", "--root", root.string(), "--fields", "title", "--porcelain"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("Song") != std::string::npos);
+
+    code = run({"lofibox", "library", "query", "tracks", "--artist", "Artist", "--root", root.string(), "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"artist\":\"Artist\"") != std::string::npos);
 
     code = run({"lofibox", "library", "query", "Song", "--root", root.string()}, services, out, err);
     assert(code && *code == 0);
     assert(out.find("Song") != std::string::npos);
 
-    code = run({"lofibox", "cache", "status"}, services, out, err);
+    code = run({"lofibox", "search", "Song", "--root", root.string(), "--json"}, services, out, err);
     assert(code && *code == 0);
-    assert(out.find("ENTRIES") != std::string::npos);
+    assert(out.find("\"group\":\"local\"") != std::string::npos);
 
-    code = run({"lofibox", "cache", "clear"}, services, out, err);
+    code = run({"lofibox", "remote", "browse", "emby-home", "--porcelain"}, services, out, err);
     assert(code && *code == 0);
-    assert(out.find("CLEARED") != std::string::npos);
+    assert(out.find("ARTISTS") != std::string::npos);
 
-    code = run({"lofibox", "doctor"}, services, out, err);
+    code = run({"lofibox", "cache", "status", "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"entries\"") != std::string::npos);
+
+    code = run({"lofibox", "cache", "purge", "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"status\":\"CLEARED\"") != std::string::npos);
+
+    code = run({"lofibox", "doctor", "--json"}, services, out, err);
     assert(code.has_value());
-    assert(out.find("STATUS") != std::string::npos);
+    assert(out.find("\"capabilities\"") != std::string::npos);
 
     code = run({"lofibox", "play"}, services, out, err);
     assert(!code.has_value());

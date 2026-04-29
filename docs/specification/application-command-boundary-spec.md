@@ -26,10 +26,12 @@ For shared app-state contracts, use `lofibox-zero-app-state-spec.md`.
 For persistence domains, use `lofibox-zero-persistence-spec.md`.
 For desktop event handoff, use `linux-desktop-integration-spec.md`.
 For live runtime commands and snapshots, use `runtime-command-session-architecture-spec.md`.
+For installed terminal syntax, output modes, and CLI exit-code contracts, use `lofibox-cli-surface-spec.md`.
 For testing gates, use `testing-ci-spec.md`.
 
 This document defines the application command/query boundary that sits between runtime shells and product domains.
 It does not define the live runtime command bus; live playback, active queue, active EQ, active remote session, and live settings are governed by `runtime-command-session-architecture-spec.md`.
+It also does not define terminal command syntax; the CLI surface is governed by `lofibox-cli-surface-spec.md`.
 
 ## 3. Scope
 

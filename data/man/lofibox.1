@@ -7,12 +7,24 @@ lofibox \- chromeless desktop-widget music player
 .B lofibox
 [\fB\-\-help\fR]
 [\fB\-\-version\fR]
+.PP
+.B lofibox
+[\fB\-\-json\fR|\fB\-\-porcelain\fR]
+[\fB\-\-fields\fR \fIFIELDS\fR]
+[\fB\-\-quiet\fR]
+\fICOMMAND\fR
+[\fIARGS\fR...]
 .SH DESCRIPTION
 .B LoFiBox
 is a compact Linux music player with a chromeless desktop-widget surface.
 It is designed for local music playback, media-library browsing, metadata
 and artwork display, remote-source extensibility, and a DSP-ready audio
 pipeline.
+.PP
+The installed executable also provides a product-object CLI. Durable commands
+use the application command/query boundary. Live playback, active queue, active
+EQ, active remote-session, and live settings commands require a running LoFiBox
+instance and use the runtime transport.
 .SH OPTIONS
 .TP
 .B \-\-help
@@ -20,6 +32,100 @@ Show command-line help and exit.
 .TP
 .B \-\-version
 Show the application version and exit.
+.TP
+.B \-\-json
+Emit machine-readable JSON for commands that support structured output.
+.TP
+.B \-\-porcelain
+Emit stable tab-separated output for commands that support machine output.
+.TP
+.BI \-\-fields " FIELDS"
+Limit named fields for state-oriented commands. Fields are comma-separated.
+.TP
+.B \-\-quiet
+Suppress stdout where supported while preserving the exit code.
+.SH COMMANDS
+.TP
+.B version
+Show version information. Supports
+.BR \-\-json ,
+.BR \-\-porcelain ,
+and
+.BR \-\-quiet .
+.TP
+.B doctor
+Run safe runtime and environment diagnostics.
+.TP
+.B source list|show|add|update|remove|probe|auth-status|capabilities
+Manage durable remote/source profiles and safe source status.
+.TP
+.B credentials list|show-ref|set|status|validate|delete
+Manage credential references. Secret values are not printed. Use
+.B \-\-password-stdin
+or
+.B \-\-token-stdin
+to provide secret material from standard input.
+.TP
+.B library scan|status|list|query
+Scan and inspect the local media library.
+.TP
+.B search
+Search local media and, when requested, configured remote sources.
+.TP
+.B remote browse|recent|search|resolve|stream-info
+Browse, search, resolve, and inspect connected remote catalogs.
+.TP
+.B cache status|purge|gc
+Inspect and maintain governed cache storage.
+.TP
+.B now
+Query the running LoFiBox runtime snapshot.
+.TP
+.B runtime status|playback|queue|eq|remote|settings|reload|shutdown
+Query or control the running runtime.
+.TP
+.B play
+Control live playback. Supports
+.B \-\-id
+for a local track id and transport options such as
+.BR \-\-pause ,
+.BR \-\-resume ,
+.BR \-\-toggle ,
+.BR \-\-next ,
+.BR \-\-prev ,
+.BR \-\-stop ,
+.BR \-\-seek ,
+.BR \-\-shuffle ,
+and
+.BR \-\-repeat .
+.TP
+.B queue show|set|next|clear
+Inspect or mutate the active runtime queue.
+.TP
+.B eq show|enable|disable|preset|band
+Inspect or mutate the active runtime EQ state.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 2
+User input or usage error.
+.TP
+.B 3
+Resource not found.
+.TP
+.B 4
+Credential missing or authentication failed.
+.TP
+.B 5
+Network, remote, runtime transport, or provider connection failure.
+.TP
+.B 6
+Playback backend or live playback failure.
+.TP
+.B 7
+Persistence failure.
 .SH FILES
 .TP
 .I ~/.config/lofibox/

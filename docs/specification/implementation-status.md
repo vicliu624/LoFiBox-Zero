@@ -171,3 +171,16 @@ This update records the runtime-host ownership closure:
 - Every published runtime command kind now has dispatcher behavior. Playback stop/seek, queue jump/clear, remote reconnect, settings apply, runtime shutdown, and runtime reload are no longer formal contract placeholders.
 - Runtime CLI now connects over the Unix socket runtime transport. It has no in-process fallback and does not construct app services, controllers, runtime domains, runtime bus, runtime server, or `AppRuntimeContext`.
 - New smoke coverage includes runtime host ownership, Unix socket transport, runtime CLI, seek/stop/queue-clear, settings apply, shutdown/reload, and desktop-open runtime-command routing.
+
+## 2026-04-29 CLI Surface Contract And Machine Output Update
+
+This update records the CLI contract pass:
+
+- `lofibox-cli-surface-spec.md` now owns installed terminal syntax, the direct/runtime command split, product-object command families, `--json` / `--porcelain` / `--fields` / `--quiet`, and stable exit-code meanings.
+- The CLI vocabulary is now explicitly product-object based: `source` configures durable profiles, `remote` browses/searches/resolves connected catalogs, `search` is the unified local/remote entry, `play` and `queue` target live runtime state, and CLI commands must not simulate pages or selected-row UI flows.
+- Direct CLI now supports machine output and field filtering for implemented durable commands: source list/show/add/update/remove/probe/auth-status/capabilities, credentials list/show-ref/status/validate/set/delete with stdin secret options, library scan/status/list/query, unified search, remote browse/recent/search/resolve/stream-info, cache status/purge/gc, and doctor.
+- Runtime CLI now supports `now`, `queue show`, `eq show`, JSON command results, field-filtered snapshots, `play --id`, `play --pause/resume/toggle/next/prev/stop/seek/shuffle/repeat`, `queue next`, and `queue set`, while continuing to use the external runtime transport only.
+- `lofibox version --json` and `--porcelain` are available through the common target option path.
+- The direct/runtime CLI smoke tests now cover machine output, field filtering, credential-reference status, source capability projection, local search, remote browse root projection, cache purge, runtime `now`, and runtime EQ snapshot projection.
+- Verified on `vicliu@192.168.50.48`: no-X11/no-device Ninja test build passed 71/71 CTest tests.
+- Verified on `vicliu@192.168.50.92`: temporary-prefix device build installed and passed CLI smoke; Debian `dpkg-buildpackage -b -us -uc` passed package-time 71/71 tests; `sudo dpkg -i lofibox_0.1.0-1_arm64.deb` replaced the installed package; installed CLI smoke and `sh debian/tests/smoke` passed.
