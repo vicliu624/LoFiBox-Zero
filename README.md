@@ -94,6 +94,34 @@ LOFIBOX_MEDIA_ROOT="$HOME/Music" \
 
 This is a real Linux presentation target using the same app, playback, library, remote-source, metadata, DSP, persistence, and credential semantics as the device target.
 
+## Preview APT Repository
+
+Before LoFiBox is available from the official Debian archive, preview packages
+can be published as a signed GitHub Pages APT repository.
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+
+curl -fsSL https://vicliu624.github.io/lofibox-apt/lofibox-archive-keyring.pgp \
+  | sudo tee /etc/apt/keyrings/lofibox-archive-keyring.pgp >/dev/null
+
+sudo chmod 0644 /etc/apt/keyrings/lofibox-archive-keyring.pgp
+
+sudo tee /etc/apt/sources.list.d/lofibox.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://vicliu624.github.io/lofibox-apt/debian
+Suites: trixie
+Components: main
+Signed-By: /etc/apt/keyrings/lofibox-archive-keyring.pgp
+EOF
+
+sudo apt update
+sudo apt install lofibox
+```
+
+The preview repository uses a per-repository keyring and `Signed-By`; do not use
+`apt-key`. The official Debian archive remains the long-term target.
+
 ## Optional Host Fingerprinting
 
 The development container already installs `libchromaprint-tools`. For direct host runs, use:

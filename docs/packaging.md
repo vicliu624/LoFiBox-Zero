@@ -3,6 +3,8 @@
 # LoFiBox Packaging
 
 Normative archive rules live in `docs/specification/debian-official-archive-spec.md`.
+The temporary pre-archive GitHub Pages APT repository is governed by
+`docs/specification/github-pages-apt-repository-spec.md`.
 
 ## Standard Build
 
@@ -72,6 +74,76 @@ scripts/run-debian-package-validation.ps1
 
 The helper creates the local upstream tarball, builds the Debian package through the dedicated package-build image, runs `lintian`, and runs `autopkgtest` against the generated `.changes` file. It intentionally depends on a pre-existing local image and does not pull or build images implicitly. By default the final `lintian`/`autopkgtest` container is run with Docker networking disabled so routine validation proves the prepared package-build image is self-contained; pass `-AllowNetwork` only when intentionally refreshing or diagnosing the image.
 
+## Preview APT Repository
+
+Before LoFiBox is accepted into the official Debian archive, early users may
+install from the LoFiBox-maintained preview APT repository published through
+GitHub Pages.
+
+User setup:
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+
+curl -fsSL https://vicliu624.github.io/lofibox-apt/lofibox-archive-keyring.pgp \
+  | sudo tee /etc/apt/keyrings/lofibox-archive-keyring.pgp >/dev/null
+
+sudo chmod 0644 /etc/apt/keyrings/lofibox-archive-keyring.pgp
+
+sudo tee /etc/apt/sources.list.d/lofibox.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://vicliu624.github.io/lofibox-apt/debian
+Suites: trixie
+Components: main
+Signed-By: /etc/apt/keyrings/lofibox-archive-keyring.pgp
+EOF
+
+sudo apt update
+sudo apt install lofibox
+```
+
+The repository must be signed and consumed through `Signed-By`. Do not use
+`apt-key`.
+
+Preview package versions should use a local suffix such as:
+
+```text
+0.1.0-1~lofibox1
+```
+
+This keeps future official Debian versions such as `0.1.0-1` able to supersede
+the preview package naturally.
+
+Publication is manual through:
+
+```text
+lofibox-apt/.github/workflows/publish.yml
+```
+
+The workflow requires protected GitHub secrets:
+
+```text
+LOFIBOX_APT_GPG_PRIVATE_KEY
+LOFIBOX_APT_GPG_KEY_ID
+```
+
+Local repository generation from existing `.changes` files uses:
+
+```sh
+scripts/build-github-pages-apt-repository.sh \
+  --suite trixie \
+  --component main \
+  --architectures amd64,arm64 \
+  --output public \
+  --gpg-key "$LOFIBOX_APT_GPG_KEY_ID" \
+  --changes ../lofibox_0.1.0-1~lofibox1_amd64.changes \
+  --changes ../lofibox_0.1.0-1~lofibox1_arm64.changes
+```
+
+The current GitHub-hosted workflow builds `amd64`. `arm64` packages should be
+added from native real-device builds, for example from the Raspberry Pi class
+deployment target, or from a future protected self-hosted arm64 runner.
+
 ## Autopkgtest
 
 The package smoke test is intentionally limited to installed runtime behavior and desktop metadata, but it is not marked `superficial` because it is the package-level gate for CLI availability and desktop/AppStream metadata validity:
@@ -88,6 +160,7 @@ Packaging work should support:
 
 - `lofibox --help`
 - `lofibox --version`
+- `lofibox-tui --help`
 - `dpkg-checkbuilddeps debian/control`
 - `desktop-file-validate`
 - `appstreamcli validate`

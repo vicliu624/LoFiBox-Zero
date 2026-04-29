@@ -1,6 +1,7 @@
 build/
 obj-*/
 out/
+public/
 .cache/
 .idea/
 .vscode/

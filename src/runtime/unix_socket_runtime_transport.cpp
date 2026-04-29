@@ -56,7 +56,12 @@ bool writeAll(int fd, const void* data, std::size_t size) noexcept
     const auto* bytes = static_cast<const unsigned char*>(data);
     std::size_t written = 0;
     while (written < size) {
-        const auto count = ::send(fd, bytes + written, size - written, 0);
+#if defined(MSG_NOSIGNAL)
+        constexpr int kSendFlags = MSG_NOSIGNAL;
+#else
+        constexpr int kSendFlags = 0;
+#endif
+        const auto count = ::send(fd, bytes + written, size - written, kSendFlags);
         if (count <= 0) {
             return false;
         }

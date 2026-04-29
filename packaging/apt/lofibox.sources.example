@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+Types: deb
+URIs: https://vicliu624.github.io/lofibox-apt/debian
+Suites: trixie
+Components: main
+Signed-By: /etc/apt/keyrings/lofibox-archive-keyring.pgp

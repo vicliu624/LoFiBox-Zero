@@ -13,6 +13,11 @@ The long-term installation target is:
 sudo apt install lofibox
 ```
 
+Before official archive acceptance, LoFiBox may provide a temporary signed APT
+repository hosted through GitHub Pages. That preview repository is governed by
+`github-pages-apt-repository-spec.md` and must remain compatible with eventual
+official archive migration.
+
 This constraint must shape source layout, build behavior, dependency handling, runtime paths, tests, licensing, and packaging.
 It must not be used as a reason to delete product capabilities.
 
@@ -24,6 +29,7 @@ For dependency admission, use `dependency-policy-spec.md`.
 For Linux desktop files and runtime integration, use `linux-desktop-integration-spec.md`.
 For copyright and resource governance, use `copyright-resource-governance-spec.md`.
 For tests and CI, use `testing-ci-spec.md`.
+For the temporary pre-archive GitHub Pages APT repository, use `github-pages-apt-repository-spec.md`.
 
 This document controls distribution-facing engineering rules.
 
