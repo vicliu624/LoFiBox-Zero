@@ -2,16 +2,14 @@
 
 #pragma once
 
-#include <array>
 #include <string>
+
+#include "app/eq_ui_state.h"
+#include "app/settings_ui_state.h"
 
 namespace lofibox::app {
 
-struct SettingsState {
-    int sleep_timer_index{0};
-    int backlight_index{1};
-    int language_index{0};
-};
+using SettingsState = SettingsUiState;
 
 struct NetworkState {
     bool connected{false};
@@ -29,11 +27,6 @@ struct MetadataServiceState {
     std::string status{"OFFLINE"};
 };
 
-struct EqState {
-    std::array<int, 10> bands{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int selected_band{0};
-    std::string preset_name{"FLAT"};
-    bool enabled{false};
-};
+using EqState = EqUiState;
 
 } // namespace lofibox::app

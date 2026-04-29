@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "runtime/runtime_command.h"
 #include "runtime/runtime_command_dispatcher.h"
 #include "runtime/runtime_query_dispatcher.h"
@@ -21,6 +23,7 @@ public:
     [[nodiscard]] std::uint64_t version() const noexcept;
 
 private:
+    mutable std::mutex mutex_{};
     RuntimeCommandDispatcher commands_;
     RuntimeQueryDispatcher queries_;
 };

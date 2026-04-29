@@ -5,8 +5,11 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "app/app_runtime_context.h"
+#include "application/app_service_host.h"
+#include "runtime/runtime_host.h"
 
 namespace {
 
@@ -75,10 +78,13 @@ int main()
     services.remote.remote_source_provider = std::make_shared<DesktopOpenRemoteSourceProvider>();
     services.remote.remote_stream_resolver = std::make_shared<DesktopOpenStreamResolver>();
 
+    lofibox::application::AppServiceHost app_host{services};
+    lofibox::runtime::RuntimeHost runtime_host{app_host.registry()};
     lofibox::app::AppRuntimeContext app{
         {},
         {},
-        services,
+        app_host,
+        runtime_host.client(),
         {"https://example.test/desktop-open.mp3"}};
     app.update();
 

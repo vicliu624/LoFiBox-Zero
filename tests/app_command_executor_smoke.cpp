@@ -6,10 +6,7 @@
 
 #include "app/app_command_executor.h"
 #include "app/runtime_services.h"
-#include "runtime/in_process_runtime_client.h"
-#include "runtime/runtime_command_bus.h"
-#include "runtime/runtime_command_server.h"
-#include "runtime/runtime_session_facade.h"
+#include "runtime/runtime_host.h"
 
 namespace {
 
@@ -19,12 +16,9 @@ public:
         : services(lofibox::app::withNullRuntimeServices({}))
     {
         controllers.bindServices(services);
-        runtime_session = std::make_unique<lofibox::runtime::RuntimeSessionFacade>(
-            lofibox::application::AppServiceRegistry{controllers, services},
-            eq);
-        runtime_bus = std::make_unique<lofibox::runtime::RuntimeCommandBus>(*runtime_session);
-        runtime_server = std::make_unique<lofibox::runtime::RuntimeCommandServer>(*runtime_bus);
-        runtime_client = std::make_unique<lofibox::runtime::InProcessRuntimeCommandClient>(*runtime_server);
+        runtime_host = std::make_unique<lofibox::runtime::RuntimeHost>(
+            lofibox::application::AppServiceRegistry{controllers, services});
+        runtime_host->resetEq();
     }
 
     [[nodiscard]] lofibox::app::AppPage currentPage() const noexcept override { return navigation.currentPage(); }
@@ -44,12 +38,16 @@ public:
     [[nodiscard]] lofibox::application::AppServiceRegistry appServices() noexcept override { return {controllers, services}; }
     lofibox::app::NavigationState& navigationState() noexcept override { return navigation; }
     lofibox::app::EqState& eqState() noexcept override { return eq; }
+    [[nodiscard]] lofibox::runtime::EqRuntimeSnapshot eqRuntimeSnapshot() const noexcept override
+    {
+        return runtime_host->client().query(lofibox::runtime::RuntimeQuery{lofibox::runtime::RuntimeQueryKind::EqSnapshot}).eq;
+    }
     int& mainMenuIndex() noexcept override { return menu_index; }
     void closeHelpForCommand() noexcept override { ++close_help_calls; }
     [[nodiscard]] lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(lofibox::runtime::RuntimeCommand command) override
     {
         ++runtime_command_calls;
-        return runtime_client->dispatch(command);
+        return runtime_host->client().dispatch(command);
     }
 
     lofibox::app::NavigationState navigation{};
@@ -57,10 +55,7 @@ public:
     lofibox::app::AppControllerSet controllers{};
     lofibox::app::EqState eq{};
     lofibox::app::SettingsState settings{};
-    std::unique_ptr<lofibox::runtime::RuntimeSessionFacade> runtime_session{};
-    std::unique_ptr<lofibox::runtime::RuntimeCommandBus> runtime_bus{};
-    std::unique_ptr<lofibox::runtime::RuntimeCommandServer> runtime_server{};
-    std::unique_ptr<lofibox::runtime::InProcessRuntimeCommandClient> runtime_client{};
+    std::unique_ptr<lofibox::runtime::RuntimeHost> runtime_host{};
     int menu_index{0};
     int close_help_calls{0};
     int runtime_command_calls{0};
@@ -106,10 +101,13 @@ int main()
     }
 
     target.eq.selected_band = 0;
-    target.eq.bands[0] = 12;
+    (void)target.runtime_host->client().dispatch(lofibox::runtime::RuntimeCommand{
+        lofibox::runtime::RuntimeCommandKind::EqSetBand,
+        lofibox::runtime::RuntimeCommandPayload::eqSetBand(0, 12),
+        lofibox::runtime::CommandOrigin::DirectTest});
     const int before_eq_commands = target.runtime_command_calls;
     lofibox::app::commandAdjustSelectedEqualizerBand(target, 1);
-    if (target.eq.bands[0] != 12) {
+    if (target.eqRuntimeSnapshot().bands[0] != 12) {
         std::cerr << "Expected EQ gain to clamp at +12 dB.\n";
         return 1;
     }
@@ -117,25 +115,32 @@ int main()
         std::cerr << "Expected GUI EQ adjustment to submit a runtime command through the target client.\n";
         return 1;
     }
-    target.eq.bands[0] = -12;
+    (void)target.runtime_host->client().dispatch(lofibox::runtime::RuntimeCommand{
+        lofibox::runtime::RuntimeCommandKind::EqSetBand,
+        lofibox::runtime::RuntimeCommandPayload::eqSetBand(0, -12),
+        lofibox::runtime::CommandOrigin::DirectTest});
     lofibox::app::commandAdjustSelectedEqualizerBand(target, -1);
-    if (target.eq.bands[0] != -12) {
+    if (target.eqRuntimeSnapshot().bands[0] != -12) {
         std::cerr << "Expected EQ gain to clamp at -12 dB.\n";
         return 1;
     }
     lofibox::app::commandMoveEqualizerSelection(target, 99);
-    if (target.eq.selected_band != static_cast<int>(target.eq.bands.size()) - 1) {
+    if (target.eq.selected_band != static_cast<int>(target.eqRuntimeSnapshot().bands.size()) - 1) {
         std::cerr << "Expected EQ selected band to clamp to last band.\n";
         return 1;
     }
-    target.eq.preset_name = "FLAT";
+    (void)target.runtime_host->client().dispatch(lofibox::runtime::RuntimeCommand{
+        lofibox::runtime::RuntimeCommandKind::EqApplyPreset,
+        lofibox::runtime::RuntimeCommandPayload::eqApplyPreset("FLAT"),
+        lofibox::runtime::CommandOrigin::DirectTest});
     lofibox::app::commandCycleEqualizerPreset(target, 1);
-    if (target.eq.preset_name != "BASS BOOST" || target.eq.bands[0] != 6 || target.eq.bands[9] != -2) {
+    auto eq_snapshot = target.eqRuntimeSnapshot();
+    if (eq_snapshot.preset_name != "BASS BOOST" || eq_snapshot.bands[0] != 6 || eq_snapshot.bands[9] != -2) {
         std::cerr << "Expected EQ preset cycling to apply the next built-in preset.\n";
         return 1;
     }
     lofibox::app::commandAdjustSelectedEqualizerBand(target, 1);
-    if (target.eq.preset_name != "CUSTOM") {
+    if (target.eqRuntimeSnapshot().preset_name != "CUSTOM") {
         std::cerr << "Expected manual EQ adjustment to mark the preset as CUSTOM.\n";
         return 1;
     }

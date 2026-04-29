@@ -9,8 +9,8 @@ This document defines the live runtime command/query boundary for `LoFiBox Zero`
 The boundary exists because live playback, active queue, active EQ, active remote stream state, and immediately effective runtime settings are not durable configuration and are not GUI page state.
 They belong to the running LoFiBox instance.
 
-Runtime CLI is only one future entry point into this boundary.
-The same boundary must serve GUI input, desktop integration, future runtime CLI, future automation clients, MCP-style runtime tools, and tests.
+Runtime CLI is one external entry point into this boundary.
+The same boundary must serve GUI input, desktop integration, runtime CLI, future automation clients, MCP-style runtime tools, and tests.
 
 ## 2. Authority
 
@@ -45,11 +45,13 @@ This document defines the runtime command/session layer that sits between interf
 - `RuntimeQuery` is a read request for live runtime truth.
 - `RuntimeCommandResult` is the structured outcome of a runtime command.
 - `RuntimeSnapshot` is structured live truth before GUI rows, terminal text, desktop notifications, or automation payloads.
+- `RuntimeHost` is the sole in-process owner of live runtime lifetime, tick, runtime domains, runtime bus, server, local client, and optional external transport.
 - `RuntimeSessionFacade` is the process-local composition facade over playback runtime, queue runtime, EQ runtime, remote session runtime, live settings runtime, and snapshot assembly. It is not a second controller and must not keep accumulating business logic.
 - `PlaybackRuntime`, `QueueRuntime`, `EqRuntime`, `RemoteSessionRuntime`, and `SettingsRuntime` are the live runtime domains that own current session truth.
 - `RuntimeSnapshotAssembler` composes domain snapshots into one full runtime snapshot. GUI rows, terminal text, and automation payloads project from that snapshot.
 - `RuntimeCommandClient` and `RuntimeCommandServer` are transport-neutral wrappers around the runtime command/query contract.
 - `RuntimeTransport` is the transport envelope boundary. It may move commands and queries, but it must not understand playback, queue, EQ, remote, settings, or GUI semantics.
+- `AppRuntimeContext` is a GUI shell and runtime client consumer. It may interpret page state into commands and project snapshots into rows, but it does not own runtime services, controllers, runtime session, runtime bus, runtime server, runtime client, transport, callback bridges, or runtime tick.
 
 ### 3.3 Invalid Distinctions
 
@@ -89,7 +91,7 @@ The direct CLI remains outside this live runtime layer:
 argv -> DirectCliDispatcher -> AppServiceHost/AppServiceRegistry -> durable application services
 ```
 
-The future runtime CLI path must become:
+The runtime CLI path is:
 
 ```text
 argv -> RuntimeCommandClient -> RuntimeCommandServer -> RuntimeCommandBus -> RuntimeSessionFacade
@@ -101,7 +103,28 @@ The GUI path for live runtime mutation must also use a runtime client:
 GUI page interpreter -> in-process RuntimeCommandClient -> RuntimeCommandServer -> RuntimeCommandBus
 ```
 
-`AppRuntimeContext` may compose the in-process objects for the current GUI runtime, but its live mutation method must call the runtime client instead of dispatching the bus directly.
+Top-level app ownership is:
+
+```text
+LoFiBoxApp
+  |-- RuntimeServices
+  |-- AppServiceHost
+  |-- RuntimeHost
+  `-- AppRuntimeContext
+```
+
+`RuntimeServices` and `AppControllerSet` are owned by the non-GUI app core host path.
+`RuntimeHost` owns live runtime objects and advances them through `RuntimeHost::tick`.
+`AppRuntimeContext` receives `AppServiceHost&` and `RuntimeCommandClient&`; it must not construct or retain the runtime host internals.
+
+The external runtime CLI path is:
+
+```text
+argv -> UnixSocketRuntimeCommandClient -> UnixSocketRuntimeTransport
+     -> UnixSocketRuntimeCommandServer -> RuntimeCommandServer -> RuntimeCommandBus
+```
+
+There is no in-process fallback for runtime CLI commands.
 
 ## 5. Runtime Domains
 
@@ -173,6 +196,8 @@ Remote session runtime does not own:
 Source configuration remains owned by `SourceProfileCommandService`.
 Remote browse/search/resolve query behavior remains owned by `RemoteBrowseQueryService`.
 Remote session runtime owns only the active live-session truth.
+Remote playback must enter runtime through explicit resolved runtime payloads such as resolved stream payloads or resolved library-track payloads.
+Runtime code must not call back into `AppRuntimeContext` to resolve or start a GUI-selected remote stream.
 
 ### 5.5 Live Settings Runtime
 
@@ -213,6 +238,9 @@ Each command kind must validate the payload tag it needs. A command with the wro
 Runtime snapshots must be structured objects, not pre-rendered text.
 GUI rows, terminal output, desktop notifications, and automation payloads are projections over runtime snapshots.
 
+Every public `RuntimeCommandKind` must either be implemented or removed from the contract.
+Formal command kinds must not remain as permanently unsupported placeholders.
+
 ## 7. Serialization And Instance Boundary
 
 All live runtime mutations must pass through one serialized runtime command dispatcher in the running instance.
@@ -221,7 +249,7 @@ This applies equally to:
 
 - GUI input
 - desktop media keys
-- future runtime CLI
+- runtime CLI
 - future automation
 - future MCP runtime tools
 
@@ -240,11 +268,14 @@ src/runtime/
   runtime_result.*
   runtime_snapshot.*
   runtime_session_facade.*
+  runtime_host.*
   playback_runtime.*
   queue_runtime.*
   eq_runtime.*
+  eq_runtime_state.*
   remote_session_runtime.*
   settings_runtime.*
+  settings_runtime_state.*
   runtime_snapshot_assembler.*
   runtime_command_dispatcher.*
   runtime_query_dispatcher.*
@@ -253,10 +284,13 @@ src/runtime/
   runtime_command_server.*
   runtime_transport.*
   in_process_runtime_client.*
+  runtime_envelope_serializer.*
+  unix_socket_runtime_transport.*
 ```
 
 The transport-neutral client/server/transport contracts live in `src/runtime`.
-Concrete IPC adapters, once chosen, belong behind a platform transport boundary and must consume the runtime contract instead of redefining command semantics.
+The current Linux-first external transport is a Unix domain socket with length-prefixed runtime envelopes.
+It consumes the runtime contract instead of redefining command semantics.
 
 ## 9. Relationship To GUI
 
@@ -269,41 +303,57 @@ It may own:
 - page-local selection/focus/help state
 - page projection assembly
 - temporary GUI browse state while a dedicated runtime domain is not yet owning it
-- in-process runtime composition objects needed to run the current GUI instance
 
-It must not be the stable runtime command API.
+It must not own:
+
+- `RuntimeServices`
+- `AppControllerSet`
+- `RuntimeHost`
+- `RuntimeSessionFacade`
+- `RuntimeCommandBus`
+- `RuntimeCommandServer`
+- `InProcessRuntimeCommandClient`
+- external runtime transport
+- runtime tick/update
+- runtime-to-GUI callback bridges for remote playback
 
 It must expose GUI live mutation through an in-process `RuntimeCommandClient`.
 Page projections that need live playback, queue, EQ, or active remote-session facts must query runtime snapshots through the client.
 
 Whenever GUI input changes live playback, active queue, active EQ, active remote session, or live settings, the page interpreter must submit a runtime command.
 GUI-only motion such as moving a list selection or moving the selected EQ band may remain page state.
+EQ runtime truth belongs in `EqRuntimeState`; GUI selected-band state belongs in `EqUiState`.
+Live settings truth belongs in `SettingsRuntimeState`; GUI settings row/index state belongs in `SettingsUiState`.
+
+The GUI lifecycle helper may refresh status, load the library, and advance boot-page navigation.
+It must not advance playback; live playback advancement belongs to `RuntimeHost::tick`.
 
 ## 10. First Implementation Scope
 
-The first implementation step should establish the in-process runtime command/query bus, runtime domains, transport-neutral client/server interfaces, and GUI in-process client path.
-
-It should not implement external runtime CLI or IPC.
-
-It should expose structured snapshots for:
+The current implementation scope has established:
 
 - playback
 - queue
 - EQ
 - active remote session
-
-It should update tests and machine gates so future code cannot route runtime CLI or GUI live mutations around this boundary.
+- live settings
+- runtime host ownership
+- transport-neutral client/server interfaces
+- in-process GUI client path
+- Unix socket runtime transport
+- runtime CLI commands and queries over the external transport
 
 Runtime domain tests must validate the domain objects directly so behavior does not slide back into `RuntimeSessionFacade`.
-Client/server contract tests must validate result envelopes, correlation ids, command origins, version-before/version-after facts, query consistency, and unsupported command rejection before any external IPC is added.
+Client/server and transport tests must validate result envelopes, correlation ids, command origins, version-before/version-after facts, query consistency, socket transport behavior, runtime CLI behavior, and host shutdown/reload request propagation.
 
 ## 11. AI Constraints
 
 - Do not implement runtime CLI commands until this runtime bus exists and tests prove GUI can use it.
 - Do not add transport before the transport-neutral command/query/result/snapshot contract is in place.
-- Do not let `src/cli` include runtime internals for live-state control; future runtime CLI must use a runtime command client.
+- Do not let `src/cli` include runtime domains, runtime bus, runtime server, `AppRuntimeContext`, controllers, or UI pages for live-state control; runtime CLI must use a runtime command client and external transport.
 - Do not add live playback, queue, EQ, or remote-session mutation methods to `AppRuntimeContext`.
 - Do not allow UI rows to become runtime command/query payloads.
 - Do not add new concrete playback, queue, EQ, remote, or settings business logic to `RuntimeSessionFacade`; add it to the matching runtime domain.
 - Do not make `AppCommandExecutor` construct `RuntimeCommandBus` or `RuntimeSessionFacade`. It may interpret GUI input and submit runtime commands through its target.
 - Do not make transport include runtime domain headers. Transport sees only command/query/result/snapshot envelopes.
+- Do not reintroduce runtime-to-GUI callbacks for remote playback. GUI may resolve a stream through application query services and submit an explicit runtime command payload; runtime host owns the subsequent playback and active remote-session mutation.

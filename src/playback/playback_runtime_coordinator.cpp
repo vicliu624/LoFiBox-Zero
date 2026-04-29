@@ -38,6 +38,16 @@ bool PlaybackRuntimeCoordinator::startBackendUri(const std::string& uri, Playbac
     return session.audio_active;
 }
 
+bool PlaybackRuntimeCoordinator::seekBackend(const std::filesystem::path& path, double seconds, PlaybackSession& session)
+{
+    session.elapsed_seconds = std::max(0.0, seconds);
+    session.audio_active = audio_pipeline_.startFile(path, session.elapsed_seconds);
+    if (session.audio_active) {
+        session.status = PlaybackStatus::Playing;
+    }
+    return session.audio_active;
+}
+
 void PlaybackRuntimeCoordinator::pause(PlaybackSession& session) noexcept
 {
     if (session.status == PlaybackStatus::Playing) {
@@ -52,6 +62,16 @@ void PlaybackRuntimeCoordinator::resume(PlaybackSession& session) noexcept
         audio_pipeline_.resume();
         session.status = PlaybackStatus::Playing;
     }
+}
+
+void PlaybackRuntimeCoordinator::stop(PlaybackSession& session) noexcept
+{
+    audio_pipeline_.stop();
+    session.status = PlaybackStatus::Paused;
+    session.audio_active = false;
+    session.elapsed_seconds = 0.0;
+    session.visualization_pending = false;
+    session.visualization_frame = {};
 }
 
 void PlaybackRuntimeCoordinator::stepQueue(const QueueState& queue, const PlaybackSession& session, int delta, const PlayIndexCallback& play_index) const

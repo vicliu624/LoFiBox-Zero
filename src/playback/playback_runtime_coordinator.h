@@ -24,8 +24,10 @@ public:
     void beginTrack(PlaybackSession& session) const noexcept;
     [[nodiscard]] bool startBackend(const std::filesystem::path& path, PlaybackSession& session);
     [[nodiscard]] bool startBackendUri(const std::string& uri, PlaybackSession& session);
+    [[nodiscard]] bool seekBackend(const std::filesystem::path& path, double seconds, PlaybackSession& session);
     void pause(PlaybackSession& session) noexcept;
     void resume(PlaybackSession& session) noexcept;
+    void stop(PlaybackSession& session) noexcept;
     void stepQueue(const QueueState& queue, const PlaybackSession& session, int delta, const PlayIndexCallback& play_index) const;
     [[nodiscard]] bool advanceAfterFinish(const QueueState& queue, const PlaybackSession& session, const PlayIndexCallback& play_index) const;
     void tick(PlaybackSession& session, const QueueState& queue, const LibraryController& library_controller, double delta_seconds, const PlayIndexCallback& play_index);

@@ -7,6 +7,7 @@
 
 #include "app/lofibox_app_runner.h"
 #include "cli/direct_cli.h"
+#include "cli/runtime_cli.h"
 #include "platform/host/legacy_asset_loader.h"
 #include "platform/host/runtime_services_factory.h"
 #include "platform/host/single_instance_lock.h"
@@ -18,6 +19,10 @@ int main(int argc, char** argv)
     try {
         if (lofibox::targets::handleCommonCliOptions(argc, argv, std::cout)) {
             return 0;
+        }
+
+        if (const auto runtime_cli_exit = lofibox::cli::runRuntimeCliCommand(argc, argv, std::cout, std::cerr)) {
+            return *runtime_cli_exit;
         }
 
         auto services = lofibox::platform::host::createHostRuntimeServices();

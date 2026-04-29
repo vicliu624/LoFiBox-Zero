@@ -7,11 +7,13 @@
 #include "app/app_controller_set.h"
 #include "app/runtime_services.h"
 #include "runtime/eq_runtime.h"
+#include "runtime/eq_runtime_state.h"
 #include "runtime/playback_runtime.h"
 #include "runtime/queue_runtime.h"
 #include "runtime/remote_session_runtime.h"
 #include "runtime/runtime_snapshot_assembler.h"
 #include "runtime/settings_runtime.h"
+#include "runtime/settings_runtime_state.h"
 
 namespace {
 
@@ -52,12 +54,13 @@ int main()
     controllers.library.setSongsContextAll();
 
     auto registry = lofibox::application::AppServiceRegistry{controllers, services};
-    lofibox::app::EqState eq{};
+    lofibox::runtime::EqRuntimeState eq{};
+    lofibox::runtime::SettingsRuntimeState settings_state{};
     lofibox::runtime::PlaybackRuntime playback{registry};
     lofibox::runtime::QueueRuntime queue{registry};
     lofibox::runtime::EqRuntime eq_runtime{registry, eq};
     lofibox::runtime::RemoteSessionRuntime remote{};
-    lofibox::runtime::SettingsRuntime settings{};
+    lofibox::runtime::SettingsRuntime settings{settings_state};
     lofibox::runtime::RuntimeSnapshotAssembler assembler{};
 
     if (!playback.startTrack(21)) {
@@ -74,8 +77,12 @@ int main()
         std::cerr << "Expected QueueRuntime to own active queue stepping.\n";
         return 1;
     }
+    if (!queue.jump(0) || controllers.playback.session().current_track_id != 21) {
+        std::cerr << "Expected QueueRuntime to own queue jumping.\n";
+        return 1;
+    }
     auto queue_snapshot = queue.snapshot(2);
-    if (queue_snapshot.active_ids.size() != 2U || queue_snapshot.active_index != 1) {
+    if (queue_snapshot.active_ids.size() != 2U || queue_snapshot.active_index != 0) {
         std::cerr << "Expected QueueRuntime snapshot to expose active queue truth.\n";
         return 1;
     }
@@ -90,11 +97,6 @@ int main()
         return 1;
     }
 
-    bool remote_started = false;
-    remote.setActiveRemoteStreamStarter([&remote_started] {
-        remote_started = true;
-        return true;
-    });
     lofibox::runtime::RemoteSessionSnapshot remote_snapshot{};
     remote_snapshot.profile_id = "domain-remote";
     remote_snapshot.source_label = "DOMAIN REMOTE";
@@ -102,8 +104,14 @@ int main()
     remote_snapshot.stream_resolved = true;
     remote_snapshot.seekable = true;
     remote.setSnapshot(remote_snapshot);
-    if (!remote.startActiveStream() || !remote_started) {
-        std::cerr << "Expected RemoteSessionRuntime to own active remote stream mutation.\n";
+    if (!remote.reconnect()) {
+        std::cerr << "Expected RemoteSessionRuntime to own live remote reconnect readiness.\n";
+        return 1;
+    }
+
+    settings.applyLive("ALSA", "LAN_ONLY", "15M");
+    if (settings.snapshot(4).output_mode != "ALSA" || settings.snapshot(4).sleep_timer != "15M") {
+        std::cerr << "Expected SettingsRuntime to own live settings truth.\n";
         return 1;
     }
 

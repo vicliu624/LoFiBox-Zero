@@ -40,8 +40,13 @@ public:
         bool cache_remote_facts);
     void stepQueue(LibraryController& library_controller, int delta);
     void stepQueue(LibraryController& library_controller, int delta, const RemoteTrackStarter& remote_starter);
+    [[nodiscard]] bool jumpQueue(LibraryController& library_controller, int queue_index);
+    [[nodiscard]] bool jumpQueue(LibraryController& library_controller, int queue_index, const RemoteTrackStarter& remote_starter);
+    void clearQueue() noexcept;
     void pause() noexcept;
     void resume() noexcept;
+    void stop() noexcept;
+    [[nodiscard]] bool seek(LibraryController& library_controller, double seconds);
     void togglePlayPause() noexcept;
     void setShuffleEnabled(bool enabled);
     void toggleShuffle();

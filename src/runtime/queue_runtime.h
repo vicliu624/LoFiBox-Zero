@@ -3,20 +3,17 @@
 #pragma once
 
 #include "application/app_service_registry.h"
-#include "application/playback_command_service.h"
 #include "runtime/runtime_snapshot.h"
 
 namespace lofibox::runtime {
 
 class QueueRuntime {
 public:
-    using RemoteTrackStarter = application::PlaybackCommandService::RemoteTrackStarter;
-
     explicit QueueRuntime(application::AppServiceRegistry services) noexcept;
 
-    void setRemoteTrackStarter(RemoteTrackStarter starter);
-
     [[nodiscard]] bool step(int delta) const;
+    [[nodiscard]] bool jump(int queue_index) const;
+    void clear() const noexcept;
     void cycleMainMenuPlaybackMode() const;
     void toggleShuffle() const;
     void cycleRepeatMode() const noexcept;
@@ -26,7 +23,6 @@ public:
 
 private:
     application::AppServiceRegistry services_;
-    RemoteTrackStarter remote_track_starter_{};
 };
 
 } // namespace lofibox::runtime

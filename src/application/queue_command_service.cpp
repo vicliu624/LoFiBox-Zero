@@ -14,6 +14,16 @@ void QueueCommandService::step(int delta, const PlaybackCommandService::RemoteTr
     playback_.stepQueue(delta, remote_starter);
 }
 
+bool QueueCommandService::jump(int queue_index, const PlaybackCommandService::RemoteTrackStarter& remote_starter) const
+{
+    return playback_.jumpQueue(queue_index, remote_starter);
+}
+
+void QueueCommandService::clear() const noexcept
+{
+    playback_.clearQueue();
+}
+
 void QueueCommandService::prepareForTrack(int track_id) const
 {
     playback_.prepareQueueForTrack(track_id);

@@ -21,12 +21,6 @@ public:
     [[nodiscard]] bool bootAnimationComplete() const override { return boot_animation_complete; }
     void showMainMenu() override { ++show_main_menu_calls; page = lofibox::app::AppPage::MainMenu; }
 
-    void updatePlayback(double delta_seconds) override
-    {
-        ++update_playback_calls;
-        last_delta_seconds = delta_seconds;
-    }
-
     std::chrono::steady_clock::time_point last_update{std::chrono::steady_clock::now() - std::chrono::milliseconds{16}};
     lofibox::app::LibraryIndexState library_state{lofibox::app::LibraryIndexState::Ready};
     lofibox::app::AppPage page{lofibox::app::AppPage::MainMenu};
@@ -35,8 +29,6 @@ public:
     int start_loading_calls{0};
     int refresh_library_calls{0};
     int show_main_menu_calls{0};
-    int update_playback_calls{0};
-    double last_delta_seconds{0.0};
 };
 
 } // namespace
@@ -47,14 +39,14 @@ int main()
 
     target.library_state = lofibox::app::LibraryIndexState::Uninitialized;
     lofibox::app::updateAppLifecycle(target);
-    if (target.refresh_runtime_calls != 1 || target.start_loading_calls != 1 || target.update_playback_calls != 0) {
-        std::cerr << "Expected uninitialized library to enter loading and skip playback update.\n";
+    if (target.refresh_runtime_calls != 1 || target.start_loading_calls != 1) {
+        std::cerr << "Expected uninitialized library to enter loading without owning runtime playback tick.\n";
         return 1;
     }
 
     lofibox::app::updateAppLifecycle(target);
-    if (target.refresh_library_calls != 1 || target.update_playback_calls != 1) {
-        std::cerr << "Expected loading library to refresh and then update playback.\n";
+    if (target.refresh_library_calls != 1) {
+        std::cerr << "Expected loading library to refresh without driving live runtime playback.\n";
         return 1;
     }
 
@@ -64,11 +56,6 @@ int main()
     lofibox::app::updateAppLifecycle(target);
     if (target.show_main_menu_calls != 1 || target.page != lofibox::app::AppPage::MainMenu) {
         std::cerr << "Expected completed boot page to advance to main menu.\n";
-        return 1;
-    }
-
-    if (target.last_delta_seconds < 0.0) {
-        std::cerr << "Expected non-negative update delta.\n";
         return 1;
     }
 

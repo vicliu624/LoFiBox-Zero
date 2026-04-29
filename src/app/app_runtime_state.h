@@ -27,10 +27,10 @@ struct AppRuntimeState {
     clock::time_point boot_started{clock::now()};
     NavigationState navigation{};
     int main_menu_index{1};
-    SettingsState settings{};
+    SettingsUiState settings{};
     NetworkState network{};
     MetadataServiceState metadata_service{};
-    EqState eq{};
+    EqUiState eq{};
     std::vector<RemoteServerProfile> remote_profiles{};
     std::optional<RemoteServerKind> selected_remote_kind{};
     std::optional<std::size_t> selected_remote_profile_index{};

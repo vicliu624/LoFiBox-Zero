@@ -104,7 +104,7 @@ This update records specification and implementation convergence:
 
 - `application-command-boundary-spec.md` now defines an application command/query boundary for product evolvability, not for CLI alone.
 - The boundary separates product commands and queries from GUI page commands, selected-row confirmation, focused-field editing, and runtime-shell details.
-- GUI routing, desktop integration, direct CLI, future runtime CLI, automation clients, and tests are all command consumers that must converge through application services instead of each inventing a route into controllers, `AppRuntimeContext`, UI pages, or runtime providers.
+- GUI routing, desktop integration, direct CLI, runtime CLI, automation clients, and tests are all command consumers that must converge through application services instead of each inventing a route into controllers, `AppRuntimeContext`, UI pages, or runtime providers.
 - `AppRuntimeContext` remains the current GUI runtime composition shell under migration pressure; it is not the long-term public product command API.
 - `RuntimeServices` remains a grouped capability registry, not the product command/query service layer.
 - Direct versus runtime command ownership is now specified as a state-ownership distinction: durable configuration/library/cache/diagnostic work may be direct, while live playback, active queue, current output, and in-memory runtime truth must target the running runtime once external runtime commands exist.
@@ -126,8 +126,8 @@ This update records specification and implementation convergence for the next bo
 - `CredentialCommandService` now owns credential status, secret set, and secret delete. `SourceProfileCommandService` no longer persists password or API token values through text-field updates; it keeps profile lifecycle, profile field mutation, readiness, credential-reference attachment, TLS toggles, permission labels, persistence, and probe.
 - `CacheCommandService` and `RuntimeDiagnosticService` now provide application-level cache and doctor facts for direct command consumers.
 - `AppServiceHost` now composes direct-command application services over the current app/controller/runtime objects so `src/cli` and tests do not treat `AppRuntimeContext`, targets, controllers, or runtime provider groups as their public command boundary.
-- `src/cli` now contains the first direct-only command dispatcher for durable commands: source list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor.
-- The direct CLI intentionally does not implement live playback, active queue, now-playing, seek, previous/next, pause/resume, or active EQ control. Those remain runtime-command work and still require a future runtime command client/server before external command consumers may affect live runtime state.
+- `src/cli` contains a direct command dispatcher for durable commands: source list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor.
+- Live playback, active queue, now-playing, seek, previous/next, pause/resume, active EQ, active remote session, live settings, shutdown, and reload belong to runtime command work. They now use the runtime command client/server contract and external runtime transport; direct CLI must not implement them by constructing a second runtime instance.
 - Architecture and implementation-placement gates now cover `src/application/remote_browse_query_service.*`, `credential_command_service.*`, `cache_command_service.*`, `runtime_diagnostic_service.*`, and `src/cli/direct_cli.*`.
 - The current arm64 Debian package was built and installed over the existing same-version package on `vicliu@192.168.50.92`; package-time CTest passed 60/60, `dpkg -i` replaced `lofibox (0.1.0-1) over (0.1.0-1)`, the installed `/usr/bin/lofibox` hash matched the package build artifact, GUI startup stayed alive until the timeout killed it, and installed direct CLI checks passed for source list, cache status, doctor, local library status/query, isolated source/credential/cache writes, and probe of every configured remote source.
 
@@ -140,9 +140,9 @@ This update records specification and implementation convergence for the first l
 - GUI page interpretation remains GUI-owned, but GUI actions that mutate live playback, queue, or EQ must submit runtime commands. Page-local state such as selected rows and the selected EQ band remains projection/input state rather than runtime truth.
 - `src/runtime` now contains the first in-process runtime command bus, command dispatcher, query dispatcher, session facade, result contract, and structured playback/queue/EQ/remote-session snapshots.
 - GUI playback transport, queue stepping, playback mode toggles, local/remote library track start, stream-detail start, desktop-open URL start, and active EQ mutations now route through runtime commands inside the running instance.
-- `lofibox_runtime_command_bus_smoke` covers start-track, queue-step, EQ mutation, EQ preset cycling, structured remote-session snapshot projection, runtime versioning, and rejection of transport-neutral commands not implemented in the first scope. `lofibox_desktop_open_runtime_command_smoke` covers desktop-open URL playback through runtime command handling.
+- `lofibox_runtime_command_bus_smoke` covers start-track, queue-step, seek, queue-clear, EQ mutation, EQ preset cycling, structured remote-session snapshot projection, and runtime versioning. `lofibox_desktop_open_runtime_command_smoke` covers desktop-open URL playback through runtime command handling.
 - Architecture and implementation-placement gates now require `src/runtime` ownership and prevent runtime code from depending on `AppRuntimeContext`, UI pages, targets, platform transports, or CLI adapters.
-- Runtime IPC and external runtime CLI remain not implemented in this status entry. The required first step is an in-process runtime command/query contract, dispatcher, facade, and structured snapshots.
+- This historical status entry has been superseded by the runtime-host ownership closure below: runtime IPC and external runtime CLI now exist through the Unix socket runtime transport.
 
 ## 2026-04-29 Runtime Command Architecture 收口 Update
 
@@ -152,8 +152,22 @@ This update records the runtime-command closure pass:
 - `PlaybackRuntime`, `QueueRuntime`, `EqRuntime`, `RemoteSessionRuntime`, `SettingsRuntime`, and `RuntimeSnapshotAssembler` now live under `src/runtime` as the first domain split beneath the facade.
 - `RuntimeCommandPayload` now uses tagged payload variants for command-specific data instead of one shared field bag.
 - `RuntimeCommandResult` now preserves command origin, correlation id, `version_before_apply`, and `version_after_apply`.
-- `RuntimeCommandClient`, `RuntimeCommandServer`, `RuntimeTransport`, and `InProcessRuntimeCommandClient` now define the transport-neutral runtime entry contract. No external IPC or runtime CLI transport is implemented by this status entry.
-- `AppRuntimeContext` composes the in-process runtime client/server/bus for the current GUI instance and submits live commands through the runtime client instead of dispatching the bus directly.
+- `RuntimeCommandClient`, `RuntimeCommandServer`, `RuntimeTransport`, `InProcessRuntimeCommandClient`, length-prefixed runtime envelopes, Unix socket runtime transport, and runtime CLI command parsing now define the runtime entry contract. Runtime CLI uses external transport only.
+- `RuntimeHost` now owns the in-process runtime session, bus, server, local client, external transport, and live tick for the current running instance. `AppRuntimeContext` receives a runtime client and submits live commands through that client instead of composing or owning runtime internals.
 - `AppCommandExecutor` remains a GUI page interpreter. It emits runtime commands through `AppCommandTarget` and no longer constructs `RuntimeCommandBus` or `RuntimeSessionFacade`.
 - Runtime domain and client/server smoke tests now guard the domain split, snapshot assembly, client/server envelope behavior, command origin preservation, version-before/version-after facts, and unsupported-command rejection.
 - Architecture and implementation-placement gates now require the runtime domain/client/server files and reject GUI command-routing paths that directly construct the runtime bus/session facade.
+
+## 2026-04-29 Runtime Host Ownership And External Runtime CLI Update
+
+This update records the runtime-host ownership closure:
+
+- `LoFiBoxApp` now owns `RuntimeServices`, `AppServiceHost`, `RuntimeHost`, and `AppRuntimeContext` as separate top-level objects. `AppRuntimeContext` is no longer the app's runtime host.
+- `RuntimeHost` owns `RuntimeSessionFacade`, `RuntimeCommandBus`, `RuntimeCommandServer`, `InProcessRuntimeCommandClient`, runtime EQ/settings state, external Unix socket transport, runtime shutdown/reload flags, and live playback tick.
+- `LoFiBoxApp::update()` advances live playback through `RuntimeHost::tick(delta_seconds)` before updating the GUI shell. `AppLifecycleTarget` no longer exposes playback update.
+- `AppRuntimeContext` now receives `AppServiceHost&` and `RuntimeCommandClient&`, owns only GUI/page state, and consumes app behavior through `AppServiceRegistry`; it does not directly call `AppServiceHost::controllers()` or `AppServiceHost::services()`.
+- Runtime-to-GUI remote playback callbacks have been removed. Desktop-open URL, Stream Detail, Search remote result, and unified remote-library playback paths resolve streams through application query services and submit explicit resolved runtime command payloads.
+- EQ runtime truth is split into `runtime::EqRuntimeState`; GUI selected-band state is split into `app::EqUiState`. Live settings truth is split into `runtime::SettingsRuntimeState`; GUI settings row/index state is split into `app::SettingsUiState`.
+- Every published runtime command kind now has dispatcher behavior. Playback stop/seek, queue jump/clear, remote reconnect, settings apply, runtime shutdown, and runtime reload are no longer formal contract placeholders.
+- Runtime CLI now connects over the Unix socket runtime transport. It has no in-process fallback and does not construct app services, controllers, runtime domains, runtime bus, runtime server, or `AppRuntimeContext`.
+- New smoke coverage includes runtime host ownership, Unix socket transport, runtime CLI, seek/stop/queue-clear, settings apply, shutdown/reload, and desktop-open runtime-command routing.

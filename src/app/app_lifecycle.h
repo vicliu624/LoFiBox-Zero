@@ -25,7 +25,6 @@ public:
     [[nodiscard]] virtual bool bootAnimationComplete() const = 0;
     virtual void showMainMenu() = 0;
 
-    virtual void updatePlayback(double delta_seconds) = 0;
 };
 
 void updateAppLifecycle(AppLifecycleTarget& target);

@@ -2,8 +2,6 @@
 
 #include "runtime/playback_runtime.h"
 
-#include <utility>
-
 #include "playback/playback_state.h"
 
 namespace lofibox::runtime {
@@ -26,14 +24,14 @@ PlaybackRuntime::PlaybackRuntime(application::AppServiceRegistry services) noexc
 {
 }
 
-void PlaybackRuntime::setRemoteTrackStarter(RemoteTrackStarter starter)
+void PlaybackRuntime::update(double delta_seconds) const
 {
-    remote_track_starter_ = std::move(starter);
+    services_.playbackCommands().update(delta_seconds);
 }
 
 bool PlaybackRuntime::playFirstAvailable() const
 {
-    return services_.playbackCommands().playFirstAvailable(remote_track_starter_);
+    return services_.playbackCommands().playFirstAvailable();
 }
 
 bool PlaybackRuntime::startTrack(int track_id) const
@@ -41,7 +39,33 @@ bool PlaybackRuntime::startTrack(int track_id) const
     if (track_id <= 0) {
         return false;
     }
-    return services_.playbackCommands().startTrack(track_id, remote_track_starter_);
+    return services_.playbackCommands().startTrack(track_id);
+}
+
+bool PlaybackRuntime::startRemoteStream(const RemotePlayResolvedStreamPayload& payload) const
+{
+    return services_.playbackCommands().startRemoteStream(payload.stream, payload.track, payload.source);
+}
+
+bool PlaybackRuntime::startRemoteLibraryTrack(const RemotePlayResolvedLibraryTrackPayload& payload) const
+{
+    return services_.playbackCommands().startRemoteLibraryTrack(
+        payload.local_track_id,
+        payload.stream,
+        payload.profile,
+        payload.track,
+        payload.source,
+        payload.cache_remote_facts);
+}
+
+void PlaybackRuntime::stop() const noexcept
+{
+    services_.playbackCommands().stop();
+}
+
+bool PlaybackRuntime::seek(double seconds) const
+{
+    return services_.playbackCommands().seek(seconds);
 }
 
 void PlaybackRuntime::pause() const noexcept

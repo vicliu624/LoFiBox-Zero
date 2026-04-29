@@ -86,6 +86,19 @@ void PlaybackCommandService::stepQueue(int delta, const RemoteTrackStarter& remo
     playback_.stepQueue(library_, delta);
 }
 
+bool PlaybackCommandService::jumpQueue(int queue_index, const RemoteTrackStarter& remote_starter) const
+{
+    if (remote_starter) {
+        return playback_.jumpQueue(library_, queue_index, remote_starter);
+    }
+    return playback_.jumpQueue(library_, queue_index);
+}
+
+void PlaybackCommandService::clearQueue() const noexcept
+{
+    playback_.clearQueue();
+}
+
 void PlaybackCommandService::pause() const noexcept
 {
     playback_.pause();
@@ -94,6 +107,16 @@ void PlaybackCommandService::pause() const noexcept
 void PlaybackCommandService::resume() const noexcept
 {
     playback_.resume();
+}
+
+void PlaybackCommandService::stop() const noexcept
+{
+    playback_.stop();
+}
+
+bool PlaybackCommandService::seek(double seconds) const
+{
+    return playback_.seek(library_, seconds);
 }
 
 void PlaybackCommandService::togglePlayPause() const noexcept
@@ -152,6 +175,18 @@ void PlaybackCommandService::cycleMainMenuPlaybackMode() const
 bool PlaybackCommandService::startRemoteStream(const app::ResolvedRemoteStream& stream, const app::RemoteTrack& track, const std::string& source) const
 {
     return playback_.startRemoteStream(stream, track, source);
+}
+
+bool PlaybackCommandService::startRemoteLibraryTrack(
+    int local_track_id,
+    const app::ResolvedRemoteStream& stream,
+    const app::RemoteServerProfile& profile,
+    const app::RemoteTrack& remote_track,
+    const std::string& source,
+    bool cache_remote_facts) const
+{
+    auto* track = library_.findMutableTrack(local_track_id);
+    return track != nullptr && startRemoteLibraryTrack(stream, *track, profile, remote_track, source, cache_remote_facts);
 }
 
 bool PlaybackCommandService::startRemoteLibraryTrack(

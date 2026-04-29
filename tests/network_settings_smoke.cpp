@@ -2,12 +2,15 @@
 
 #include <iostream>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "app/app_runtime_context.h"
 #include "app/input_event.h"
 #include "app/remote_profile_store.h"
 #include "app/runtime_services.h"
+#include "application/app_service_host.h"
+#include "runtime/runtime_host.h"
 
 namespace {
 
@@ -37,11 +40,27 @@ public:
     mutable int load_count{0};
 };
 
+struct TestRuntimeApp {
+    explicit TestRuntimeApp(lofibox::app::RuntimeServices initial_services = {})
+        : services(lofibox::app::withNullRuntimeServices(std::move(initial_services))),
+          app_host(services),
+          runtime_host(app_host.registry()),
+          app({}, {}, app_host, runtime_host.client())
+    {
+    }
+
+    lofibox::app::RuntimeServices services;
+    lofibox::application::AppServiceHost app_host;
+    lofibox::runtime::RuntimeHost runtime_host;
+    lofibox::app::AppRuntimeContext app;
+};
+
 } // namespace
 
 int main()
 {
-    lofibox::app::AppRuntimeContext app{};
+    TestRuntimeApp test_app{};
+    auto& app = test_app.app;
 
     app.update();
     app.update();
@@ -129,7 +148,8 @@ int main()
     {
         lofibox::app::RuntimeServices services{};
         services.remote.remote_profile_store = std::make_shared<ReloadingRemoteProfileStore>();
-        lofibox::app::AppRuntimeContext configured_app({}, {}, services);
+        TestRuntimeApp configured_test_app{std::move(services)};
+        auto& configured_app = configured_test_app.app;
 
         configured_app.update();
         configured_app.update();

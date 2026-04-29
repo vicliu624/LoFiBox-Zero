@@ -2,26 +2,14 @@
 
 #include "runtime/runtime_session_facade.h"
 
-#include <utility>
-
 namespace lofibox::runtime {
 
-RuntimeSessionFacade::RuntimeSessionFacade(application::AppServiceRegistry services, app::EqState& eq) noexcept
+RuntimeSessionFacade::RuntimeSessionFacade(application::AppServiceRegistry services, EqRuntimeState& eq, SettingsRuntimeState& settings) noexcept
     : playback_(services),
       queue_(services),
-      eq_(services, eq)
+      eq_(services, eq),
+      settings_(settings)
 {
-}
-
-void RuntimeSessionFacade::setRemoteTrackStarter(RemoteTrackStarter starter)
-{
-    playback_.setRemoteTrackStarter(starter);
-    queue_.setRemoteTrackStarter(std::move(starter));
-}
-
-void RuntimeSessionFacade::setActiveRemoteStreamStarter(ActiveRemoteStreamStarter starter)
-{
-    remote_.setActiveRemoteStreamStarter(std::move(starter));
 }
 
 PlaybackRuntime& RuntimeSessionFacade::playback() noexcept

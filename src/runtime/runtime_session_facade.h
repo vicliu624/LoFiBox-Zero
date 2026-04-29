@@ -2,16 +2,14 @@
 
 #pragma once
 
-#include <functional>
-
-#include "app/app_state.h"
 #include "application/app_service_registry.h"
-#include "application/playback_command_service.h"
+#include "runtime/eq_runtime_state.h"
 #include "runtime/eq_runtime.h"
 #include "runtime/playback_runtime.h"
 #include "runtime/queue_runtime.h"
 #include "runtime/remote_session_runtime.h"
 #include "runtime/runtime_snapshot_assembler.h"
+#include "runtime/settings_runtime_state.h"
 #include "runtime/settings_runtime.h"
 #include "runtime/runtime_snapshot.h"
 
@@ -19,13 +17,7 @@ namespace lofibox::runtime {
 
 class RuntimeSessionFacade {
 public:
-    using RemoteTrackStarter = application::PlaybackCommandService::RemoteTrackStarter;
-    using ActiveRemoteStreamStarter = std::function<bool()>;
-
-    RuntimeSessionFacade(application::AppServiceRegistry services, app::EqState& eq) noexcept;
-
-    void setRemoteTrackStarter(RemoteTrackStarter starter);
-    void setActiveRemoteStreamStarter(ActiveRemoteStreamStarter starter);
+    RuntimeSessionFacade(application::AppServiceRegistry services, EqRuntimeState& eq, SettingsRuntimeState& settings) noexcept;
 
     [[nodiscard]] PlaybackRuntime& playback() noexcept;
     [[nodiscard]] const PlaybackRuntime& playback() const noexcept;

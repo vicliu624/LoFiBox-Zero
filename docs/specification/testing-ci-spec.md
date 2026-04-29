@@ -15,6 +15,7 @@ Unit tests should cover:
 - playback queue
 - application command/query services returning structured command results without depending on GUI page selection state
 - runtime command/query contract behavior for accepted/applied result semantics, correlation ids, versioning, and invalid command rejection
+- runtime host ownership behavior proving live runtime can run without `AppRuntimeContext` owning or constructing runtime internals
 - runtime domain behavior for playback, active queue, active EQ, active remote session, live settings, and full snapshot assembly without going through GUI pages
 - runtime snapshots for playback, active queue, active EQ, and active remote session before GUI row or terminal projection
 - remote browse query service behavior for root browsing, child browsing, search, stream resolution, degraded facts, directory cache reuse, and local read-only remote fact caching
@@ -38,7 +39,9 @@ Integration tests should cover:
 - direct command service behavior for library/source/credential/cache/diagnostic domains under isolated XDG test roots
 - first-stage direct CLI parsing/formatting for source list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor
 - runtime command client/server behavior before live playback or active queue control is exposed to external command consumers
-- runtime transport-envelope behavior at the contract level before any Unix socket, D-Bus, JSON-RPC, stdio, or named-pipe implementation is selected
+- runtime transport-envelope behavior and the Unix socket runtime transport, including request/response framing, server shutdown, and snapshot consistency
+- runtime CLI behavior through external transport only, with no in-process fallback and no dependency on `AppRuntimeContext`, controllers, runtime domains, runtime bus, or runtime server
+- runtime command coverage for every published command kind, including stop, seek, queue jump/clear, remote reconnect, live settings apply, runtime shutdown, and runtime reload
 - local library scan
 - database migration
 - metadata cache
@@ -96,6 +99,8 @@ Tests must not:
 - depend on a real user input-method configuration
 - simulate product commands by driving GUI-only selected-row or field-editor internals when an application command service is the intended boundary
 - simulate live runtime commands by driving GUI-only page state when the runtime command bus is the intended boundary
+- simulate runtime CLI by constructing an in-process app/runtime instance instead of going through `RuntimeCommandClient` and runtime transport
+- assert runtime-host extraction by only checking that a few member pointers moved; tests must prove ownership, tick, callback removal, and client-only GUI access
 - test remote diagnostics or stream detail by asserting only rendered row text when structured application query facts are available
 - test playback, queue, EQ, or active remote-session truth by asserting only rendered row text when runtime snapshots are available
 - mutate live playback or active queue from a second process without an explicit runtime command path

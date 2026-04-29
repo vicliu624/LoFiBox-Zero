@@ -186,7 +186,8 @@ ui::pages::AboutPageView buildAboutProjection(const AppRenderTarget& target)
 
 ui::pages::EqualizerPageView buildEqualizerProjection(const AppRenderTarget& target)
 {
-    return ui_pages::EqualizerPageView{target.eqState().bands, target.eqState().selected_band, target.eqState().preset_name};
+    const auto eq = target.eqRuntimeSnapshot();
+    return ui_pages::EqualizerPageView{eq.bands, target.eqState().selected_band, eq.preset_name};
 }
 
 } // namespace lofibox::app

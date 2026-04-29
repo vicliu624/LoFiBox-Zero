@@ -11,6 +11,8 @@ public:
     explicit QueueCommandService(PlaybackCommandService playback) noexcept;
 
     void step(int delta, const PlaybackCommandService::RemoteTrackStarter& remote_starter = {}) const;
+    [[nodiscard]] bool jump(int queue_index, const PlaybackCommandService::RemoteTrackStarter& remote_starter = {}) const;
+    void clear() const noexcept;
     void prepareForTrack(int track_id) const;
 
 private:

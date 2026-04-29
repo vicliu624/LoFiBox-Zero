@@ -9,6 +9,7 @@
 #include "application/app_service_registry.h"
 #include "runtime/runtime_command.h"
 #include "runtime/runtime_result.h"
+#include "runtime/runtime_snapshot.h"
 
 namespace lofibox::app {
 
@@ -21,6 +22,7 @@ public:
     [[nodiscard]] virtual ::lofibox::application::AppServiceRegistry appServices() noexcept = 0;
     virtual NavigationState& navigationState() noexcept = 0;
     virtual EqState& eqState() noexcept = 0;
+    [[nodiscard]] virtual ::lofibox::runtime::EqRuntimeSnapshot eqRuntimeSnapshot() const noexcept = 0;
     virtual int& mainMenuIndex() noexcept = 0;
     virtual void closeHelpForCommand() noexcept = 0;
     [[nodiscard]] virtual ::lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command) = 0;

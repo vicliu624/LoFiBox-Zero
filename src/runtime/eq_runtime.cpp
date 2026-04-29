@@ -25,14 +25,14 @@ std::string upperAscii(std::string_view text)
     return result;
 }
 
-bool hasNonZeroGain(const app::EqState& state) noexcept
+bool hasNonZeroGain(const EqRuntimeState& state) noexcept
 {
     return std::any_of(state.bands.begin(), state.bands.end(), [](int gain) {
         return gain != 0;
     });
 }
 
-audio::dsp::DspChainProfile dspProfileFromEqState(const app::EqState& state)
+audio::dsp::DspChainProfile dspProfileFromEqState(const EqRuntimeState& state)
 {
     auto eq = audio::dsp::tenBandFlatEqProfile();
     eq.id = "runtime-current";
@@ -57,7 +57,7 @@ audio::dsp::DspChainProfile dspProfileFromEqState(const app::EqState& state)
 
 } // namespace
 
-EqRuntime::EqRuntime(application::AppServiceRegistry services, app::EqState& eq) noexcept
+EqRuntime::EqRuntime(application::AppServiceRegistry services, EqRuntimeState& eq) noexcept
     : services_(services),
       eq_(eq)
 {

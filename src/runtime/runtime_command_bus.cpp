@@ -12,11 +12,13 @@ RuntimeCommandBus::RuntimeCommandBus(RuntimeSessionFacade& session) noexcept
 
 RuntimeCommandResult RuntimeCommandBus::dispatch(const RuntimeCommand& command)
 {
+    const std::lock_guard lock{mutex_};
     return commands_.dispatch(command);
 }
 
 RuntimeSnapshot RuntimeCommandBus::query(const RuntimeQuery& query) const
 {
+    const std::lock_guard lock{mutex_};
     return queries_.query(query, commands_.version());
 }
 
@@ -27,6 +29,7 @@ RuntimeSnapshot RuntimeCommandBus::snapshot() const
 
 std::uint64_t RuntimeCommandBus::version() const noexcept
 {
+    const std::lock_guard lock{mutex_};
     return commands_.version();
 }
 

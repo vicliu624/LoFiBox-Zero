@@ -3,21 +3,22 @@
 #pragma once
 
 #include "application/app_service_registry.h"
-#include "application/playback_command_service.h"
+#include "runtime/runtime_command.h"
 #include "runtime/runtime_snapshot.h"
 
 namespace lofibox::runtime {
 
 class PlaybackRuntime {
 public:
-    using RemoteTrackStarter = application::PlaybackCommandService::RemoteTrackStarter;
-
     explicit PlaybackRuntime(application::AppServiceRegistry services) noexcept;
 
-    void setRemoteTrackStarter(RemoteTrackStarter starter);
-
+    void update(double delta_seconds) const;
     [[nodiscard]] bool playFirstAvailable() const;
     [[nodiscard]] bool startTrack(int track_id) const;
+    [[nodiscard]] bool startRemoteStream(const RemotePlayResolvedStreamPayload& payload) const;
+    [[nodiscard]] bool startRemoteLibraryTrack(const RemotePlayResolvedLibraryTrackPayload& payload) const;
+    void stop() const noexcept;
+    [[nodiscard]] bool seek(double seconds) const;
     void pause() const noexcept;
     void resume() const noexcept;
     void togglePlayPause() const noexcept;
@@ -25,7 +26,6 @@ public:
 
 private:
     application::AppServiceRegistry services_;
-    RemoteTrackStarter remote_track_starter_{};
 };
 
 } // namespace lofibox::runtime

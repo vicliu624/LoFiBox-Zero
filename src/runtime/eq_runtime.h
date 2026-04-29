@@ -4,15 +4,15 @@
 
 #include <string_view>
 
-#include "app/app_state.h"
 #include "application/app_service_registry.h"
+#include "runtime/eq_runtime_state.h"
 #include "runtime/runtime_snapshot.h"
 
 namespace lofibox::runtime {
 
 class EqRuntime {
 public:
-    EqRuntime(application::AppServiceRegistry services, app::EqState& eq) noexcept;
+    EqRuntime(application::AppServiceRegistry services, EqRuntimeState& eq) noexcept;
 
     void setEnabled(bool enabled);
     [[nodiscard]] bool setBand(int band_index, int gain_db);
@@ -26,7 +26,7 @@ private:
     void applyToPlayback() const;
 
     application::AppServiceRegistry services_;
-    app::EqState& eq_;
+    EqRuntimeState& eq_;
 };
 
 } // namespace lofibox::runtime

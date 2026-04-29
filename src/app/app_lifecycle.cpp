@@ -27,7 +27,7 @@ void updateAppLifecycle(AppLifecycleTarget& target)
         target.showMainMenu();
     }
 
-    target.updatePlayback(delta);
+    (void)delta;
 }
 
 } // namespace lofibox::app

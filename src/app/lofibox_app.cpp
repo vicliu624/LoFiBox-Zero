@@ -5,17 +5,38 @@
 #include <utility>
 
 #include "app/app_runtime_context.h"
-
 namespace lofibox::app {
 
-LoFiBoxApp::LoFiBoxApp(std::vector<std::filesystem::path> media_roots, ui::UiAssets assets, RuntimeServices services, std::vector<std::string> startup_uris)
-    : context_(std::make_unique<AppRuntimeContext>(std::move(media_roots), std::move(assets), std::move(services), std::move(startup_uris)))
-{}
+LoFiBoxApp::LoFiBoxApp(
+    std::vector<std::filesystem::path> media_roots,
+    ui::UiAssets assets,
+    RuntimeServices services,
+    std::vector<std::string> startup_uris,
+    bool enable_external_runtime_transport)
+    : services_(withNullRuntimeServices(std::move(services))),
+      app_host_(services_),
+      runtime_host_(app_host_.registry()),
+      context_(std::make_unique<AppRuntimeContext>(
+          std::move(media_roots),
+          std::move(assets),
+          app_host_,
+          runtime_host_.client(),
+          std::move(startup_uris)))
+{
+    runtime_host_.resetEq();
+    if (enable_external_runtime_transport) {
+        (void)runtime_host_.startExternalTransport();
+    }
+}
 
 LoFiBoxApp::~LoFiBoxApp() = default;
 
 void LoFiBoxApp::update()
 {
+    const auto now = clock::now();
+    const double delta_seconds = std::chrono::duration<double>(now - last_runtime_tick_).count();
+    last_runtime_tick_ = now;
+    runtime_host_.tick(delta_seconds);
     context_->update();
 }
 
@@ -32,6 +53,11 @@ void LoFiBoxApp::render(core::Canvas& canvas) const
 AppDebugSnapshot LoFiBoxApp::snapshot() const
 {
     return context_->snapshot();
+}
+
+bool LoFiBoxApp::runtimeShutdownRequested() const noexcept
+{
+    return runtime_host_.shutdownRequested();
 }
 
 } // namespace lofibox::app

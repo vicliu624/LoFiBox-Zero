@@ -10,21 +10,18 @@
 #include <vector>
 
 #include "app/app_command_executor.h"
-#include "app/app_controller_set.h"
 #include "app/app_debug_snapshot.h"
 #include "app/app_input_router.h"
 #include "app/app_lifecycle.h"
 #include "app/app_renderer.h"
 #include "app/app_runtime_state.h"
-#include "app/runtime_services.h"
+#include "application/app_service_host.h"
 #include "core/canvas.h"
+#include "runtime/runtime_snapshot.h"
 #include "ui/ui_models.h"
 
 namespace lofibox::runtime {
-class InProcessRuntimeCommandClient;
-class RuntimeCommandBus;
-class RuntimeCommandServer;
-class RuntimeSessionFacade;
+class RuntimeCommandClient;
 struct RemoteSessionSnapshot;
 } // namespace lofibox::runtime
 
@@ -35,11 +32,13 @@ class AppRuntimeContext final : public AppInputTarget,
                                 public AppLifecycleTarget,
                                 public AppCommandTarget {
 public:
-    explicit AppRuntimeContext(std::vector<std::filesystem::path> media_roots = {},
-                               ui::UiAssets assets = {},
-                               RuntimeServices services = {},
+    explicit AppRuntimeContext(std::vector<std::filesystem::path> media_roots,
+                               ui::UiAssets assets,
+                               ::lofibox::application::AppServiceHost& app_host,
+                               ::lofibox::runtime::RuntimeCommandClient& runtime_client,
                                std::vector<std::string> startup_uris = {});
     ~AppRuntimeContext() override;
+
 
     void update();
     void handleInput(const InputEvent& event);
@@ -50,6 +49,7 @@ public:
     void refreshRuntimeStatusIfDue() override;
     [[nodiscard]] AppPage currentPage() const noexcept override;
     [[nodiscard]] ::lofibox::application::AppServiceRegistry appServices() noexcept override;
+    [[nodiscard]] ::lofibox::application::AppServiceRegistry appServices() const noexcept;
     [[nodiscard]] ::lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command) override;
     NavigationState& navigationState() noexcept override;
     EqState& eqState() noexcept override;
@@ -63,12 +63,12 @@ public:
     void startLibraryLoading() override;
     void refreshLibrary() override;
     void showMainMenu() override;
-    void updatePlayback(double delta_seconds) override;
     [[nodiscard]] StorageInfo storage() const override;
     [[nodiscard]] bool networkConnected() const noexcept override;
     [[nodiscard]] int mainMenuIndex() const noexcept override;
     [[nodiscard]] const PlaybackSession& playbackSession() const noexcept override;
     [[nodiscard]] const EqState& eqState() const noexcept override;
+    [[nodiscard]] ::lofibox::runtime::EqRuntimeSnapshot eqRuntimeSnapshot() const noexcept override;
     [[nodiscard]] ListSelection listSelection() const noexcept override;
     [[nodiscard]] AppPage helpPage() const noexcept override;
     [[nodiscard]] const TrackRecord* findTrack(int id) const noexcept override;
@@ -142,10 +142,13 @@ private:
     [[nodiscard]] std::optional<RemoteServerProfile> selectedRemoteProfile() const;
     [[nodiscard]] RemoteServerProfile* selectedMutableRemoteProfile() noexcept;
     [[nodiscard]] RemoteTrack remoteTrackFromLibraryTrack(const RemoteServerProfile& profile, const TrackRecord& track) const;
-    [[nodiscard]] bool startRemoteLibraryTrack(const TrackRecord& track);
-    [[nodiscard]] bool startSelectedRemoteStream();
-    [[nodiscard]] ::lofibox::runtime::RemoteSessionSnapshot buildRemoteSessionSnapshot() const;
-    void syncRemoteSessionRuntime();
+    [[nodiscard]] ::lofibox::runtime::RuntimeCommandPayload remoteLibraryTrackPayload(const TrackRecord& track);
+    [[nodiscard]] ::lofibox::runtime::RuntimeCommandPayload selectedRemoteStreamPayload() const;
+    [[nodiscard]] ::lofibox::runtime::RemoteSessionSnapshot remoteSessionSnapshotFor(
+        const RemoteServerProfile& profile,
+        const ResolvedRemoteStream& stream,
+        const RemoteTrack& track,
+        std::string source) const;
     void refreshSearchResults();
     [[nodiscard]] ::lofibox::application::SourceProfileCommandService sourceProfileService() const noexcept;
     [[nodiscard]] ::lofibox::application::RemoteBrowseQueryService remoteBrowseService() const noexcept;
@@ -158,12 +161,8 @@ private:
     void beginRemoteProfileFieldEdit(int field);
 
     AppRuntimeState state_{};
-    AppControllerSet controllers_{};
-    RuntimeServices services_{};
-    std::unique_ptr<::lofibox::runtime::RuntimeSessionFacade> runtime_session_;
-    std::unique_ptr<::lofibox::runtime::RuntimeCommandBus> runtime_bus_;
-    std::unique_ptr<::lofibox::runtime::RuntimeCommandServer> runtime_server_;
-    std::unique_ptr<::lofibox::runtime::InProcessRuntimeCommandClient> runtime_client_;
+    ::lofibox::application::AppServiceHost& app_host_;
+    ::lofibox::runtime::RuntimeCommandClient& runtime_client_;
 };
 
 } // namespace lofibox::app

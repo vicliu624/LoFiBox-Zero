@@ -68,11 +68,14 @@ add_library(lofibox_zero_core STATIC
     src/runtime/runtime_command_bus.cpp
     src/runtime/runtime_command_dispatcher.cpp
     src/runtime/runtime_command_server.cpp
+    src/runtime/runtime_envelope_serializer.cpp
+    src/runtime/runtime_host.cpp
     src/runtime/runtime_query_dispatcher.cpp
     src/runtime/runtime_result.cpp
     src/runtime/runtime_session_facade.cpp
     src/runtime/runtime_snapshot_assembler.cpp
     src/runtime/settings_runtime.cpp
+    src/runtime/unix_socket_runtime_transport.cpp
     src/app/library_controller.cpp
     src/app/library_navigation_service.cpp
     src/app/library_repository.cpp
@@ -127,6 +130,7 @@ add_library(lofibox_zero_core STATIC
 
 target_include_directories(lofibox_zero_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(lofibox_zero_core PUBLIC cxx_std_20)
+target_link_libraries(lofibox_zero_core PUBLIC Threads::Threads)
 target_compile_definitions(lofibox_zero_core PUBLIC
     LOFIBOX_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
     LOFIBOX_SYSTEM_ASSET_DIR="${CMAKE_INSTALL_FULL_DATADIR}/lofibox/assets"
@@ -191,6 +195,7 @@ endif()
 
 add_library(lofibox_zero_target_cli STATIC
     src/cli/direct_cli.cpp
+    src/cli/runtime_cli.cpp
     src/targets/cli_options.cpp
 )
 target_include_directories(lofibox_zero_target_cli PUBLIC "${PROJECT_SOURCE_DIR}/src")
@@ -336,6 +341,30 @@ if(BUILD_TESTING)
     add_executable(lofibox_runtime_client_server_smoke tests/runtime_client_server_smoke.cpp)
     target_link_libraries(lofibox_runtime_client_server_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_runtime_client_server_smoke COMMAND lofibox_runtime_client_server_smoke)
+
+    add_executable(lofibox_runtime_host_smoke tests/runtime_host_smoke.cpp)
+    target_link_libraries(lofibox_runtime_host_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_host_smoke COMMAND lofibox_runtime_host_smoke)
+
+    add_executable(lofibox_runtime_transport_socket_smoke tests/runtime_transport_socket_smoke.cpp)
+    target_link_libraries(lofibox_runtime_transport_socket_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_transport_socket_smoke COMMAND lofibox_runtime_transport_socket_smoke)
+
+    add_executable(lofibox_runtime_cli_smoke tests/runtime_cli_smoke.cpp)
+    target_link_libraries(lofibox_runtime_cli_smoke PRIVATE lofibox_zero_target_cli)
+    add_test(NAME lofibox_runtime_cli_smoke COMMAND lofibox_runtime_cli_smoke)
+
+    add_executable(lofibox_runtime_seek_stop_queueclear_smoke tests/runtime_seek_stop_queueclear_smoke.cpp)
+    target_link_libraries(lofibox_runtime_seek_stop_queueclear_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_seek_stop_queueclear_smoke COMMAND lofibox_runtime_seek_stop_queueclear_smoke)
+
+    add_executable(lofibox_runtime_settings_apply_smoke tests/runtime_settings_apply_smoke.cpp)
+    target_link_libraries(lofibox_runtime_settings_apply_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_settings_apply_smoke COMMAND lofibox_runtime_settings_apply_smoke)
+
+    add_executable(lofibox_runtime_shutdown_reload_smoke tests/runtime_shutdown_reload_smoke.cpp)
+    target_link_libraries(lofibox_runtime_shutdown_reload_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_shutdown_reload_smoke COMMAND lofibox_runtime_shutdown_reload_smoke)
 
     add_executable(lofibox_desktop_open_runtime_command_smoke tests/desktop_open_runtime_command_smoke.cpp)
     target_link_libraries(lofibox_desktop_open_runtime_command_smoke PRIVATE lofibox_zero_core)

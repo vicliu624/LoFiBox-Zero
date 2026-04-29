@@ -6,11 +6,13 @@
 
 #include "app/app_controller_set.h"
 #include "app/runtime_services.h"
+#include "runtime/eq_runtime_state.h"
 #include "runtime/in_process_runtime_client.h"
 #include "runtime/runtime_command_bus.h"
 #include "runtime/runtime_command_server.h"
 #include "runtime/runtime_session_facade.h"
 #include "runtime/runtime_transport.h"
+#include "runtime/settings_runtime_state.h"
 
 namespace {
 
@@ -68,10 +70,12 @@ int main()
         lofibox::app::TrackRecord{31, std::filesystem::path{"transport.mp3"}, "Transport", "Artist", "Album"});
     controllers.library.setSongsContextAll();
 
-    lofibox::app::EqState eq{};
+    lofibox::runtime::EqRuntimeState eq{};
+    lofibox::runtime::SettingsRuntimeState settings{};
     lofibox::runtime::RuntimeSessionFacade session{
         lofibox::application::AppServiceRegistry{controllers, services},
-        eq};
+        eq,
+        settings};
     lofibox::runtime::RuntimeCommandBus bus{session};
     lofibox::runtime::RuntimeCommandServer server{bus};
     lofibox::runtime::InProcessRuntimeCommandClient client{server};
@@ -101,19 +105,19 @@ int main()
         return 1;
     }
 
-    const auto unsupported = transport.sendCommand(lofibox::runtime::RuntimeCommandRequest{lofibox::runtime::RuntimeCommand{
+    const auto seek = transport.sendCommand(lofibox::runtime::RuntimeCommandRequest{lofibox::runtime::RuntimeCommand{
         lofibox::runtime::RuntimeCommandKind::PlaybackSeek,
         lofibox::runtime::RuntimeCommandPayload::seek(42.0),
         lofibox::runtime::CommandOrigin::Automation,
-        "seek-not-yet"}});
-    if (unsupported.result.accepted
-        || unsupported.result.applied
-        || unsupported.result.origin != lofibox::runtime::CommandOrigin::Automation
-        || unsupported.result.correlation_id != "seek-not-yet"
-        || unsupported.result.version_before_apply != 1U
-        || unsupported.result.version_after_apply != 1U
-        || unsupported.result.code != "UNSUPPORTED_RUNTIME_COMMAND") {
-        std::cerr << "Expected transport-neutral server envelope to reject unsupported commands without mutating version.\n";
+        "seek-now"}});
+    if (!seek.result.accepted
+        || !seek.result.applied
+        || seek.result.origin != lofibox::runtime::CommandOrigin::Automation
+        || seek.result.correlation_id != "seek-now"
+        || seek.result.version_before_apply != 1U
+        || seek.result.version_after_apply != 2U
+        || seek.result.code != "PLAYBACK_SEEK") {
+        std::cerr << "Expected transport-neutral server envelope to apply seek commands.\n";
         return 1;
     }
 
@@ -121,7 +125,7 @@ int main()
         lofibox::runtime::RuntimeQueryKind::FullSnapshot,
         lofibox::runtime::CommandOrigin::Automation,
         "full"}});
-    if (full.snapshot.version != 1U || full.snapshot.playback.current_track_id != 31) {
+    if (full.snapshot.version != 2U || full.snapshot.playback.current_track_id != 31) {
         std::cerr << "Expected transport-neutral query envelope to expose the same live runtime truth.\n";
         return 1;
     }

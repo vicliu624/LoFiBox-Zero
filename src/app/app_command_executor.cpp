@@ -152,7 +152,7 @@ void commandTogglePlayPause(AppCommandTarget& target)
 void commandMoveEqualizerSelection(AppCommandTarget& target, int delta)
 {
     auto& eq = target.eqState();
-    eq.selected_band = std::clamp(eq.selected_band + delta, 0, static_cast<int>(eq.bands.size()) - 1);
+    eq.selected_band = std::clamp(eq.selected_band + delta, 0, static_cast<int>(target.eqRuntimeSnapshot().bands.size()) - 1);
 }
 
 void commandAdjustSelectedEqualizerBand(AppCommandTarget& target, int delta)

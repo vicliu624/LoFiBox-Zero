@@ -35,6 +35,14 @@ void printHelp(std::ostream& out)
         << "  cache status|clear\n"
         << "  doctor\n"
         << '\n'
+        << "Runtime commands (requires a running LoFiBox instance):\n"
+        << "  runtime status|playback|queue|eq|remote|settings\n"
+        << "  play|pause|resume|toggle|stop|seek <seconds>|next|prev\n"
+        << "  queue jump <index>|queue clear\n"
+        << "  shuffle on|off|repeat off|all|one\n"
+        << "  eq enable|disable|preset <name>|band <index> <gain>\n"
+        << "  remote reconnect|runtime reload|runtime shutdown\n"
+        << '\n'
         << "Environment:\n"
         << "  LOFIBOX_ASSET_DIR   Override the runtime asset directory.\n"
         << "  LOFIBOX_FONT_PATH   Override the system font file used for text rendering.\n";

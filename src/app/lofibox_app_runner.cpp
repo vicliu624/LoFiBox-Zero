@@ -17,7 +17,7 @@ void runLoFiBoxApp(
     std::chrono::milliseconds auto_exit_after,
     std::vector<std::string> startup_uris)
 {
-    LoFiBoxApp app{{}, std::move(assets), std::move(services), std::move(startup_uris)};
+    LoFiBoxApp app{{}, std::move(assets), std::move(services), std::move(startup_uris), true};
     core::Canvas canvas{core::kDisplayWidth, core::kDisplayHeight};
 
     using clock = std::chrono::steady_clock;
@@ -31,6 +31,9 @@ void runLoFiBoxApp(
         }
 
         if (auto_exit_after > std::chrono::milliseconds::zero() && (clock::now() - started_at) >= auto_exit_after) {
+            break;
+        }
+        if (app.runtimeShutdownRequested()) {
             break;
         }
 

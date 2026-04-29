@@ -40,6 +40,13 @@ RuntimeSnapshot RuntimeQueryDispatcher::query(const RuntimeQuery& query, std::ui
             result.remote = session_.remote().snapshot(version);
             return result;
         }
+    case RuntimeQueryKind::SettingsSnapshot:
+        {
+            RuntimeSnapshot result{};
+            result.version = version;
+            result.settings = session_.settings().snapshot(version);
+            return result;
+        }
     case RuntimeQueryKind::FullSnapshot:
         return session_.snapshot(version);
     }

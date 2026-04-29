@@ -61,7 +61,10 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
 
         if ($repoPath -eq "src/app/app_runtime_context.h") {
             if ($line -match '^\s*(std::vector<std::filesystem::path>|ui::UiAssets|LibraryController|PlaybackController|NavigationState|SettingsState|NetworkState|MetadataServiceState|EqState)\s+[A-Za-z0-9_]+\{') {
-                Add-Violation $violations $repoPath $lineNumber "runtime field ownership" "AppRuntimeContext must not re-accumulate raw runtime state or controllers; use AppRuntimeState and AppControllerSet"
+                Add-Violation $violations $repoPath $lineNumber "gui shell ownership" "AppRuntimeContext must not re-accumulate raw GUI state, runtime services, or controllers; use AppRuntimeState plus AppServiceHost/RuntimeCommandClient references"
+            }
+            if ($line -match 'RuntimeServices|AppControllerSet|RuntimeHost|RuntimeSessionFacade|RuntimeCommandBus|RuntimeCommandServer|InProcessRuntimeCommandClient|UnixSocketRuntime') {
+                Add-Violation $violations $repoPath $lineNumber "runtime host ownership" "AppRuntimeContext must not own or include runtime host internals, controllers, runtime services, or transports"
             }
         }
 
@@ -81,6 +84,9 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath -eq "src/app/app_runtime_context.cpp") {
+            if ($line -match 'app_host_\.controllers\s*\(|app_host_\.services\s*\(') {
+                Add-Violation $violations $repoPath $lineNumber "app host internals" "AppRuntimeContext must consume AppServiceRegistry and RuntimeCommandClient, not AppServiceHost controllers/services internals"
+            }
             if ($line -match 'playbackCommands\(\)\.startRemoteStream\s*\(' -and $currentFunction -ne "startSelectedRemoteStream") {
                 Add-Violation $violations $repoPath $lineNumber "runtime command bus bypass" "Remote stream playback from GUI/desktop/search/stream-detail flows must submit a RuntimeCommand; direct startRemoteStream is only allowed inside the runtime facade callback"
             }
@@ -99,8 +105,8 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath.StartsWith("src/cli/", [System.StringComparison]::Ordinal)) {
-            if ($line -match '\bAppRuntimeContext\b|ui::|pages::|playbackCommands\(\)\.(pause|resume|toggle|step|start|setDspProfile)|queueCommands\(\)\.(step|rebuild|set)') {
-                Add-Violation $violations $repoPath $lineNumber "direct CLI boundary" "First-stage direct CLI must use application services for durable commands and must not touch GUI runtime, UI pages, or live playback/queue commands"
+            if ($line -match '\bAppRuntimeContext\b|ui::|pages::|playbackCommands\(\)\.(pause|resume|toggle|step|start|setDspProfile)|queueCommands\(\)\.(step|rebuild|set)|RuntimeCommandBus|RuntimeCommandServer|RuntimeSessionFacade') {
+                Add-Violation $violations $repoPath $lineNumber "cli boundary" "CLI may parse/format direct commands or use RuntimeCommandClient transport, but it must not touch GUI runtime, UI pages, controllers, runtime domains, bus, or server"
             }
         }
 
@@ -229,8 +235,18 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         }
 
         if ($repoPath.StartsWith("src/cli/", [System.StringComparison]::Ordinal)) {
-            if (Test-AnyPrefix $include @("platform/", "targets/", "ui/", "app/app_runtime_context.h", "playback/playback_controller.h", "runtime/")) {
-                Add-Violation $violations $repoPath $lineNumber $include "direct CLI parsing/formatting must depend on application services, not concrete platform adapters, targets, GUI runtime, UI, playback internals, or live runtime internals"
+            if (Test-AnyPrefix $include @("platform/", "targets/", "ui/", "app/app_runtime_context.h", "playback/playback_controller.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "CLI parsing/formatting must not depend on concrete platform adapters, targets, GUI runtime, UI, or playback internals"
+            }
+            $allowedRuntimeCliIncludes = @(
+                "runtime/runtime_command.h",
+                "runtime/runtime_command_client.h",
+                "runtime/runtime_result.h",
+                "runtime/runtime_snapshot.h",
+                "runtime/unix_socket_runtime_transport.h"
+            )
+            if ((Test-AnyPrefix $include @("runtime/")) -and ($include -notin $allowedRuntimeCliIncludes)) {
+                Add-Violation $violations $repoPath $lineNumber $include "Runtime CLI may include only the runtime command/client/result/snapshot/transport client contract, not runtime host internals"
             }
         }
 
@@ -239,13 +255,13 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
                 Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp composition must use dedicated page-model/routing/rendering helpers instead of owning input mapping, page rendering, or UI constants"
             }
             if (Test-AnyPrefix $include @("app/app_command_executor.h", "app/app_input_router.h", "app/app_lifecycle.h", "app/app_page_model.h", "app/app_renderer.h", "app/app_state.h", "app/library_controller.h", "app/navigation_state.h", "app/playback_controller.h")) {
-                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp must stay a thin public facade; runtime state, controllers, routing, rendering, lifecycle, and command execution belong to AppRuntimeContext"
+                Add-Violation $violations $repoPath $lineNumber $include "LoFiBoxApp must stay a composition root; GUI routing/rendering/lifecycle belongs to AppRuntimeContext, app controllers belong to AppServiceHost, and live runtime belongs to RuntimeHost"
             }
         }
 
         if ($repoPath -eq "src/app/app_runtime_context.h") {
             if (Test-AnyPrefix $include @("app/app_state.h", "app/library_controller.h", "app/navigation_state.h", "app/playback_controller.h")) {
-                Add-Violation $violations $repoPath $lineNumber $include "AppRuntimeContext must depend on AppRuntimeState and AppControllerSet instead of directly including raw state/controller owners"
+                Add-Violation $violations $repoPath $lineNumber $include "AppRuntimeContext must depend on AppRuntimeState, AppServiceHost, and RuntimeCommandClient instead of directly including raw state/controller owners"
             }
         }
 

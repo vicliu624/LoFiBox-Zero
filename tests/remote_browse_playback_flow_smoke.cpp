@@ -7,7 +7,9 @@
 #include <vector>
 
 #include "app/app_runtime_context.h"
+#include "runtime/runtime_host.h"
 #include "app/runtime_services.h"
+#include "application/app_service_host.h"
 #include "cache/cache_manager.h"
 #include "remote/common/remote_source_registry.h"
 
@@ -161,7 +163,9 @@ int main()
         "remote-media-direct-url-direct-https://example.test/audio.mp3",
         "version=1\nid=https://example.test/audio.mp3\ntitle=Cached Stream Title\nartist=Cached Artist\nalbum=Cached Album\nalbum_id=\nduration=123\n");
 
-    lofibox::app::AppRuntimeContext app{{media_root}, {}, std::move(services)};
+    lofibox::application::AppServiceHost app_host{services};
+    lofibox::runtime::RuntimeHost runtime_host{app_host.registry()};
+    lofibox::app::AppRuntimeContext app{{media_root}, {}, app_host, runtime_host.client()};
     app.update();
     app.update();
     app.pushPage(lofibox::app::AppPage::MusicIndex);
@@ -238,16 +242,16 @@ int main()
         std::filesystem::remove_all(media_root, ec);
         return 1;
     }
-    app.updatePlayback(0.2);
+    runtime_host.tick(0.2);
     if (!app.playbackSession().visualization_frame.available) {
         std::cerr << "Expected remote playback to keep Now Playing visualization available.\n";
         std::filesystem::remove_all(cache_root, ec);
         std::filesystem::remove_all(media_root, ec);
         return 1;
     }
-    app.updatePlayback(200.0);
+    runtime_host.tick(200.0);
     audio->finished = true;
-    app.updatePlayback(0.5);
+    runtime_host.tick(0.5);
     if (app.playbackSession().status == lofibox::app::PlaybackStatus::Playing || app.playbackSession().elapsed_seconds > 123.01) {
         std::cerr << "Expected finished remote track to stop advancing elapsed time at track duration.\n";
         std::filesystem::remove_all(cache_root, ec);

@@ -6,11 +6,6 @@
 
 namespace lofibox::runtime {
 
-void RemoteSessionRuntime::setActiveRemoteStreamStarter(ActiveRemoteStreamStarter starter)
-{
-    active_remote_stream_starter_ = std::move(starter);
-}
-
 void RemoteSessionRuntime::setSnapshot(RemoteSessionSnapshot snapshot)
 {
     snapshot_ = std::move(snapshot);
@@ -21,9 +16,9 @@ void RemoteSessionRuntime::clearSnapshot() noexcept
     snapshot_ = {};
 }
 
-bool RemoteSessionRuntime::startActiveStream() const
+bool RemoteSessionRuntime::reconnect() const
 {
-    return active_remote_stream_starter_ ? active_remote_stream_starter_() : false;
+    return snapshot_.stream_resolved;
 }
 
 RemoteSessionSnapshot RemoteSessionRuntime::snapshot(std::uint64_t version) const

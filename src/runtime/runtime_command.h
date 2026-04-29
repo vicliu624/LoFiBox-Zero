@@ -6,6 +6,9 @@
 #include <utility>
 #include <variant>
 
+#include "app/remote_media_services.h"
+#include "runtime/runtime_snapshot.h"
+
 namespace lofibox::runtime {
 
 enum class CommandOrigin {
@@ -52,6 +55,7 @@ enum class RuntimeQueryKind {
     QueueSnapshot,
     EqSnapshot,
     RemoteSessionSnapshot,
+    SettingsSnapshot,
     FullSnapshot,
 };
 
@@ -95,6 +99,29 @@ struct EqApplyPresetPayload {
     std::string preset_name{};
 };
 
+struct SettingsApplyLivePayload {
+    std::string output_mode{};
+    std::string network_policy{};
+    std::string sleep_timer{};
+};
+
+struct RemotePlayResolvedStreamPayload {
+    app::ResolvedRemoteStream stream{};
+    app::RemoteTrack track{};
+    std::string source{};
+    RemoteSessionSnapshot snapshot{};
+};
+
+struct RemotePlayResolvedLibraryTrackPayload {
+    int local_track_id{0};
+    app::RemoteServerProfile profile{};
+    app::RemoteTrack track{};
+    app::ResolvedRemoteStream stream{};
+    std::string source{};
+    bool cache_remote_facts{false};
+    RemoteSessionSnapshot snapshot{};
+};
+
 using RuntimeCommandData = std::variant<
     EmptyPayload,
     PlaybackStartTrackPayload,
@@ -105,7 +132,10 @@ using RuntimeCommandData = std::variant<
     EqSetBandPayload,
     EqAdjustBandPayload,
     EqCyclePresetPayload,
-    EqApplyPresetPayload>;
+    EqApplyPresetPayload,
+    SettingsApplyLivePayload,
+    RemotePlayResolvedStreamPayload,
+    RemotePlayResolvedLibraryTrackPayload>;
 
 struct RuntimeCommandPayload {
     RuntimeCommandData data{EmptyPayload{}};
@@ -120,6 +150,32 @@ struct RuntimeCommandPayload {
     [[nodiscard]] static RuntimeCommandPayload eqAdjustBand(int band_index, int delta_db) { return {{EqAdjustBandPayload{band_index, delta_db}}}; }
     [[nodiscard]] static RuntimeCommandPayload eqCyclePreset(int delta) { return {{EqCyclePresetPayload{delta}}}; }
     [[nodiscard]] static RuntimeCommandPayload eqApplyPreset(std::string preset_name) { return {{EqApplyPresetPayload{std::move(preset_name)}}}; }
+    [[nodiscard]] static RuntimeCommandPayload settingsApplyLive(std::string output_mode, std::string network_policy, std::string sleep_timer)
+    {
+        return {{SettingsApplyLivePayload{std::move(output_mode), std::move(network_policy), std::move(sleep_timer)}}};
+    }
+    [[nodiscard]] static RuntimeCommandPayload remoteResolvedStream(app::ResolvedRemoteStream stream, app::RemoteTrack track, std::string source, RemoteSessionSnapshot snapshot)
+    {
+        return {{RemotePlayResolvedStreamPayload{std::move(stream), std::move(track), std::move(source), std::move(snapshot)}}};
+    }
+    [[nodiscard]] static RuntimeCommandPayload remoteResolvedLibraryTrack(
+        int local_track_id,
+        app::RemoteServerProfile profile,
+        app::RemoteTrack track,
+        app::ResolvedRemoteStream stream,
+        std::string source,
+        bool cache_remote_facts,
+        RemoteSessionSnapshot snapshot)
+    {
+        return {{RemotePlayResolvedLibraryTrackPayload{
+            local_track_id,
+            std::move(profile),
+            std::move(track),
+            std::move(stream),
+            std::move(source),
+            cache_remote_facts,
+            std::move(snapshot)}}};
+    }
 
     template <typename Payload>
     [[nodiscard]] const Payload* get() const noexcept

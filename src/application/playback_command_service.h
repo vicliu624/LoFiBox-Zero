@@ -28,8 +28,12 @@ public:
     [[nodiscard]] bool startTrack(int track_id, const RemoteTrackStarter& remote_starter = {}) const;
     void prepareQueueForTrack(int track_id) const;
     void stepQueue(int delta, const RemoteTrackStarter& remote_starter = {}) const;
+    [[nodiscard]] bool jumpQueue(int queue_index, const RemoteTrackStarter& remote_starter = {}) const;
+    void clearQueue() const noexcept;
     void pause() const noexcept;
     void resume() const noexcept;
+    void stop() const noexcept;
+    [[nodiscard]] bool seek(double seconds) const;
     void togglePlayPause() const noexcept;
     void setShuffleEnabled(bool enabled) const;
     void toggleShuffle() const;
@@ -39,6 +43,13 @@ public:
     void cycleMainMenuPlaybackMode() const;
 
     [[nodiscard]] bool startRemoteStream(const app::ResolvedRemoteStream& stream, const app::RemoteTrack& track, const std::string& source) const;
+    [[nodiscard]] bool startRemoteLibraryTrack(
+        int local_track_id,
+        const app::ResolvedRemoteStream& stream,
+        const app::RemoteServerProfile& profile,
+        const app::RemoteTrack& remote_track,
+        const std::string& source,
+        bool cache_remote_facts) const;
     [[nodiscard]] bool startRemoteLibraryTrack(
         const app::ResolvedRemoteStream& stream,
         app::TrackRecord& track,

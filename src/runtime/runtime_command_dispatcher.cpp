@@ -28,11 +28,27 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
             const auto* payload = command.payload.get<PlaybackStartTrackPayload>();
             return applied(command, "PLAYBACK_START_TRACK", "Playback start-track submitted.", payload != nullptr && session_.playback().startTrack(payload->track_id));
         }
+    case RuntimeCommandKind::PlaybackStop:
+        session_.playback().stop();
+        return applied(command, "PLAYBACK_STOP", "Playback stop submitted.", true);
+    case RuntimeCommandKind::PlaybackSeek:
+        {
+            const auto* payload = command.payload.get<PlaybackSeekPayload>();
+            return applied(command, "PLAYBACK_SEEK", "Playback seek submitted.", payload != nullptr && session_.playback().seek(payload->seconds));
+        }
     case RuntimeCommandKind::QueueStep:
         {
             const auto* payload = command.payload.get<QueueStepPayload>();
             return applied(command, "QUEUE_STEP", "Queue step submitted.", payload != nullptr && session_.queue().step(payload->delta));
         }
+    case RuntimeCommandKind::QueueJump:
+        {
+            const auto* payload = command.payload.get<QueueIndexPayload>();
+            return applied(command, "QUEUE_JUMP", "Queue jump submitted.", payload != nullptr && session_.queue().jump(payload->queue_index));
+        }
+    case RuntimeCommandKind::QueueClear:
+        session_.queue().clear();
+        return applied(command, "QUEUE_CLEAR", "Queue clear submitted.", true);
     case RuntimeCommandKind::PlaybackToggleShuffle:
         session_.queue().toggleShuffle();
         return applied(command, "PLAYBACK_SHUFFLE", "Playback shuffle submitted.", true);
@@ -61,7 +77,25 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
             return applied(command, "PLAYBACK_REPEAT_ONE", "Repeat-one submitted.", true);
         }
     case RuntimeCommandKind::RemoteStartActiveStream:
-        return applied(command, "REMOTE_START_ACTIVE_STREAM", "Remote active stream playback submitted.", session_.remote().startActiveStream());
+        {
+            if (const auto* library_payload = command.payload.get<RemotePlayResolvedLibraryTrackPayload>()) {
+                const bool started = session_.playback().startRemoteLibraryTrack(*library_payload);
+                if (started) {
+                    session_.remote().setSnapshot(library_payload->snapshot);
+                }
+                return applied(command, "REMOTE_START_ACTIVE_STREAM", "Remote library stream playback submitted.", started);
+            }
+            if (const auto* stream_payload = command.payload.get<RemotePlayResolvedStreamPayload>()) {
+                const bool started = session_.playback().startRemoteStream(*stream_payload);
+                if (started) {
+                    session_.remote().setSnapshot(stream_payload->snapshot);
+                }
+                return applied(command, "REMOTE_START_ACTIVE_STREAM", "Remote stream playback submitted.", started);
+            }
+            return applied(command, "REMOTE_START_ACTIVE_STREAM", "Resolved remote stream payload missing.", false);
+        }
+    case RuntimeCommandKind::RemoteReconnect:
+        return applied(command, "REMOTE_RECONNECT", "Remote reconnect submitted.", session_.remote().reconnect());
     case RuntimeCommandKind::EqEnable:
         session_.eq().setEnabled(true);
         return applied(command, "EQ_ENABLE", "EQ enable submitted.", true);
@@ -91,15 +125,21 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
     case RuntimeCommandKind::EqReset:
         session_.eq().reset();
         return applied(command, "EQ_RESET", "EQ reset submitted.", true);
-    case RuntimeCommandKind::PlaybackStop:
-    case RuntimeCommandKind::PlaybackSeek:
-    case RuntimeCommandKind::QueueJump:
-    case RuntimeCommandKind::QueueClear:
-    case RuntimeCommandKind::RemoteReconnect:
     case RuntimeCommandKind::SettingsApplyLive:
+        {
+            const auto* payload = command.payload.get<SettingsApplyLivePayload>();
+            if (payload == nullptr) {
+                return applied(command, "SETTINGS_APPLY_LIVE", "Settings payload missing.", false);
+            }
+            session_.settings().applyLive(payload->output_mode, payload->network_policy, payload->sleep_timer);
+            return applied(command, "SETTINGS_APPLY_LIVE", "Live settings submitted.", true);
+        }
     case RuntimeCommandKind::RuntimeShutdown:
+        session_.settings().requestShutdown();
+        return applied(command, "RUNTIME_SHUTDOWN", "Runtime shutdown requested.", true);
     case RuntimeCommandKind::RuntimeReload:
-        return rejectUnsupported(command, "Runtime command is part of the transport-neutral contract but is not implemented in the first in-process scope.");
+        session_.settings().requestReload();
+        return applied(command, "RUNTIME_RELOAD", "Runtime reload requested.", true);
     }
     return rejectUnsupported(command, "Unknown runtime command.");
 }

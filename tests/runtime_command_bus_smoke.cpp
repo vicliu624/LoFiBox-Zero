@@ -6,8 +6,10 @@
 
 #include "app/app_controller_set.h"
 #include "app/runtime_services.h"
+#include "runtime/eq_runtime_state.h"
 #include "runtime/runtime_command_bus.h"
 #include "runtime/runtime_session_facade.h"
+#include "runtime/settings_runtime_state.h"
 
 namespace {
 
@@ -53,10 +55,12 @@ int main()
     model.tracks.push_back(lofibox::app::TrackRecord{12, std::filesystem::path{"beta.mp3"}, "Beta", "Artist", "Album"});
     controllers.library.setSongsContextAll();
 
-    lofibox::app::EqState eq{};
+    lofibox::runtime::EqRuntimeState eq{};
+    lofibox::runtime::SettingsRuntimeState settings{};
     lofibox::runtime::RuntimeSessionFacade session{
         lofibox::application::AppServiceRegistry{controllers, services},
-        eq};
+        eq,
+        settings};
     lofibox::runtime::RemoteSessionSnapshot remote_snapshot{};
     remote_snapshot.profile_id = "remote-a";
     remote_snapshot.source_label = "REMOTE A";
@@ -128,9 +132,19 @@ int main()
         return 1;
     }
 
-    result = bus.dispatch(command(lofibox::runtime::RuntimeCommandKind::PlaybackSeek));
-    if (result.accepted || result.applied || result.code != "UNSUPPORTED_RUNTIME_COMMAND") {
-        std::cerr << "Expected first-stage runtime bus to reject transport-neutral commands that are not implemented yet.\n";
+    result = bus.dispatch(lofibox::runtime::RuntimeCommand{
+        lofibox::runtime::RuntimeCommandKind::PlaybackSeek,
+        lofibox::runtime::RuntimeCommandPayload::seek(1.0),
+        lofibox::runtime::CommandOrigin::DirectTest});
+    if (!result.accepted || !result.applied || result.code != "PLAYBACK_SEEK") {
+        std::cerr << "Expected transport-neutral seek command to be implemented by the runtime bus.\n";
+        return 1;
+    }
+
+    result = bus.dispatch(command(lofibox::runtime::RuntimeCommandKind::QueueClear));
+    snapshot = bus.snapshot();
+    if (!result.accepted || !result.applied || !snapshot.queue.active_ids.empty()) {
+        std::cerr << "Expected queue clear command to be implemented by the runtime bus.\n";
         return 1;
     }
 

@@ -15,6 +15,7 @@
 #include "app/navigation_state.h"
 #include "playback/playback_state.h"
 #include "core/canvas.h"
+#include "runtime/runtime_snapshot.h"
 #include "ui/ui_models.h"
 
 namespace lofibox::app {
@@ -33,6 +34,7 @@ public:
     [[nodiscard]] virtual const PlaybackSession& playbackSession() const noexcept = 0;
     [[nodiscard]] virtual const TrackRecord* findTrack(int id) const noexcept = 0;
     [[nodiscard]] virtual const EqState& eqState() const noexcept = 0;
+    [[nodiscard]] virtual runtime::EqRuntimeSnapshot eqRuntimeSnapshot() const noexcept = 0;
     [[nodiscard]] virtual ListSelection listSelection() const noexcept = 0;
     [[nodiscard]] virtual AppPageModel pageModel() const = 0;
     [[nodiscard]] virtual bool helpOpen() const noexcept = 0;

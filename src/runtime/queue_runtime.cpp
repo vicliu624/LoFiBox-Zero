@@ -2,8 +2,6 @@
 
 #include "runtime/queue_runtime.h"
 
-#include <utility>
-
 namespace lofibox::runtime {
 
 QueueRuntime::QueueRuntime(application::AppServiceRegistry services) noexcept
@@ -11,18 +9,26 @@ QueueRuntime::QueueRuntime(application::AppServiceRegistry services) noexcept
 {
 }
 
-void QueueRuntime::setRemoteTrackStarter(RemoteTrackStarter starter)
-{
-    remote_track_starter_ = std::move(starter);
-}
-
 bool QueueRuntime::step(int delta) const
 {
     if (delta == 0) {
         return false;
     }
-    services_.queueCommands().step(delta, remote_track_starter_);
+    services_.queueCommands().step(delta);
     return true;
+}
+
+bool QueueRuntime::jump(int queue_index) const
+{
+    if (queue_index < 0) {
+        return false;
+    }
+    return services_.queueCommands().jump(queue_index);
+}
+
+void QueueRuntime::clear() const noexcept
+{
+    services_.queueCommands().clear();
 }
 
 void QueueRuntime::cycleMainMenuPlaybackMode() const

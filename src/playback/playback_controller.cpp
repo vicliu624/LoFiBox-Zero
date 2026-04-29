@@ -219,6 +219,21 @@ void PlaybackController::stepQueue(LibraryController& library_controller, int de
     });
 }
 
+bool PlaybackController::jumpQueue(LibraryController& library_controller, int queue_index)
+{
+    return playQueueIndex(library_controller, queue_index);
+}
+
+bool PlaybackController::jumpQueue(LibraryController& library_controller, int queue_index, const RemoteTrackStarter& remote_starter)
+{
+    return playQueueIndex(library_controller, queue_index, remote_starter);
+}
+
+void PlaybackController::clearQueue() noexcept
+{
+    queue_ = {};
+}
+
 void PlaybackController::pause() noexcept
 {
     if (session_.status == PlaybackStatus::Playing) {
@@ -231,6 +246,23 @@ void PlaybackController::resume() noexcept
     if (session_.status == PlaybackStatus::Paused) {
         runtime_.resume(session_);
     }
+}
+
+void PlaybackController::stop() noexcept
+{
+    runtime_.stop(session_);
+}
+
+bool PlaybackController::seek(LibraryController& library_controller, double seconds)
+{
+    if (!session_.current_track_id) {
+        return false;
+    }
+    auto* track = library_controller.findMutableTrack(*session_.current_track_id);
+    if (track == nullptr || track->remote) {
+        return false;
+    }
+    return runtime_.seekBackend(track->path, seconds, session_);
 }
 
 void PlaybackController::togglePlayPause() noexcept
