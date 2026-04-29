@@ -101,6 +101,7 @@ Packaging work should support:
 The package should install into standard paths:
 
 - `/usr/bin/lofibox`
+- `/usr/bin/lofibox-tui`
 - `/usr/lib/lofibox/`
 - `/usr/lib/lofibox/tag_writer.py`
 - `/usr/lib/lofibox/remote_media_tool.py`

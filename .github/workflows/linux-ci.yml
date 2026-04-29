@@ -65,6 +65,9 @@ jobs:
           -DLOFIBOX_BUILD_X11=OFF
           -DBUILD_TESTING=OFF
 
+      - name: Build Linux Install Skeleton Binaries
+        run: cmake --build build/install-skeleton --target lofibox_zero_tui_bin
+
       - name: Validate Desktop Metadata
         run: |
           desktop-file-validate data/io.github.vicliu624.lofibox.desktop
@@ -73,10 +76,13 @@ jobs:
       - name: Validate Install Skeleton
         run: |
           cmake --install build/install-skeleton --prefix "$PWD/.tmp/install-root"
+          test -x .tmp/install-root/bin/lofibox-tui
           test -f .tmp/install-root/share/applications/io.github.vicliu624.lofibox.desktop
           test -f .tmp/install-root/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
           test -f .tmp/install-root/share/icons/hicolor/scalable/apps/io.github.vicliu624.lofibox.svg
+          test -f .tmp/install-root/share/icons/hicolor/180x180/apps/io.github.vicliu624.lofibox.png
           test -f .tmp/install-root/share/mime/packages/io.github.vicliu624.lofibox.xml
+          test -f .tmp/install-root/share/man/man1/lofibox.1
           test -f .tmp/install-root/share/doc/lofibox/architecture.md
 
       - name: Configure Linux Device Target

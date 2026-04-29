@@ -32,7 +32,7 @@ endif()
 
 option(LOFIBOX_BUILD_DEVICE "Build the Linux framebuffer device target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
 option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
-option(LOFIBOX_BUILD_TUI "Build the ANSI terminal UI target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
+option(LOFIBOX_BUILD_TUI "Build the ANSI terminal UI target." ON)
 
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp

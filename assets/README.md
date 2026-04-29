@@ -15,12 +15,16 @@ These are the small self-created PNG assets carried over from the author's legac
   - `About.png`
   - `Equalizer.png`
   - `Library.png`
-  - `logo.png`
+  - `logo.png` (generated from the formal app logo in `data/io.github.vicliu624.lofibox.svg`)
   - `Music.png`
   - `NowPlaying.png`
   - `Playlists.png`
   - `Settings.png`
 - Typical dimensions: `164x164`, with `logo.png` at `180x180`
+
+The formal application logo source is `data/io.github.vicliu624.lofibox.svg`.
+The `logo.png` file in this directory is the raster hicolor/runtime projection
+of that source and should not be edited independently.
 
 ## Current Rule
 

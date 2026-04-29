@@ -81,11 +81,18 @@ Packaging tests must include:
 
 - `lofibox --version`
 - `lofibox --help`
+- `lofibox-tui --help` in package-level smoke tests when the package is built with the TUI target
 - desktop file validation
 - AppStream metadata validation
 - install and uninstall sanity
 
 `debian/tests/control` and `debian/tests/smoke` must exist for autopkgtest.
+
+CI install-skeleton validation may configure Linux framebuffer and X11 presentation targets off for dependency isolation,
+but it must keep the terminal-native TUI enabled. The install-skeleton job must build `lofibox_zero_tui_bin` before
+`cmake --install` and assert the installed `lofibox-tui` executable alongside desktop, AppStream, icon, MIME,
+documentation, helper, and manpage installation. Full package smoke tests remain responsible for proving the complete
+installed executable surface, including `lofibox` and `lofibox-tui`.
 
 ## 6. Test Isolation Rules
 

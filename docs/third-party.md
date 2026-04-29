@@ -49,13 +49,13 @@ Each entry must include:
 
 - license: `GPL-3.0-or-later`
 - packaging status: installable
-- audit note: treated as project-created logo asset
+- audit note: treated as the formal project-created application logo asset
 
 ### `assets/ui/icons/legacy-lofibox/*.png`
 
 - license: `GPL-3.0-or-later`
 - packaging status: installable runtime UI assets
-- audit note: upstream author confirmed all PNG resources in this repository are self-created and not downloaded from third-party sources
+- audit note: `logo.png` is generated from the formal application logo SVG; other PNG resources in this directory are self-created legacy runtime UI assets and not downloaded from third-party sources
 
 ## Metadata And Fixture Domains
 
