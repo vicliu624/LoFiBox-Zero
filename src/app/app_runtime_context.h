@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -17,9 +18,15 @@
 #include "app/app_runtime_state.h"
 #include "app/runtime_services.h"
 #include "core/canvas.h"
-#include "runtime/runtime_command_bus.h"
-#include "runtime/runtime_session_facade.h"
 #include "ui/ui_models.h"
+
+namespace lofibox::runtime {
+class InProcessRuntimeCommandClient;
+class RuntimeCommandBus;
+class RuntimeCommandServer;
+class RuntimeSessionFacade;
+struct RemoteSessionSnapshot;
+} // namespace lofibox::runtime
 
 namespace lofibox::app {
 
@@ -32,6 +39,7 @@ public:
                                ui::UiAssets assets = {},
                                RuntimeServices services = {},
                                std::vector<std::string> startup_uris = {});
+    ~AppRuntimeContext() override;
 
     void update();
     void handleInput(const InputEvent& event);
@@ -136,7 +144,8 @@ private:
     [[nodiscard]] RemoteTrack remoteTrackFromLibraryTrack(const RemoteServerProfile& profile, const TrackRecord& track) const;
     [[nodiscard]] bool startRemoteLibraryTrack(const TrackRecord& track);
     [[nodiscard]] bool startSelectedRemoteStream();
-    [[nodiscard]] ::lofibox::runtime::RemoteSessionSnapshot remoteSessionSnapshot() const;
+    [[nodiscard]] ::lofibox::runtime::RemoteSessionSnapshot buildRemoteSessionSnapshot() const;
+    void syncRemoteSessionRuntime();
     void refreshSearchResults();
     [[nodiscard]] ::lofibox::application::SourceProfileCommandService sourceProfileService() const noexcept;
     [[nodiscard]] ::lofibox::application::RemoteBrowseQueryService remoteBrowseService() const noexcept;
@@ -151,8 +160,10 @@ private:
     AppRuntimeState state_{};
     AppControllerSet controllers_{};
     RuntimeServices services_{};
-    ::lofibox::runtime::RuntimeSessionFacade runtime_session_;
-    ::lofibox::runtime::RuntimeCommandBus runtime_bus_;
+    std::unique_ptr<::lofibox::runtime::RuntimeSessionFacade> runtime_session_;
+    std::unique_ptr<::lofibox::runtime::RuntimeCommandBus> runtime_bus_;
+    std::unique_ptr<::lofibox::runtime::RuntimeCommandServer> runtime_server_;
+    std::unique_ptr<::lofibox::runtime::InProcessRuntimeCommandClient> runtime_client_;
 };
 
 } // namespace lofibox::app

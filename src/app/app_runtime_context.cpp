@@ -15,6 +15,10 @@
 #include "app/text_input_utils.h"
 #include "remote/common/remote_source_registry.h"
 #include "remote/common/stream_source_model.h"
+#include "runtime/in_process_runtime_client.h"
+#include "runtime/runtime_command_bus.h"
+#include "runtime/runtime_command_server.h"
+#include "runtime/runtime_session_facade.h"
 
 namespace lofibox::app {
 
@@ -103,9 +107,7 @@ AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_ro
                                      RuntimeServices services,
                                      std::vector<std::string> startup_uris)
     : state_{},
-      services_(withNullRuntimeServices(std::move(services))),
-      runtime_session_{::lofibox::application::AppServiceRegistry{controllers_, services_}, state_.eq},
-      runtime_bus_{runtime_session_}
+      services_(withNullRuntimeServices(std::move(services)))
 {
     state_.media_roots = std::move(media_roots);
     state_.pending_open_uris = std::move(startup_uris);
@@ -119,19 +121,25 @@ AppRuntimeContext::AppRuntimeContext(std::vector<std::filesystem::path> media_ro
     state_.ui_assets = std::move(assets);
     state_.remote_profiles = sourceProfileService().loadProfiles();
     controllers_.bindServices(services_);
-    runtime_session_.setRemoteTrackStarter([this](int track_id) {
+    runtime_session_ = std::make_unique<::lofibox::runtime::RuntimeSessionFacade>(
+        ::lofibox::application::AppServiceRegistry{controllers_, services_},
+        state_.eq);
+    runtime_bus_ = std::make_unique<::lofibox::runtime::RuntimeCommandBus>(*runtime_session_);
+    runtime_server_ = std::make_unique<::lofibox::runtime::RuntimeCommandServer>(*runtime_bus_);
+    runtime_client_ = std::make_unique<::lofibox::runtime::InProcessRuntimeCommandClient>(*runtime_server_);
+    runtime_session_->setRemoteTrackStarter([this](int track_id) {
         const auto* track = controllers_.library.findTrack(track_id);
         return track != nullptr && startRemoteLibraryTrack(*track);
     });
-    runtime_session_.setActiveRemoteStreamStarter([this]() {
+    runtime_session_->setActiveRemoteStreamStarter([this]() {
         return startSelectedRemoteStream();
     });
-    runtime_session_.setRemoteSessionSnapshotProvider([this]() {
-        return remoteSessionSnapshot();
-    });
-    runtime_session_.resetEq();
+    runtime_session_->eq().reset();
+    syncRemoteSessionRuntime();
     refreshRuntimeStatus(true);
 }
+
+AppRuntimeContext::~AppRuntimeContext() = default;
 
 void AppRuntimeContext::update()
 {
@@ -287,7 +295,10 @@ NavigationState& AppRuntimeContext::navigationState() noexcept
 
 ::lofibox::runtime::RuntimeCommandResult AppRuntimeContext::submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command)
 {
-    return runtime_bus_.dispatch(command);
+    syncRemoteSessionRuntime();
+    auto result = runtime_client_->dispatch(command);
+    syncRemoteSessionRuntime();
+    return result;
 }
 
 ::lofibox::application::SourceProfileCommandService AppRuntimeContext::sourceProfileService() const noexcept
@@ -476,11 +487,9 @@ void AppRuntimeContext::pausePlayback()
 
 void AppRuntimeContext::stepTrack(int delta)
 {
-    ::lofibox::runtime::RuntimeCommandPayload payload{};
-    payload.queue_delta = delta;
     (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::QueueStep,
-        payload,
+        ::lofibox::runtime::RuntimeCommandPayload::queueStep(delta),
         ::lofibox::runtime::CommandOrigin::Gui});
 }
 
@@ -594,11 +603,9 @@ void AppRuntimeContext::confirmMainMenu()
 
 bool AppRuntimeContext::startLibraryTrack(int track_id)
 {
-    ::lofibox::runtime::RuntimeCommandPayload payload{};
-    payload.track_id = track_id;
     const auto result = submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack,
-        payload,
+        ::lofibox::runtime::RuntimeCommandPayload::startTrack(track_id),
         ::lofibox::runtime::CommandOrigin::Gui});
     return result.applied;
 }
@@ -802,7 +809,7 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::streamDetail
 
 std::vector<std::pair<std::string, std::string>> AppRuntimeContext::queueRows() const
 {
-    const auto runtime_snapshot = runtime_bus_.snapshot();
+    const auto runtime_snapshot = runtime_client_->snapshot();
     const auto& playback = runtime_snapshot.playback;
     const auto& queue = runtime_snapshot.queue;
     std::vector<std::pair<std::string, std::string>> rows{};
@@ -1400,7 +1407,7 @@ bool AppRuntimeContext::startSelectedRemoteStream()
         sourceProfileService().profileLabel(*profile));
 }
 
-::lofibox::runtime::RemoteSessionSnapshot AppRuntimeContext::remoteSessionSnapshot() const
+::lofibox::runtime::RemoteSessionSnapshot AppRuntimeContext::buildRemoteSessionSnapshot() const
 {
     ::lofibox::runtime::RemoteSessionSnapshot snapshot{};
     const auto profile = selectedRemoteProfile();
@@ -1430,6 +1437,13 @@ bool AppRuntimeContext::startSelectedRemoteStream()
         }
     }
     return snapshot;
+}
+
+void AppRuntimeContext::syncRemoteSessionRuntime()
+{
+    if (runtime_session_) {
+        runtime_session_->remote().setSnapshot(buildRemoteSessionSnapshot());
+    }
 }
 
 void AppRuntimeContext::refreshSearchResults()

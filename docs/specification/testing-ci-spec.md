@@ -15,6 +15,7 @@ Unit tests should cover:
 - playback queue
 - application command/query services returning structured command results without depending on GUI page selection state
 - runtime command/query contract behavior for accepted/applied result semantics, correlation ids, versioning, and invalid command rejection
+- runtime domain behavior for playback, active queue, active EQ, active remote session, live settings, and full snapshot assembly without going through GUI pages
 - runtime snapshots for playback, active queue, active EQ, and active remote session before GUI row or terminal projection
 - remote browse query service behavior for root browsing, child browsing, search, stream resolution, degraded facts, directory cache reuse, and local read-only remote fact caching
 - credential command service behavior for secret status, set, delete, safe redaction assumptions, and separation from source-profile field editing
@@ -37,6 +38,7 @@ Integration tests should cover:
 - direct command service behavior for library/source/credential/cache/diagnostic domains under isolated XDG test roots
 - first-stage direct CLI parsing/formatting for source list/add/update/probe, credentials set/status/delete, library scan/status/query, cache status/clear, and doctor
 - runtime command client/server behavior before live playback or active queue control is exposed to external command consumers
+- runtime transport-envelope behavior at the contract level before any Unix socket, D-Bus, JSON-RPC, stdio, or named-pipe implementation is selected
 - local library scan
 - database migration
 - metadata cache

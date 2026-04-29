@@ -9,20 +9,40 @@ namespace lofibox::runtime {
 RuntimeCommandResult RuntimeCommandResult::reject(
     std::string code,
     std::string message,
+    CommandOrigin origin,
     std::string correlation_id,
-    std::uint64_t version) noexcept
+    std::uint64_t version_before_apply,
+    std::uint64_t version_after_apply) noexcept
 {
-    return {false, false, std::move(code), std::move(message), std::move(correlation_id), version};
+    return {
+        false,
+        false,
+        std::move(code),
+        std::move(message),
+        origin,
+        std::move(correlation_id),
+        version_before_apply,
+        version_after_apply};
 }
 
 RuntimeCommandResult RuntimeCommandResult::ok(
     std::string code,
     std::string message,
+    CommandOrigin origin,
     std::string correlation_id,
-    std::uint64_t version,
+    std::uint64_t version_before_apply,
+    std::uint64_t version_after_apply,
     bool applied) noexcept
 {
-    return {true, applied, std::move(code), std::move(message), std::move(correlation_id), version};
+    return {
+        true,
+        applied,
+        std::move(code),
+        std::move(message),
+        origin,
+        std::move(correlation_id),
+        version_before_apply,
+        version_after_apply};
 }
 
 } // namespace lofibox::runtime

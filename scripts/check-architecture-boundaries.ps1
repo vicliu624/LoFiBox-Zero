@@ -69,6 +69,9 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             if ($line -match 'libraryController\s*\(|playbackController\s*\(|#\s*include\s+"app/library_controller\.h"|#\s*include\s+"playback/playback_controller\.h"') {
                 Add-Violation $violations $repoPath $lineNumber "application command boundary" "GUI command routing must dispatch through AppServiceRegistry instead of exposing LibraryController or PlaybackController"
             }
+            if ($line -match 'RuntimeCommandBus|RuntimeSessionFacade|runtime_command_bus\.h|runtime_session_facade\.h') {
+                Add-Violation $violations $repoPath $lineNumber "runtime client boundary" "GUI command routing may emit runtime commands through the command target; it must not construct or depend on the runtime bus or session facade"
+            }
         }
 
         if ($repoPath.StartsWith("src/application/", [System.StringComparison]::Ordinal)) {
@@ -80,6 +83,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
         if ($repoPath -eq "src/app/app_runtime_context.cpp") {
             if ($line -match 'playbackCommands\(\)\.startRemoteStream\s*\(' -and $currentFunction -ne "startSelectedRemoteStream") {
                 Add-Violation $violations $repoPath $lineNumber "runtime command bus bypass" "Remote stream playback from GUI/desktop/search/stream-detail flows must submit a RuntimeCommand; direct startRemoteStream is only allowed inside the runtime facade callback"
+            }
+            if ($currentFunction -eq "submitRuntimeCommand" -and $line -match 'runtime_bus_') {
+                Add-Violation $violations $repoPath $lineNumber "runtime client boundary" "AppRuntimeContext::submitRuntimeCommand must use the in-process RuntimeCommandClient instead of dispatching the RuntimeCommandBus directly"
+            }
+            if ($line -match 'runtime_bus_\.snapshot\s*\(') {
+                Add-Violation $violations $repoPath $lineNumber "runtime client boundary" "GUI page projections must query runtime snapshots through RuntimeCommandClient, not directly through RuntimeCommandBus"
             }
         }
 

@@ -57,26 +57,27 @@ int main()
     lofibox::runtime::RuntimeSessionFacade session{
         lofibox::application::AppServiceRegistry{controllers, services},
         eq};
-    session.setRemoteSessionSnapshotProvider([] {
-        lofibox::runtime::RemoteSessionSnapshot snapshot{};
-        snapshot.profile_id = "remote-a";
-        snapshot.source_label = "REMOTE A";
-        snapshot.connection_status = "ONLINE";
-        snapshot.stream_resolved = true;
-        snapshot.buffer_state = "READY";
-        return snapshot;
-    });
+    lofibox::runtime::RemoteSessionSnapshot remote_snapshot{};
+    remote_snapshot.profile_id = "remote-a";
+    remote_snapshot.source_label = "REMOTE A";
+    remote_snapshot.connection_status = "ONLINE";
+    remote_snapshot.stream_resolved = true;
+    remote_snapshot.buffer_state = "READY";
+    session.remote().setSnapshot(remote_snapshot);
 
     lofibox::runtime::RuntimeCommandBus bus{session};
 
-    auto payload = lofibox::runtime::RuntimeCommandPayload{};
-    payload.track_id = 11;
     auto result = bus.dispatch(lofibox::runtime::RuntimeCommand{
         lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack,
-        payload,
+        lofibox::runtime::RuntimeCommandPayload::startTrack(11),
         lofibox::runtime::CommandOrigin::DirectTest,
         "start-alpha"});
-    if (!result.accepted || !result.applied || result.correlation_id != "start-alpha" || result.version_after_apply != 1U) {
+    if (!result.accepted
+        || !result.applied
+        || result.origin != lofibox::runtime::CommandOrigin::DirectTest
+        || result.correlation_id != "start-alpha"
+        || result.version_before_apply != 0U
+        || result.version_after_apply != 1U) {
         std::cerr << "Expected runtime bus to accept and apply a start-track command with a version.\n";
         return 1;
     }
@@ -89,23 +90,18 @@ int main()
         return 1;
     }
 
-    payload = {};
-    payload.queue_delta = 1;
     result = bus.dispatch(lofibox::runtime::RuntimeCommand{
         lofibox::runtime::RuntimeCommandKind::QueueStep,
-        payload,
+        lofibox::runtime::RuntimeCommandPayload::queueStep(1),
         lofibox::runtime::CommandOrigin::DirectTest});
     if (!result.applied || controllers.playback.session().current_track_id != 12) {
         std::cerr << "Expected queue stepping to mutate playback through the runtime bus.\n";
         return 1;
     }
 
-    payload = {};
-    payload.eq_band_index = 0;
-    payload.eq_gain_delta = 20;
     result = bus.dispatch(lofibox::runtime::RuntimeCommand{
         lofibox::runtime::RuntimeCommandKind::EqAdjustBand,
-        payload,
+        lofibox::runtime::RuntimeCommandPayload::eqAdjustBand(0, 20),
         lofibox::runtime::CommandOrigin::DirectTest});
     snapshot = bus.query(lofibox::runtime::RuntimeQuery{lofibox::runtime::RuntimeQueryKind::EqSnapshot});
     if (!result.applied || snapshot.eq.bands[0] != 12 || snapshot.eq.preset_name != "CUSTOM" || !snapshot.eq.enabled) {
@@ -113,22 +109,18 @@ int main()
         return 1;
     }
 
-    payload = {};
-    payload.preset_name = "FLAT";
     result = bus.dispatch(lofibox::runtime::RuntimeCommand{
         lofibox::runtime::RuntimeCommandKind::EqApplyPreset,
-        payload,
+        lofibox::runtime::RuntimeCommandPayload::eqApplyPreset("FLAT"),
         lofibox::runtime::CommandOrigin::DirectTest});
     if (!result.applied) {
         std::cerr << "Expected EQ flat preset to be applied through the runtime bus.\n";
         return 1;
     }
 
-    payload = {};
-    payload.preset_delta = 1;
     result = bus.dispatch(lofibox::runtime::RuntimeCommand{
         lofibox::runtime::RuntimeCommandKind::EqCyclePreset,
-        payload,
+        lofibox::runtime::RuntimeCommandPayload::eqCyclePreset(1),
         lofibox::runtime::CommandOrigin::DirectTest});
     snapshot = bus.snapshot();
     if (!result.applied || snapshot.eq.preset_name != "BASS BOOST" || snapshot.eq.bands[0] != 6 || snapshot.remote.source_label != "REMOTE A") {

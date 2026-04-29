@@ -16,28 +16,28 @@ RuntimeSnapshot RuntimeQueryDispatcher::query(const RuntimeQuery& query, std::ui
         {
             RuntimeSnapshot result{};
             result.version = version;
-            result.playback = session_.playbackSnapshot(version);
+            result.playback = session_.playback().snapshot(version);
             return result;
         }
     case RuntimeQueryKind::QueueSnapshot:
         {
             RuntimeSnapshot result{};
             result.version = version;
-            result.queue = session_.queueSnapshot(version);
+            result.queue = session_.queue().snapshot(version);
             return result;
         }
     case RuntimeQueryKind::EqSnapshot:
         {
             RuntimeSnapshot result{};
             result.version = version;
-            result.eq = session_.eqSnapshot(version);
+            result.eq = session_.eq().snapshot(version);
             return result;
         }
     case RuntimeQueryKind::RemoteSessionSnapshot:
         {
             RuntimeSnapshot result{};
             result.version = version;
-            result.remote = session_.remoteSessionSnapshot(version);
+            result.remote = session_.remote().snapshot(version);
             return result;
         }
     case RuntimeQueryKind::FullSnapshot:

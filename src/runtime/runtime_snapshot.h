@@ -61,11 +61,19 @@ struct RemoteSessionSnapshot {
     std::uint64_t version{0};
 };
 
+struct SettingsRuntimeSnapshot {
+    std::string output_mode{"DEFAULT"};
+    std::string network_policy{"DEFAULT"};
+    std::string sleep_timer{"OFF"};
+    std::uint64_t version{0};
+};
+
 struct RuntimeSnapshot {
     PlaybackRuntimeSnapshot playback{};
     QueueRuntimeSnapshot queue{};
     EqRuntimeSnapshot eq{};
     RemoteSessionSnapshot remote{};
+    SettingsRuntimeSnapshot settings{};
     std::uint64_t version{0};
 };
 

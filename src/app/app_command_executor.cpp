@@ -6,9 +6,6 @@
 #include <array>
 #include <cstddef>
 
-#include "runtime/runtime_command_bus.h"
-#include "runtime/runtime_session_facade.h"
-
 namespace lofibox::app {
 namespace {
 
@@ -30,13 +27,6 @@ void clampListSelection(AppCommandTarget& target)
 }
 
 } // namespace
-
-::lofibox::runtime::RuntimeCommandResult AppCommandTarget::submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command)
-{
-    ::lofibox::runtime::RuntimeSessionFacade session{appServices(), eqState()};
-    ::lofibox::runtime::RuntimeCommandBus bus{session};
-    return bus.dispatch(command);
-}
 
 void commandPushPage(AppCommandTarget& target, AppPage page)
 {
@@ -68,11 +58,9 @@ void commandPausePlayback(AppCommandTarget& target)
 
 void commandStepTrack(AppCommandTarget& target, int delta)
 {
-    ::lofibox::runtime::RuntimeCommandPayload payload{};
-    payload.queue_delta = delta;
     (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::QueueStep,
-        payload,
+        ::lofibox::runtime::RuntimeCommandPayload::queueStep(delta),
         ::lofibox::runtime::CommandOrigin::Gui});
 }
 
@@ -87,17 +75,14 @@ void commandCycleMainMenuPlaybackMode(AppCommandTarget& target)
 void commandToggleRepeatAll(AppCommandTarget& target)
 {
     const bool enabled = !target.appServices().playbackStatus().session().repeat_all;
-    ::lofibox::runtime::RuntimeCommandPayload payload{};
-    payload.enabled = enabled;
     (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll,
-        payload,
+        ::lofibox::runtime::RuntimeCommandPayload::enabled(enabled),
         ::lofibox::runtime::CommandOrigin::Gui});
     if (!enabled) {
-        payload.enabled = false;
         (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
             ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatOne,
-            payload,
+            ::lofibox::runtime::RuntimeCommandPayload::enabled(false),
             ::lofibox::runtime::CommandOrigin::Gui});
     }
 }
@@ -105,17 +90,14 @@ void commandToggleRepeatAll(AppCommandTarget& target)
 void commandToggleRepeatOne(AppCommandTarget& target)
 {
     const bool enabled = !target.appServices().playbackStatus().session().repeat_one;
-    ::lofibox::runtime::RuntimeCommandPayload payload{};
-    payload.enabled = enabled;
     (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatOne,
-        payload,
+        ::lofibox::runtime::RuntimeCommandPayload::enabled(enabled),
         ::lofibox::runtime::CommandOrigin::Gui});
     if (!enabled) {
-        payload.enabled = false;
         (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
             ::lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll,
-            payload,
+            ::lofibox::runtime::RuntimeCommandPayload::enabled(false),
             ::lofibox::runtime::CommandOrigin::Gui});
     }
 }
@@ -175,22 +157,17 @@ void commandMoveEqualizerSelection(AppCommandTarget& target, int delta)
 
 void commandAdjustSelectedEqualizerBand(AppCommandTarget& target, int delta)
 {
-    ::lofibox::runtime::RuntimeCommandPayload payload{};
-    payload.eq_band_index = target.eqState().selected_band;
-    payload.eq_gain_delta = delta;
     (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::EqAdjustBand,
-        payload,
+        ::lofibox::runtime::RuntimeCommandPayload::eqAdjustBand(target.eqState().selected_band, delta),
         ::lofibox::runtime::CommandOrigin::Gui});
 }
 
 void commandCycleEqualizerPreset(AppCommandTarget& target, int delta)
 {
-    ::lofibox::runtime::RuntimeCommandPayload payload{};
-    payload.preset_delta = delta;
     (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::EqCyclePreset,
-        payload,
+        ::lofibox::runtime::RuntimeCommandPayload::eqCyclePreset(delta),
         ::lofibox::runtime::CommandOrigin::Gui});
 }
 

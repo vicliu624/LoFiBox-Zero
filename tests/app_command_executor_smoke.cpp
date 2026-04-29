@@ -2,9 +2,14 @@
 
 #include <filesystem>
 #include <iostream>
+#include <memory>
 
 #include "app/app_command_executor.h"
 #include "app/runtime_services.h"
+#include "runtime/in_process_runtime_client.h"
+#include "runtime/runtime_command_bus.h"
+#include "runtime/runtime_command_server.h"
+#include "runtime/runtime_session_facade.h"
 
 namespace {
 
@@ -14,6 +19,12 @@ public:
         : services(lofibox::app::withNullRuntimeServices({}))
     {
         controllers.bindServices(services);
+        runtime_session = std::make_unique<lofibox::runtime::RuntimeSessionFacade>(
+            lofibox::application::AppServiceRegistry{controllers, services},
+            eq);
+        runtime_bus = std::make_unique<lofibox::runtime::RuntimeCommandBus>(*runtime_session);
+        runtime_server = std::make_unique<lofibox::runtime::RuntimeCommandServer>(*runtime_bus);
+        runtime_client = std::make_unique<lofibox::runtime::InProcessRuntimeCommandClient>(*runtime_server);
     }
 
     [[nodiscard]] lofibox::app::AppPage currentPage() const noexcept override { return navigation.currentPage(); }
@@ -35,14 +46,24 @@ public:
     lofibox::app::EqState& eqState() noexcept override { return eq; }
     int& mainMenuIndex() noexcept override { return menu_index; }
     void closeHelpForCommand() noexcept override { ++close_help_calls; }
+    [[nodiscard]] lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(lofibox::runtime::RuntimeCommand command) override
+    {
+        ++runtime_command_calls;
+        return runtime_client->dispatch(command);
+    }
 
     lofibox::app::NavigationState navigation{};
     lofibox::app::RuntimeServices services{};
     lofibox::app::AppControllerSet controllers{};
     lofibox::app::EqState eq{};
     lofibox::app::SettingsState settings{};
+    std::unique_ptr<lofibox::runtime::RuntimeSessionFacade> runtime_session{};
+    std::unique_ptr<lofibox::runtime::RuntimeCommandBus> runtime_bus{};
+    std::unique_ptr<lofibox::runtime::RuntimeCommandServer> runtime_server{};
+    std::unique_ptr<lofibox::runtime::InProcessRuntimeCommandClient> runtime_client{};
     int menu_index{0};
     int close_help_calls{0};
+    int runtime_command_calls{0};
 };
 
 } // namespace
@@ -86,9 +107,14 @@ int main()
 
     target.eq.selected_band = 0;
     target.eq.bands[0] = 12;
+    const int before_eq_commands = target.runtime_command_calls;
     lofibox::app::commandAdjustSelectedEqualizerBand(target, 1);
     if (target.eq.bands[0] != 12) {
         std::cerr << "Expected EQ gain to clamp at +12 dB.\n";
+        return 1;
+    }
+    if (target.runtime_command_calls <= before_eq_commands) {
+        std::cerr << "Expected GUI EQ adjustment to submit a runtime command through the target client.\n";
         return 1;
     }
     target.eq.bands[0] = -12;

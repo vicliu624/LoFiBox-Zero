@@ -3,11 +3,16 @@
 #pragma once
 
 #include <functional>
-#include <string_view>
 
 #include "app/app_state.h"
 #include "application/app_service_registry.h"
 #include "application/playback_command_service.h"
+#include "runtime/eq_runtime.h"
+#include "runtime/playback_runtime.h"
+#include "runtime/queue_runtime.h"
+#include "runtime/remote_session_runtime.h"
+#include "runtime/runtime_snapshot_assembler.h"
+#include "runtime/settings_runtime.h"
 #include "runtime/runtime_snapshot.h"
 
 namespace lofibox::runtime {
@@ -16,48 +21,31 @@ class RuntimeSessionFacade {
 public:
     using RemoteTrackStarter = application::PlaybackCommandService::RemoteTrackStarter;
     using ActiveRemoteStreamStarter = std::function<bool()>;
-    using RemoteSessionSnapshotProvider = std::function<RemoteSessionSnapshot()>;
 
     RuntimeSessionFacade(application::AppServiceRegistry services, app::EqState& eq) noexcept;
 
     void setRemoteTrackStarter(RemoteTrackStarter starter);
     void setActiveRemoteStreamStarter(ActiveRemoteStreamStarter starter);
-    void setRemoteSessionSnapshotProvider(RemoteSessionSnapshotProvider provider);
 
-    [[nodiscard]] bool playFirstAvailable() const;
-    [[nodiscard]] bool startTrack(int track_id) const;
-    void pause() const noexcept;
-    void resume() const noexcept;
-    void togglePlayPause() const noexcept;
-    [[nodiscard]] bool stepQueue(int delta) const;
-    void cycleMainMenuPlaybackMode() const;
-    void toggleShuffle() const;
-    void cycleRepeatMode() const noexcept;
-    void setRepeatAll(bool enabled) const noexcept;
-    void setRepeatOne(bool enabled) const noexcept;
-    [[nodiscard]] bool startActiveRemoteStream() const;
-
-    void setEqEnabled(bool enabled);
-    [[nodiscard]] bool setEqBand(int band_index, int gain_db);
-    [[nodiscard]] bool adjustEqBand(int band_index, int delta_db);
-    [[nodiscard]] bool applyEqPreset(std::string_view preset_name);
-    [[nodiscard]] bool cycleEqPreset(int delta);
-    void resetEq();
-
+    [[nodiscard]] PlaybackRuntime& playback() noexcept;
+    [[nodiscard]] const PlaybackRuntime& playback() const noexcept;
+    [[nodiscard]] QueueRuntime& queue() noexcept;
+    [[nodiscard]] const QueueRuntime& queue() const noexcept;
+    [[nodiscard]] EqRuntime& eq() noexcept;
+    [[nodiscard]] const EqRuntime& eq() const noexcept;
+    [[nodiscard]] RemoteSessionRuntime& remote() noexcept;
+    [[nodiscard]] const RemoteSessionRuntime& remote() const noexcept;
+    [[nodiscard]] SettingsRuntime& settings() noexcept;
+    [[nodiscard]] const SettingsRuntime& settings() const noexcept;
     [[nodiscard]] RuntimeSnapshot snapshot(std::uint64_t version) const;
-    [[nodiscard]] PlaybackRuntimeSnapshot playbackSnapshot(std::uint64_t version) const;
-    [[nodiscard]] QueueRuntimeSnapshot queueSnapshot(std::uint64_t version) const;
-    [[nodiscard]] EqRuntimeSnapshot eqSnapshot(std::uint64_t version) const;
-    [[nodiscard]] RemoteSessionSnapshot remoteSessionSnapshot(std::uint64_t version) const;
 
 private:
-    void applyEqToPlayback() const;
-
-    application::AppServiceRegistry services_;
-    app::EqState& eq_;
-    RemoteTrackStarter remote_track_starter_{};
-    ActiveRemoteStreamStarter active_remote_stream_starter_{};
-    RemoteSessionSnapshotProvider remote_session_snapshot_provider_{};
+    PlaybackRuntime playback_;
+    QueueRuntime queue_;
+    EqRuntime eq_;
+    RemoteSessionRuntime remote_;
+    SettingsRuntime settings_;
+    RuntimeSnapshotAssembler snapshots_{};
 };
 
 } // namespace lofibox::runtime

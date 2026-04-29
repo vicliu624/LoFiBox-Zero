@@ -23,14 +23,12 @@ public:
     virtual EqState& eqState() noexcept = 0;
     virtual int& mainMenuIndex() noexcept = 0;
     virtual void closeHelpForCommand() noexcept = 0;
-    [[nodiscard]] virtual ::lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command);
+    [[nodiscard]] virtual ::lofibox::runtime::RuntimeCommandResult submitRuntimeCommand(::lofibox::runtime::RuntimeCommand command) = 0;
     [[nodiscard]] virtual bool startLibraryTrack(int track_id)
     {
-        ::lofibox::runtime::RuntimeCommandPayload payload{};
-        payload.track_id = track_id;
         auto result = submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
             ::lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack,
-            payload,
+            ::lofibox::runtime::RuntimeCommandPayload::startTrack(track_id),
             ::lofibox::runtime::CommandOrigin::Gui});
         return result.applied;
     }

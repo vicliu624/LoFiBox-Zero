@@ -143,3 +143,17 @@ This update records specification and implementation convergence for the first l
 - `lofibox_runtime_command_bus_smoke` covers start-track, queue-step, EQ mutation, EQ preset cycling, structured remote-session snapshot projection, runtime versioning, and rejection of transport-neutral commands not implemented in the first scope. `lofibox_desktop_open_runtime_command_smoke` covers desktop-open URL playback through runtime command handling.
 - Architecture and implementation-placement gates now require `src/runtime` ownership and prevent runtime code from depending on `AppRuntimeContext`, UI pages, targets, platform transports, or CLI adapters.
 - Runtime IPC and external runtime CLI remain not implemented in this status entry. The required first step is an in-process runtime command/query contract, dispatcher, facade, and structured snapshots.
+
+## 2026-04-29 Runtime Command Architecture 收口 Update
+
+This update records the runtime-command closure pass:
+
+- `RuntimeSessionFacade` is now a composition facade over explicit runtime domains instead of the place where live business behavior keeps accumulating.
+- `PlaybackRuntime`, `QueueRuntime`, `EqRuntime`, `RemoteSessionRuntime`, `SettingsRuntime`, and `RuntimeSnapshotAssembler` now live under `src/runtime` as the first domain split beneath the facade.
+- `RuntimeCommandPayload` now uses tagged payload variants for command-specific data instead of one shared field bag.
+- `RuntimeCommandResult` now preserves command origin, correlation id, `version_before_apply`, and `version_after_apply`.
+- `RuntimeCommandClient`, `RuntimeCommandServer`, `RuntimeTransport`, and `InProcessRuntimeCommandClient` now define the transport-neutral runtime entry contract. No external IPC or runtime CLI transport is implemented by this status entry.
+- `AppRuntimeContext` composes the in-process runtime client/server/bus for the current GUI instance and submits live commands through the runtime client instead of dispatching the bus directly.
+- `AppCommandExecutor` remains a GUI page interpreter. It emits runtime commands through `AppCommandTarget` and no longer constructs `RuntimeCommandBus` or `RuntimeSessionFacade`.
+- Runtime domain and client/server smoke tests now guard the domain split, snapshot assembly, client/server envelope behavior, command origin preservation, version-before/version-after facts, and unsupported-command rejection.
+- Architecture and implementation-placement gates now require the runtime domain/client/server files and reject GUI command-routing paths that directly construct the runtime bus/session facade.

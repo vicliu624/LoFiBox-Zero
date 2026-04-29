@@ -1,17 +1,89 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <thread>
 
 #include "app/input_event.h"
 #include "app/lofibox_app.h"
+#include "app/runtime_services.h"
 #include "core/canvas.h"
 #include "core/color.h"
 #include "core/display_profile.h"
-#include "platform/host/runtime_services_factory.h"
+#include "platform/host/runtime_provider_factories.h"
 #include "media_fixture_utils.h"
 
 namespace fs = std::filesystem;
+
+namespace {
+
+class FixtureMetadataProvider final : public lofibox::app::MetadataProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FIXTURE"; }
+    [[nodiscard]] lofibox::app::TrackMetadata read(const std::filesystem::path&, lofibox::app::MetadataReadMode) const override
+    {
+        return lofibox::app::TrackMetadata{
+            std::string{"Artwork Song"},
+            std::string{"Artwork Artist"},
+            std::string{"Artwork Album"},
+            std::nullopt,
+            std::nullopt,
+            1};
+    }
+};
+
+class OfflineConnectivityProvider final : public lofibox::app::ConnectivityProvider {
+public:
+    [[nodiscard]] bool connected() const override { return false; }
+    [[nodiscard]] std::string displayName() const override { return "OFFLINE"; }
+};
+
+class NoopTagWriter final : public lofibox::app::TagWriter {
+public:
+    [[nodiscard]] bool available() const override { return false; }
+    [[nodiscard]] std::string displayName() const override { return "NOOP"; }
+    bool write(const std::filesystem::path&, const lofibox::app::TagWriteRequest&) const override { return false; }
+};
+
+class FakeAudioBackend final : public lofibox::app::AudioPlaybackBackend {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE"; }
+    bool playFile(const std::filesystem::path&, double) override
+    {
+        playing = true;
+        paused = false;
+        return true;
+    }
+    void stop() override { playing = false; }
+    void pause() override { paused = true; }
+    void resume() override { playing = true; paused = false; }
+    [[nodiscard]] bool isPlaying() override { return playing && !paused; }
+    [[nodiscard]] bool isFinished() override { return false; }
+
+    bool playing{false};
+    bool paused{false};
+};
+
+int countRedCoverPixels(const lofibox::core::Canvas& canvas)
+{
+    int red_dominant_pixels = 0;
+    for (int y = 44; y < 120; ++y) {
+        for (int x = 30; x < 108; ++x) {
+            const auto pixel = canvas.pixel(x, y);
+            if (pixel.r > 180 && pixel.g < 100 && pixel.b < 100) {
+                ++red_dominant_pixels;
+            }
+        }
+    }
+    return red_dominant_pixels;
+}
+
+} // namespace
 
 int main()
 {
@@ -27,7 +99,8 @@ int main()
         return 0;
     }
 
-    const fs::path root = fs::temp_directory_path() / "lofibox_zero_now_playing_artwork_smoke";
+    const auto run_id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("lofibox_zero_now_playing_artwork_smoke_" + std::to_string(run_id));
     std::error_code ec{};
     fs::remove_all(root, ec);
     fs::create_directories(root / "Artist" / "Album", ec);
@@ -76,7 +149,16 @@ int main()
         return 1;
     }
 
-    auto services = lofibox::platform::host::createHostRuntimeServices();
+    auto services = lofibox::app::withNullRuntimeServices();
+    auto cache = std::make_shared<lofibox::platform::host::runtime_detail::SharedRuntimeCache>();
+    auto connectivity = std::make_shared<OfflineConnectivityProvider>();
+    auto tag_writer = std::make_shared<NoopTagWriter>();
+    services.connectivity.provider = connectivity;
+    services.metadata.metadata_provider = std::make_shared<FixtureMetadataProvider>();
+    services.metadata.artwork_provider = lofibox::platform::host::createHostArtworkProvider(cache, connectivity, tag_writer);
+    services.metadata.tag_writer = tag_writer;
+    services.playback.audio_backend = std::make_shared<FakeAudioBackend>();
+
     lofibox::app::LoFiBoxApp app{{root}, {}, std::move(services)};
     app.update();
     app.update();
@@ -92,17 +174,16 @@ int main()
         return 1;
     }
 
-    lofibox::core::Canvas canvas{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
-    app.render(canvas);
-
     int red_dominant_pixels = 0;
-    for (int y = 44; y < 120; ++y) {
-        for (int x = 30; x < 108; ++x) {
-            const auto pixel = canvas.pixel(x, y);
-            if (pixel.r > 180 && pixel.g < 100 && pixel.b < 100) {
-                ++red_dominant_pixels;
-            }
+    for (int attempt = 0; attempt < 300; ++attempt) {
+        lofibox::core::Canvas canvas{lofibox::core::kDisplayWidth, lofibox::core::kDisplayHeight};
+        app.update();
+        app.render(canvas);
+        red_dominant_pixels = countRedCoverPixels(canvas);
+        if (red_dominant_pixels >= 900) {
+            break;
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
     }
 
     if (red_dominant_pixels < 900) {
