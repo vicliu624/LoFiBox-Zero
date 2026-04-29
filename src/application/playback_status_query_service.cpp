@@ -32,13 +32,21 @@ PlaybackStatusSnapshot PlaybackStatusQueryService::snapshot() const
     if (session_value.current_track_id) {
         if (const auto* track = library_.findTrack(*session_value.current_track_id)) {
             result.title = track->title;
+            result.artist = track->artist;
+            result.album = track->album;
             result.source_label = track->remote && !track->source_label.empty() ? track->source_label : "LOCAL";
+            result.source_type = track->remote ? "REMOTE" : "LOCAL";
             result.duration_seconds = track->duration_seconds;
         }
     } else if (!session_value.current_stream_title.empty()) {
         result.title = session_value.current_stream_title;
+        result.artist = session_value.current_stream_artist;
+        result.album = session_value.current_stream_album;
         result.source_label = session_value.current_stream_source.empty() ? "STREAM" : session_value.current_stream_source;
+        result.source_type = "STREAM";
         result.duration_seconds = session_value.current_stream_duration_seconds;
+        result.live = session_value.current_stream_live;
+        result.seekable = !session_value.current_stream_live;
     }
     return result;
 }

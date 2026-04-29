@@ -11,6 +11,7 @@ They belong to the running LoFiBox instance.
 
 Runtime CLI is one external entry point into this boundary.
 The same boundary must serve GUI input, desktop integration, runtime CLI, future automation clients, MCP-style runtime tools, and tests.
+The terminal UI is another runtime client: it observes runtime snapshots and emits runtime commands, but it does not own live playback, queue, EQ, remote, lyrics, visualization, library, or diagnostic truth.
 
 ## 2. Authority
 
@@ -45,6 +46,7 @@ This document defines the runtime command/session layer that sits between interf
 - `RuntimeQuery` is a read request for live runtime truth.
 - `RuntimeCommandResult` is the structured outcome of a runtime command.
 - `RuntimeSnapshot` is structured live truth before GUI rows, terminal text, desktop notifications, or automation payloads.
+- `RuntimeSnapshot` must also be rich enough for terminal-native projection. TUI widgets, runtime CLI JSON, and future MCP-style state queries should project from the same snapshot semantics instead of each deriving state from lower layers.
 - `RuntimeHost` is the sole in-process owner of live runtime lifetime, tick, runtime domains, runtime bus, server, local client, and optional external transport.
 - `RuntimeSessionFacade` is the process-local composition facade over playback runtime, queue runtime, EQ runtime, remote session runtime, live settings runtime, and snapshot assembly. It is not a second controller and must not keep accumulating business logic.
 - `PlaybackRuntime`, `QueueRuntime`, `EqRuntime`, `RemoteSessionRuntime`, and `SettingsRuntime` are the live runtime domains that own current session truth.
@@ -79,7 +81,7 @@ Runtime Command And Query Bus
 Runtime Session Facade
         |
         v
-Playback Runtime / Queue Runtime / EQ Runtime / Remote Session Runtime / Settings Runtime
+Playback Runtime / Queue Runtime / EQ Runtime / Remote Session Runtime / Settings Runtime / Runtime Projections
         |
         v
 Application Services / Controllers / RuntimeServices
@@ -237,6 +239,7 @@ Each command kind must validate the payload tag it needs. A command with the wro
 
 Runtime snapshots must be structured objects, not pre-rendered text.
 GUI rows, terminal output, desktop notifications, and automation payloads are projections over runtime snapshots.
+The full runtime snapshot may include projection-only domains such as visualization, lyrics, library readiness, source summary, diagnostics, and creator-analysis placeholders when those facts are derived from the running instance. These projections do not make the TUI or CLI owners of the underlying services.
 
 Every public `RuntimeCommandKind` must either be implemented or removed from the contract.
 Formal command kinds must not remain as permanently unsupported placeholders.
@@ -357,3 +360,49 @@ Client/server and transport tests must validate result envelopes, correlation id
 - Do not make `AppCommandExecutor` construct `RuntimeCommandBus` or `RuntimeSessionFacade`. It may interpret GUI input and submit runtime commands through its target.
 - Do not make transport include runtime domain headers. Transport sees only command/query/result/snapshot envelopes.
 - Do not reintroduce runtime-to-GUI callbacks for remote playback. GUI may resolve a stream through application query services and submit an explicit runtime command payload; runtime host owns the subsequent playback and active remote-session mutation.
+
+## 12. Runtime Event Stream
+
+The runtime transport also owns a streaming observation mode.
+
+This mode is distinct from command dispatch and one-shot query:
+
+- `RuntimeCommand` mutates live runtime truth.
+- `RuntimeQuery` returns one structured snapshot.
+- `RuntimeEvent` publishes ordered changes and periodic snapshot heartbeats to
+  external observers such as TUI, automation, tests, and future MCP clients.
+
+The event stream must not introduce a second runtime truth source. Every event
+is generated from the same `RuntimeSnapshot` projection used by runtime CLI and
+TUI, and every event carries the full snapshot plus event-specific payload
+fields.
+
+The current Unix socket transport supports an `event_stream` envelope. The
+server keeps the stream connection open, emits `runtime.connected` and
+`runtime.snapshot` on connect, and continues accepting other command/query
+clients concurrently. Stream event versions are monotonic per stream so
+progress, visualization, lyrics-line, and creator-analysis updates can be
+observed even when command-result version truth has not changed.
+
+The canonical event families are:
+
+```text
+runtime.connected
+runtime.disconnected
+runtime.snapshot
+playback.changed
+playback.progress
+playback.error
+queue.changed
+eq.changed
+remote.changed
+settings.changed
+lyrics.changed
+lyrics.line_changed
+visualization.frame
+library.scan_started
+library.scan_progress
+library.scan_completed
+diagnostics.changed
+creator.changed
+```

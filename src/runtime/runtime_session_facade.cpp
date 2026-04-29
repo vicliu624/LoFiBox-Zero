@@ -5,9 +5,10 @@
 namespace lofibox::runtime {
 
 RuntimeSessionFacade::RuntimeSessionFacade(application::AppServiceRegistry services, EqRuntimeState& eq, SettingsRuntimeState& settings) noexcept
-    : playback_(services),
-      queue_(services),
-      eq_(services, eq),
+    : services_(services),
+      playback_(services_),
+      queue_(services_),
+      eq_(services_, eq),
       settings_(settings)
 {
 }
@@ -62,9 +63,15 @@ const SettingsRuntime& RuntimeSessionFacade::settings() const noexcept
     return settings_;
 }
 
+void RuntimeSessionFacade::tick(double delta_seconds)
+{
+    playback_.update(delta_seconds);
+    creator_.update(services_, delta_seconds);
+}
+
 RuntimeSnapshot RuntimeSessionFacade::snapshot(std::uint64_t version) const
 {
-    return snapshots_.assemble(playback_, queue_, eq_, remote_, settings_, version);
+    return snapshots_.assemble(playback_, queue_, eq_, remote_, settings_, services_, creator_, version);
 }
 
 } // namespace lofibox::runtime

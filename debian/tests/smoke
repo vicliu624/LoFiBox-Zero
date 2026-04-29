@@ -2,6 +2,7 @@
 set -eu
 
 test -x /usr/bin/lofibox
+test -x /usr/bin/lofibox-tui
 test -f /usr/share/applications/io.github.vicliu624.lofibox.desktop
 test -f /usr/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
 test -f /usr/share/icons/hicolor/scalable/apps/io.github.vicliu624.lofibox.svg
@@ -13,6 +14,7 @@ PY
 
 lofibox --help >/dev/null
 lofibox --version >/dev/null
+lofibox-tui --help >/dev/null
 
 desktop-file-validate /usr/share/applications/io.github.vicliu624.lofibox.desktop
 appstreamcli validate --no-net /usr/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml

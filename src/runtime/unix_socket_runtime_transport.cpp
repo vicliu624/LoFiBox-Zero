@@ -2,17 +2,21 @@
 
 #include "runtime/unix_socket_runtime_transport.h"
 
+#include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <limits>
 #include <system_error>
+#include <thread>
 #include <utility>
 
 #include "runtime/runtime_envelope_serializer.h"
 
 #if defined(__unix__) || defined(__APPLE__)
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -228,6 +232,111 @@ const std::string& UnixSocketRuntimeCommandClient::lastError() const noexcept
     return transport_.lastError();
 }
 
+UnixSocketRuntimeEventStream::UnixSocketRuntimeEventStream(std::filesystem::path socket_path)
+    : socket_path_(socket_path.empty() ? defaultRuntimeSocketPath() : std::move(socket_path))
+{
+}
+
+UnixSocketRuntimeEventStream::~UnixSocketRuntimeEventStream()
+{
+    close();
+}
+
+bool UnixSocketRuntimeEventStream::connect(RuntimeEventStreamRequest request)
+{
+    close();
+    last_error_.clear();
+#if defined(__unix__) || defined(__APPLE__)
+    fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd_ < 0) {
+        last_error_ = "Could not create runtime event socket.";
+        return false;
+    }
+
+    sockaddr_un address{};
+    address.sun_family = AF_UNIX;
+    const auto path = socket_path_.string();
+    if (path.size() >= sizeof(address.sun_path)) {
+        last_error_ = "Runtime socket path is too long.";
+        close();
+        return false;
+    }
+    std::strncpy(address.sun_path, path.c_str(), sizeof(address.sun_path) - 1);
+    if (::connect(fd_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
+        last_error_ = "Runtime is not reachable at " + path + ".";
+        close();
+        return false;
+    }
+    if (!writeFrame(fd_, serializeRuntimeEventStreamRequest(request))) {
+        last_error_ = "Could not write runtime event stream request.";
+        close();
+        return false;
+    }
+    return true;
+#else
+    (void)request;
+    last_error_ = "Unix runtime event stream is unavailable on this platform.";
+    return false;
+#endif
+}
+
+void UnixSocketRuntimeEventStream::close() noexcept
+{
+#if defined(__unix__) || defined(__APPLE__)
+    closeFd(fd_);
+#endif
+}
+
+std::optional<RuntimeEvent> UnixSocketRuntimeEventStream::next(std::chrono::milliseconds timeout)
+{
+#if defined(__unix__) || defined(__APPLE__)
+    if (fd_ < 0) {
+        last_error_ = "Runtime event stream is not connected.";
+        return std::nullopt;
+    }
+    pollfd poll_fd{};
+    poll_fd.fd = fd_;
+    poll_fd.events = POLLIN;
+    const int ready = ::poll(&poll_fd, 1, static_cast<int>(timeout.count()));
+    if (ready == 0) {
+        return std::nullopt;
+    }
+    if (ready < 0 || (poll_fd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+        last_error_ = "Runtime event stream disconnected.";
+        close();
+        return std::nullopt;
+    }
+    if ((poll_fd.revents & POLLIN) == 0) {
+        return std::nullopt;
+    }
+    auto frame = readFrame(fd_);
+    if (frame.empty()) {
+        last_error_ = "Could not read runtime event frame.";
+        close();
+        return std::nullopt;
+    }
+    auto event = parseRuntimeEvent(frame);
+    if (!event) {
+        last_error_ = "Runtime event frame could not be parsed.";
+        return std::nullopt;
+    }
+    return event;
+#else
+    (void)timeout;
+    return std::nullopt;
+#endif
+}
+
+const std::filesystem::path& UnixSocketRuntimeEventStream::socketPath() const noexcept
+{
+    return socket_path_;
+}
+
+const std::string& UnixSocketRuntimeEventStream::lastError() const noexcept
+{
+    return last_error_;
+}
+
 UnixSocketRuntimeCommandServer::UnixSocketRuntimeCommandServer(RuntimeCommandServer& server, std::filesystem::path socket_path)
     : server_(server),
       socket_path_(socket_path.empty() ? defaultRuntimeSocketPath() : std::move(socket_path))
@@ -303,6 +412,16 @@ void UnixSocketRuntimeCommandServer::stop() noexcept
     if (thread_.joinable()) {
         thread_.join();
     }
+    std::vector<std::thread> client_threads{};
+    {
+        const std::lock_guard lock{client_threads_mutex_};
+        client_threads.swap(client_threads_);
+    }
+    for (auto& client_thread : client_threads) {
+        if (client_thread.joinable()) {
+            client_thread.join();
+        }
+    }
     std::error_code ec{};
     std::filesystem::remove(socket_path_, ec);
 }
@@ -328,7 +447,8 @@ void UnixSocketRuntimeCommandServer::run()
             }
             continue;
         }
-        handleClient(client_fd);
+        const std::lock_guard lock{client_threads_mutex_};
+        client_threads_.emplace_back([this, client_fd]() { handleClient(client_fd); });
     }
 #endif
 }
@@ -343,6 +463,10 @@ void UnixSocketRuntimeCommandServer::handleClient(int client_fd) noexcept
     }
 
     std::string response;
+    if (auto event_stream = parseRuntimeEventStreamRequest(request)) {
+        handleEventStream(client_fd, *event_stream);
+        return;
+    }
     if (auto command = parseRuntimeCommandRequest(request)) {
         response = serializeRuntimeCommandResponse(RuntimeCommandResponse{server_.dispatch(command->command)});
     } else if (auto query = parseRuntimeQueryRequest(request)) {
@@ -360,6 +484,60 @@ void UnixSocketRuntimeCommandServer::handleClient(int client_fd) noexcept
     closeFd(client_fd);
 #else
     (void)client_fd;
+#endif
+}
+
+void UnixSocketRuntimeCommandServer::handleEventStream(int client_fd, RuntimeEventStreamRequest request) noexcept
+{
+#if defined(__unix__) || defined(__APPLE__)
+    std::optional<RuntimeSnapshot> previous{};
+    std::uint64_t last_event_version = request.after_version;
+    int sent_events = 0;
+    const auto heartbeat = std::chrono::milliseconds{std::max(100, request.heartbeat_ms)};
+    auto last_sent = std::chrono::steady_clock::now() - heartbeat;
+
+    while (running_) {
+        const auto snapshot = server_.query(request.query);
+        auto events = runtimeEventsBetween(previous, snapshot, runtimeEventTimestampMs());
+        const auto now = std::chrono::steady_clock::now();
+        if (events.empty() && (now - last_sent) >= heartbeat) {
+            RuntimeEvent heartbeat_event{};
+            heartbeat_event.kind = RuntimeEventKind::RuntimeSnapshot;
+            heartbeat_event.version = snapshot.version;
+            heartbeat_event.timestamp_ms = runtimeEventTimestampMs();
+            heartbeat_event.snapshot = snapshot;
+            heartbeat_event.elapsed_seconds = snapshot.playback.elapsed_seconds;
+            heartbeat_event.duration_seconds = snapshot.playback.duration_seconds;
+            heartbeat_event.current_index = snapshot.lyrics.current_index;
+            heartbeat_event.offset_seconds = snapshot.lyrics.offset_seconds;
+            events.push_back(std::move(heartbeat_event));
+        }
+
+        for (auto& event : events) {
+            if (event.version <= last_event_version) {
+                event.version = ++last_event_version;
+            } else {
+                last_event_version = event.version;
+            }
+            if (!writeFrame(client_fd, serializeRuntimeEvent(event))) {
+                closeFd(client_fd);
+                return;
+            }
+            ++sent_events;
+            last_sent = std::chrono::steady_clock::now();
+            if (request.max_events > 0 && sent_events >= request.max_events) {
+                closeFd(client_fd);
+                return;
+            }
+        }
+
+        previous = snapshot;
+        std::this_thread::sleep_for(std::chrono::milliseconds{33});
+    }
+    closeFd(client_fd);
+#else
+    (void)client_fd;
+    (void)request;
 #endif
 }
 

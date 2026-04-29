@@ -16,6 +16,9 @@
 #include "platform/host/single_instance_lock.h"
 #include "platform/device/linux_framebuffer_platform.h"
 #include "targets/cli_options.h"
+#if defined(LOFIBOX_HAVE_TUI)
+#include "tui/tui_app.h"
+#endif
 
 namespace {
 
@@ -66,6 +69,12 @@ int main(int argc, char** argv)
         if (lofibox::targets::handleCommonCliOptions(argc, argv, std::cout)) {
             return 0;
         }
+
+#if defined(LOFIBOX_HAVE_TUI)
+        if (const auto tui_exit = lofibox::tui::runTuiSubcommandFromArgv(argc, argv, std::cout, std::cerr)) {
+            return *tui_exit;
+        }
+#endif
 
         if (const auto runtime_cli_exit = lofibox::cli::runRuntimeCliCommand(argc, argv, std::cout, std::cerr)) {
             return *runtime_cli_exit;

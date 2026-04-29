@@ -94,6 +94,10 @@ void printHelp(std::ostream& out)
         << "  eq show|enable|disable|preset <name>|band <index> <gain>\n"
         << "  remote reconnect|runtime reload|runtime shutdown\n"
         << '\n'
+        << "Terminal UI:\n"
+        << "  lofibox tui [dashboard|now|lyrics|spectrum|queue|library|sources|eq|diagnostics|creator]\n"
+        << "  lofibox-tui [view] [--charset unicode|ascii|minimal] [--theme amber|dark|light|mono]\n"
+        << '\n'
         << "Environment:\n"
         << "  LOFIBOX_ASSET_DIR   Override the runtime asset directory.\n"
         << "  LOFIBOX_FONT_PATH   Override the system font file used for text rendering.\n";

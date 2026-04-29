@@ -157,6 +157,7 @@ lofibox cache ...
 lofibox search ...
 lofibox open ...
 lofibox desktop ...
+lofibox tui ...
 ```
 
 This list is a product vocabulary target. A command may appear in this
@@ -218,6 +219,11 @@ Credential commands must accept stdin forms for secrets:
 Runtime commands must target the running LoFiBox instance through the runtime
 transport. They must not instantiate a second application runtime to mutate live
 truth.
+
+`lofibox tui` is not a one-shot runtime CLI command. It is a terminal-native
+presentation target defined by `lofibox-terminal-ui-spec.md`. The CLI dispatcher
+may route that subcommand to the TUI entry point, but TUI rendering, input
+routing, and terminal lifecycle must remain outside `src/cli`.
 
 Current runtime implementation scope:
 

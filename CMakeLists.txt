@@ -32,6 +32,7 @@ endif()
 
 option(LOFIBOX_BUILD_DEVICE "Build the Linux framebuffer device target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
 option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
+option(LOFIBOX_BUILD_TUI "Build the ANSI terminal UI target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
 
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp
@@ -61,6 +62,7 @@ add_library(lofibox_zero_core STATIC
     src/application/runtime_diagnostic_service.cpp
     src/application/source_profile_command_service.cpp
     src/runtime/eq_runtime.cpp
+    src/runtime/creator_analysis_runtime.cpp
     src/runtime/in_process_runtime_client.cpp
     src/runtime/playback_runtime.cpp
     src/runtime/queue_runtime.cpp
@@ -68,6 +70,7 @@ add_library(lofibox_zero_core STATIC
     src/runtime/runtime_command_bus.cpp
     src/runtime/runtime_command_dispatcher.cpp
     src/runtime/runtime_command_server.cpp
+    src/runtime/runtime_event.cpp
     src/runtime/runtime_envelope_serializer.cpp
     src/runtime/runtime_host.cpp
     src/runtime/runtime_query_dispatcher.cpp
@@ -208,6 +211,63 @@ else()
     target_compile_options(lofibox_zero_target_cli PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(LOFIBOX_BUILD_TUI)
+    add_library(lofibox_zero_tui STATIC
+        src/tui/tui_app.cpp
+        src/tui/tui_model.cpp
+        src/tui/tui_state.cpp
+        src/tui/tui_view_mode.cpp
+        src/tui/tui_renderer.cpp
+        src/tui/tui_layout_engine.cpp
+        src/tui/tui_input_router.cpp
+        src/tui/tui_command_palette.cpp
+        src/tui/widgets/tui_box.cpp
+        src/tui/widgets/tui_text.cpp
+        src/tui/widgets/tui_progress_bar.cpp
+        src/tui/widgets/tui_spectrum.cpp
+        src/tui/widgets/tui_vu_meter.cpp
+        src/tui/widgets/tui_lyrics_view.cpp
+        src/tui/widgets/tui_queue_view.cpp
+        src/tui/widgets/tui_eq_view.cpp
+        src/tui/widgets/tui_status_line.cpp
+        src/tui/widgets/tui_help_overlay.cpp
+        src/tui/pages/dashboard_tui_page.cpp
+        src/tui/pages/now_playing_tui_page.cpp
+        src/tui/pages/lyrics_tui_page.cpp
+        src/tui/pages/spectrum_tui_page.cpp
+        src/tui/pages/queue_tui_page.cpp
+        src/tui/pages/library_tui_page.cpp
+        src/tui/pages/sources_tui_page.cpp
+        src/tui/pages/eq_tui_page.cpp
+        src/tui/pages/dsp_tui_page.cpp
+        src/tui/pages/diagnostics_tui_page.cpp
+        src/tui/pages/creator_tui_page.cpp
+        src/tui/pages/help_tui_page.cpp
+        src/tui/pages/command_palette_tui_page.cpp
+        src/platform/tui/terminal_presenter.cpp
+        src/platform/tui/terminal_input.cpp
+        src/platform/tui/terminal_capabilities.cpp
+        src/platform/tui/ansi_escape.cpp
+    )
+    target_include_directories(lofibox_zero_tui PUBLIC "${PROJECT_SOURCE_DIR}/src")
+    target_compile_features(lofibox_zero_tui PUBLIC cxx_std_20)
+    target_link_libraries(lofibox_zero_tui PUBLIC lofibox_zero_core)
+    if(MSVC)
+        target_compile_options(lofibox_zero_tui PRIVATE /W4 /permissive- /FS)
+    else()
+        target_compile_options(lofibox_zero_tui PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_executable(lofibox_zero_tui_bin
+        src/targets/tui_main.cpp
+    )
+    set_target_properties(lofibox_zero_tui_bin PROPERTIES OUTPUT_NAME lofibox-tui)
+    target_link_libraries(lofibox_zero_tui_bin PRIVATE lofibox_zero_tui)
+    install(TARGETS lofibox_zero_tui_bin
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    )
+endif()
+
 if(LOFIBOX_BUILD_X11)
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(FATAL_ERROR "LOFIBOX_BUILD_X11 requires a Linux target environment.")
@@ -225,6 +285,10 @@ if(LOFIBOX_BUILD_X11)
         lofibox_zero_target_cli
         X11::X11
     )
+    if(TARGET lofibox_zero_tui)
+        target_link_libraries(lofibox_zero_x11 PRIVATE lofibox_zero_tui)
+        target_compile_definitions(lofibox_zero_x11 PRIVATE LOFIBOX_HAVE_TUI=1)
+    endif()
     install(TARGETS lofibox_zero_x11
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
@@ -249,6 +313,10 @@ if(LOFIBOX_BUILD_DEVICE)
         lofibox_zero_target_cli
         PkgConfig::XKBCOMMON
     )
+    if(TARGET lofibox_zero_tui)
+        target_link_libraries(lofibox_zero_device PRIVATE lofibox_zero_tui)
+        target_compile_definitions(lofibox_zero_device PRIVATE LOFIBOX_HAVE_TUI=1)
+    endif()
     if(TARGET lofibox_zero_x11)
         install(TARGETS lofibox_zero_device
             RUNTIME DESTINATION "${LOFIBOX_PRIVATE_LIBDIR}"
@@ -350,6 +418,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_runtime_transport_socket_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_runtime_transport_socket_smoke COMMAND lofibox_runtime_transport_socket_smoke)
 
+    add_executable(lofibox_runtime_event_stream_smoke tests/runtime_event_stream_smoke.cpp)
+    target_link_libraries(lofibox_runtime_event_stream_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_event_stream_smoke COMMAND lofibox_runtime_event_stream_smoke)
+
     add_executable(lofibox_runtime_cli_smoke tests/runtime_cli_smoke.cpp)
     target_link_libraries(lofibox_runtime_cli_smoke PRIVATE lofibox_zero_target_cli)
     add_test(NAME lofibox_runtime_cli_smoke COMMAND lofibox_runtime_cli_smoke)
@@ -357,6 +429,40 @@ if(BUILD_TESTING)
     add_executable(lofibox_cli_options_smoke tests/cli_options_smoke.cpp)
     target_link_libraries(lofibox_cli_options_smoke PRIVATE lofibox_zero_target_cli)
     add_test(NAME lofibox_cli_options_smoke COMMAND lofibox_cli_options_smoke)
+
+    if(TARGET lofibox_zero_tui)
+        add_executable(lofibox_tui_progress_bar_smoke tests/tui_progress_bar_smoke.cpp)
+        target_link_libraries(lofibox_tui_progress_bar_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_progress_bar_smoke COMMAND lofibox_tui_progress_bar_smoke)
+
+        add_executable(lofibox_tui_spectrum_renderer_smoke tests/tui_spectrum_renderer_smoke.cpp)
+        target_link_libraries(lofibox_tui_spectrum_renderer_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_spectrum_renderer_smoke COMMAND lofibox_tui_spectrum_renderer_smoke)
+
+        add_executable(lofibox_tui_lyrics_view_smoke tests/tui_lyrics_view_smoke.cpp)
+        target_link_libraries(lofibox_tui_lyrics_view_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_lyrics_view_smoke COMMAND lofibox_tui_lyrics_view_smoke)
+
+        add_executable(lofibox_tui_layout_engine_smoke tests/tui_layout_engine_smoke.cpp)
+        target_link_libraries(lofibox_tui_layout_engine_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_layout_engine_smoke COMMAND lofibox_tui_layout_engine_smoke)
+
+        add_executable(lofibox_tui_input_router_smoke tests/tui_input_router_smoke.cpp)
+        target_link_libraries(lofibox_tui_input_router_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_input_router_smoke COMMAND lofibox_tui_input_router_smoke)
+
+        add_executable(lofibox_tui_dashboard_render_smoke tests/tui_dashboard_render_smoke.cpp)
+        target_link_libraries(lofibox_tui_dashboard_render_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_dashboard_render_smoke COMMAND lofibox_tui_dashboard_render_smoke)
+
+        add_executable(lofibox_tui_runtime_projection_smoke tests/tui_runtime_projection_smoke.cpp)
+        target_link_libraries(lofibox_tui_runtime_projection_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_runtime_projection_smoke COMMAND lofibox_tui_runtime_projection_smoke)
+
+        add_executable(lofibox_tui_terminal_capabilities_smoke tests/tui_terminal_capabilities_smoke.cpp)
+        target_link_libraries(lofibox_tui_terminal_capabilities_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_terminal_capabilities_smoke COMMAND lofibox_tui_terminal_capabilities_smoke)
+    endif()
 
     add_executable(lofibox_runtime_seek_stop_queueclear_smoke tests/runtime_seek_stop_queueclear_smoke.cpp)
     target_link_libraries(lofibox_runtime_seek_stop_queueclear_smoke PRIVATE lofibox_zero_core)

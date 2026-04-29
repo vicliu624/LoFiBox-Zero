@@ -184,3 +184,31 @@ This update records the CLI contract pass:
 - The direct/runtime CLI smoke tests now cover machine output, field filtering, credential-reference status, source capability projection, local search, remote browse root projection, cache purge, runtime `now`, and runtime EQ snapshot projection.
 - Verified on `vicliu@192.168.50.48`: no-X11/no-device Ninja test build passed 71/71 CTest tests.
 - Verified on `vicliu@192.168.50.92`: temporary-prefix device build installed and passed CLI smoke; Debian `dpkg-buildpackage -b -us -uc` passed package-time 71/71 tests; `sudo dpkg -i lofibox_0.1.0-1_arm64.deb` replaced the installed package; installed CLI smoke and `sh debian/tests/smoke` passed.
+
+## 2026-04-29 Terminal UI Presentation Target Update
+
+This update records the first terminal-native presentation target pass:
+
+- `lofibox-terminal-ui-spec.md` now defines LoFiBox TUI as a formal presentation target, not a CLI print mode or GUI fallback.
+- The TUI boundary is explicit: it projects `RuntimeSnapshot`, emits `RuntimeCommand`, owns only terminal-local UI state, and must not access audio backends, playback backend controllers, lyrics providers, library scanners, remote providers, credential stores, GUI pages, or `AppRuntimeContext`.
+- `RuntimeSnapshot` now includes TUI-ready projection domains for visualization, lyrics, library, source summary, diagnostics, creator placeholders, richer playback metadata, and visible queue items.
+- Runtime snapshot assembly now projects existing code facts already present in the running instance: playback session lyrics and visualization frame, library counts/readiness, queue item labels through library queries, and diagnostic capability status.
+- `lofibox_zero_tui` and standalone `lofibox-tui` now build a zero-dependency ANSI TUI surface with adaptive layouts, Unicode/ASCII/minimal character modes, dashboard/now/lyrics/spectrum/queue/library/sources/EQ/DSP/diagnostics/creator/help/command-palette views, runtime event ingestion, raw terminal input, alternate screen, and diff rendering.
+- Device and X11 targets dispatch `lofibox tui ...` to the TUI entry point when TUI support is built.
+- New smoke tests cover progress bars, spectrum rendering, lyrics fallback/current-line display, layout classification, input routing, dashboard rendering, runtime projection, and terminal capability/diff rendering behavior.
+- Verified on `vicliu@192.168.50.48`: no-X11/no-device Ninja build with `LOFIBOX_BUILD_TUI=ON` built `lofibox_zero_tui_bin`, passed all 8 TUI smoke tests, and passed full CTest 79/79.
+- Verified on `vicliu@192.168.50.92`: Debian `dpkg-buildpackage -b -us -uc` passed package-time CTest 79/79, `sudo dpkg -i /home/vicliu/lofibox_0.1.0-1_arm64.deb` installed the package, `/usr/bin/lofibox-tui` existed, `lofibox-tui --help`, `lofibox tui --help`, `lofibox-tui --once --no-color --charset ascii`, and `sh debian/tests/smoke` all passed. The one-shot TUI correctly rendered the runtime-disconnected page when no runtime socket was active.
+
+## 2026-04-29 Terminal UI Event Stream / Creator / Input Completion Update
+
+This update records the completion pass for the three TUI gaps left by the first presentation-target implementation:
+
+- Runtime event streaming now exists as a real Unix socket stream contract, not a TUI-private polling loop. Clients send an `event_stream` envelope, receive `runtime.connected` and `runtime.snapshot`, then receive snapshot-derived change events and heartbeat snapshots.
+- Runtime event types now cover playback change/progress/error, queue, EQ, remote, settings, lyrics, lyrics-line, visualization frame, library scan state, diagnostics, creator, and runtime snapshot/connection events.
+- The Unix socket runtime server now handles event streams on client worker threads so long-lived stream clients do not block command or query clients.
+- TUI interactive mode now uses a dedicated runtime event ingest thread, drains `RuntimeEvent` objects into `TuiModel`, and keeps rendering bounded by the configured refresh cadence. `--once` remains a one-shot snapshot render.
+- Creator mode is no longer only a placeholder page. `CreatorAnalysisRuntime` derives a live creator projection from the running playback visualization frames: estimated BPM, spectral key estimate, LUFS estimate, dynamic range estimate, waveform points, beat grid, loop markers, section markers, stem status, analysis source, and confidence.
+- Terminal input decoding now preserves committed UTF-8 text, recognizes Shift+Tab, Shift+Arrow, Ctrl+D, Ctrl+U, Backspace, arrows, Enter, Escape, Tab, and printable characters, and guards bracketed paste by stripping terminal controls and filling command/search text without executing pasted command-palette content.
+- Smoke coverage now includes runtime event stream connection/command concurrency/event delivery, creator projection through runtime snapshots, UTF-8 terminal input decoding, bracketed paste guard behavior, and command-palette paste confirmation semantics.
+- Verified on `vicliu@192.168.50.48`: no-X11/no-device Ninja build with `LOFIBOX_BUILD_TUI=ON` passed full CTest 80/80, including the new runtime event stream, creator projection, and terminal input guard coverage.
+- Verified on `vicliu@192.168.50.92`: Debian package-time CTest passed 80/80, the regenerated `/home/vicliu/lofibox_0.1.0-1_arm64.deb` installed over the already-installed `lofibox (0.1.0-1)` with `Unpacking lofibox (0.1.0-1) over (0.1.0-1)`, and installed smoke passed for `/usr/bin/lofibox-tui`, `lofibox tui --help`, `lofibox-tui --once --no-color --charset ascii`, and `sh debian/tests/smoke`.

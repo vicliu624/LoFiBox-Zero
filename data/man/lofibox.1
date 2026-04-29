@@ -14,6 +14,11 @@ lofibox \- chromeless desktop-widget music player
 [\fB\-\-quiet\fR]
 \fICOMMAND\fR
 [\fIARGS\fR...]
+.PP
+.B lofibox-tui
+[\fIVIEW\fR]
+[\fB\-\-charset\fR \fIunicode|ascii|minimal\fR]
+[\fB\-\-theme\fR \fIdark|light|amber|mono\fR]
 .SH DESCRIPTION
 .B LoFiBox
 is a compact Linux music player with a chromeless desktop-widget surface.
@@ -104,6 +109,21 @@ Inspect or mutate the active runtime queue.
 .TP
 .B eq show|enable|disable|preset|band
 Inspect or mutate the active runtime EQ state.
+.TP
+.B tui [dashboard|now|lyrics|spectrum|queue|library|sources|eq|diagnostics|creator]
+Open the terminal-native LoFiBox TUI through the installed
+.B lofibox
+entry point when the target is built with TUI support.
+.TP
+.B lofibox-tui [VIEW]
+Open the same terminal UI through the standalone executable. TUI options include
+.BR \-\-charset ,
+.BR \-\-theme ,
+.BR \-\-no-color ,
+.BR \-\-runtime-socket ,
+.BR \-\-layout ,
+and
+.BR \-\-refresh .
 .SH EXIT STATUS
 .TP
 .B 0

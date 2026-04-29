@@ -3,6 +3,7 @@
 #pragma once
 
 #include "application/app_service_registry.h"
+#include "runtime/creator_analysis_runtime.h"
 #include "runtime/eq_runtime_state.h"
 #include "runtime/eq_runtime.h"
 #include "runtime/playback_runtime.h"
@@ -29,14 +30,17 @@ public:
     [[nodiscard]] const RemoteSessionRuntime& remote() const noexcept;
     [[nodiscard]] SettingsRuntime& settings() noexcept;
     [[nodiscard]] const SettingsRuntime& settings() const noexcept;
+    void tick(double delta_seconds);
     [[nodiscard]] RuntimeSnapshot snapshot(std::uint64_t version) const;
 
 private:
+    application::AppServiceRegistry services_;
     PlaybackRuntime playback_;
     QueueRuntime queue_;
     EqRuntime eq_;
     RemoteSessionRuntime remote_;
     SettingsRuntime settings_;
+    CreatorAnalysisRuntime creator_;
     RuntimeSnapshotAssembler snapshots_{};
 };
 

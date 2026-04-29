@@ -110,6 +110,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             }
         }
 
+        if ($repoPath.StartsWith("src/tui/", [System.StringComparison]::Ordinal)) {
+            if ($line -match '\bAppRuntimeContext\b|AudioBackend|PlaybackBackendController|LyricsProvider|LibraryScanner|AudioDecoder|CredentialCommandService|SourceProfileCommandService') {
+                Add-Violation $violations $repoPath $lineNumber "tui boundary" "TUI must project runtime state and emit runtime commands; it must not call GUI runtime, audio backend, lyrics provider, scanner, decoder, or credential/source services directly"
+            }
+        }
+
         if ($repoPath.StartsWith("src/playback/", [System.StringComparison]::Ordinal)) {
             if ($line -match '#\s*include\s+"application/') {
                 Add-Violation $violations $repoPath $lineNumber "playback internal boundary" "Playback internals must not depend on application command/query services"
@@ -247,6 +253,12 @@ Get-ChildItem -Path (Join-Path $repo "src") -Recurse -File | Where-Object { Is-S
             )
             if ((Test-AnyPrefix $include @("runtime/")) -and ($include -notin $allowedRuntimeCliIncludes)) {
                 Add-Violation $violations $repoPath $lineNumber $include "Runtime CLI may include only the runtime command/client/result/snapshot/transport client contract, not runtime host internals"
+            }
+        }
+
+        if ($repoPath.StartsWith("src/tui/", [System.StringComparison]::Ordinal)) {
+            if (Test-AnyPrefix $include @("app/app_runtime_context.h", "audio/", "metadata/", "remote/", "security/", "platform/host/", "platform/device/", "platform/x11/", "ui/pages/", "playback/playback_backend_controller.h")) {
+                Add-Violation $violations $repoPath $lineNumber $include "TUI must stay a terminal runtime projection and must not include GUI runtime, audio/metadata/remote/security internals, host/device/X11 adapters, or UI page implementations"
             }
         }
 

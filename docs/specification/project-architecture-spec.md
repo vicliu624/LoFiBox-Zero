@@ -62,6 +62,8 @@ For current implementation progress, use `implementation-status.md`.
   Thin entry points that bind one platform runtime to the shared app.
 - `cli`
   Terminal parsing, dispatch, and formatting adapters. CLI code is not product command truth; the current first-stage direct CLI must dispatch into the application command boundary, and future live-state commands must dispatch into a runtime command client.
+- `tui`
+  Terminal-native presentation target model, layout, widgets, pages, input routing, and command-palette interpretation. TUI code projects `RuntimeSnapshot` and emits `RuntimeCommand`; it is not a second playback, lyrics, library, remote, or credential runtime.
 - `container tooling`
   Reproducible Linux build/run environment. It is a delivery and validation shell, not a product behavior layer.
 - `process instance lock`
@@ -151,6 +153,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Text input, committed UTF-8, preedit, and system input-method responsibilities must follow `lofibox-zero-text-input-spec.md`.
 - Product command/query responsibilities shared by GUI, desktop integration, direct CLI, runtime CLI, automation clients, and tests must follow `application-command-boundary-spec.md`.
 - Live runtime command/session responsibilities shared by GUI, desktop integration, runtime CLI, automation clients, MCP-style runtime tools, and tests must follow `runtime-command-session-architecture-spec.md`.
+- Terminal-native presentation responsibilities must follow `lofibox-terminal-ui-spec.md`.
 - Persistence domains, hydration, and repair behavior must follow `lofibox-zero-persistence-spec.md`.
 - Credential references, secure secret storage, and runtime session handling must follow `lofibox-zero-credential-spec.md`.
 - Library scan, index build, refresh, and rebuild behavior must follow `lofibox-zero-library-indexing-spec.md`.
@@ -187,6 +190,8 @@ Any future visual or input validation must go through a real Linux product targe
 - `src/application/credential_command_service.*` owns secret set/status/delete behavior. Source profile code may attach or rotate credential references, but it must not write password or token payloads.
 - `src/application/cache_command_service.*` and `src/application/runtime_diagnostic_service.*` own cache and diagnostic direct-command facts. Terminal output, UI rows, and automation payloads must be projections over these structured results.
 - `src/cli` owns terminal argument parsing, dispatch, and text output formatting only. Direct CLI dispatches durable source, credential, library, cache, and doctor commands into application services. Runtime CLI dispatches live commands through `RuntimeCommandClient` and the external runtime transport. CLI code must not call `AppRuntimeContext`, UI pages, controllers, runtime domains, runtime bus, runtime server, concrete platform adapters, or provider implementations.
+- `src/tui` owns terminal-native model, layout, renderer, widgets, pages, input router, and command palette behavior. It may consume `RuntimeSnapshot` and produce `RuntimeCommand` requests through a caller-provided runtime client boundary, but it must not call audio backends, playback backend controllers, lyrics providers, library scanners, remote provider implementations, credential stores, GUI pages, or `AppRuntimeContext`.
+- `src/platform/tui` owns terminal adapter details such as ANSI escape output, alternate screen, raw mode, terminal size, color/Unicode capability detection, input escape-sequence parsing, and diff rendering. These terminal facts must not become product state.
 - `src/runtime` owns the transport-neutral runtime command/query contract, tagged command payloads, live runtime snapshots, playback/queue/EQ/remote-session/settings runtime domains, snapshot assembly, runtime session facade, runtime host, in-process runtime command dispatcher, runtime command client/server contract, transport-neutral envelopes, and Linux-first Unix socket transport. It may compose application services behind runtime domains, but it must not include UI pages, target entry points, CLI argument parsing, or concrete platform adapters.
 - `RuntimeSessionFacade` is a runtime-domain composition facade only. Playback, queue, EQ, remote-session, and live-settings behavior belongs in the matching runtime domain rather than being added to the facade.
 - `src/app/app_runtime_state.*` owns GUI page-local state; `src/app/app_controller_set.*` owns app controllers behind `AppServiceHost`. `AppRuntimeContext` may adapt service results and runtime snapshots to target interfaces, but it must not reach through `AppServiceHost` to controllers or `RuntimeServices` directly.

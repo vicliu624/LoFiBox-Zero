@@ -2,6 +2,7 @@
 
 #include "cli/runtime_cli.h"
 
+#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
@@ -214,10 +215,18 @@ CliFields playbackFields(const lofibox::runtime::PlaybackRuntimeSnapshot& playba
         {"status", playbackStatusLabel(playback.status)},
         {"track", playback.current_track_id ? std::to_string(*playback.current_track_id) : "-"},
         {"title", playback.title.empty() ? "-" : playback.title},
+        {"artist", playback.artist.empty() ? "-" : playback.artist},
+        {"album", playback.album.empty() ? "-" : playback.album},
         {"source", playback.source_label.empty() ? "-" : playback.source_label},
+        {"source_type", playback.source_type.empty() ? "-" : playback.source_type},
         {"elapsed", std::to_string(playback.elapsed_seconds)},
         {"duration", std::to_string(playback.duration_seconds)},
+        {"live", playback.live ? "YES" : "NO"},
+        {"seekable", playback.seekable ? "YES" : "NO"},
         {"audio", playback.audio_active ? "ACTIVE" : "IDLE"},
+        {"volume", std::to_string(playback.volume_percent)},
+        {"codec", playback.codec.empty() ? "-" : playback.codec},
+        {"bitrate", std::to_string(playback.bitrate_kbps)},
         {"shuffle", playback.shuffle_enabled ? "ON" : "OFF"},
         {"repeat", playback.repeat_one ? "ONE" : (playback.repeat_all ? "ALL" : "OFF")},
         {"version", std::to_string(playback.version)},
@@ -229,6 +238,7 @@ CliFields queueFields(const lofibox::runtime::QueueRuntimeSnapshot& queue)
     return {
         {"index", std::to_string(queue.active_index)},
         {"tracks", idsLabel(queue.active_ids)},
+        {"visible", std::to_string(queue.visible_items.size())},
         {"shuffle", queue.shuffle_enabled ? "ON" : "OFF"},
         {"repeat", queue.repeat_one ? "ONE" : (queue.repeat_all ? "ALL" : "OFF")},
         {"version", std::to_string(queue.version)},
@@ -282,6 +292,88 @@ CliFields settingsFields(const lofibox::runtime::SettingsRuntimeSnapshot& settin
         {"network", settings.network_policy},
         {"sleep", settings.sleep_timer},
         {"version", std::to_string(settings.version)},
+    };
+}
+
+std::string floatBandsLabel(const std::array<float, 10>& bands)
+{
+    std::ostringstream out{};
+    bool first = true;
+    for (const float value : bands) {
+        if (!first) out << ',';
+        first = false;
+        out << value;
+    }
+    return out.str();
+}
+
+CliFields visualizationFields(const lofibox::runtime::VisualizationRuntimeSnapshot& visualization)
+{
+    return {
+        {"available", visualization.available ? "YES" : "NO"},
+        {"bands", floatBandsLabel(visualization.bands)},
+        {"mode", visualization.mode},
+        {"frame", std::to_string(visualization.frame_index)},
+        {"version", std::to_string(visualization.version)},
+    };
+}
+
+CliFields lyricsFields(const lofibox::runtime::LyricsRuntimeSnapshot& lyrics)
+{
+    return {
+        {"available", lyrics.available ? "YES" : "NO"},
+        {"synced", lyrics.synced ? "YES" : "NO"},
+        {"source", lyrics.source.empty() ? "-" : lyrics.source},
+        {"current", std::to_string(lyrics.current_index)},
+        {"lines", std::to_string(lyrics.visible_lines.size())},
+        {"status", lyrics.status_message},
+        {"version", std::to_string(lyrics.version)},
+    };
+}
+
+CliFields libraryFields(const lofibox::runtime::LibraryRuntimeSnapshot& library)
+{
+    return {
+        {"ready", library.ready ? "YES" : "NO"},
+        {"degraded", library.degraded ? "YES" : "NO"},
+        {"tracks", std::to_string(library.track_count)},
+        {"albums", std::to_string(library.album_count)},
+        {"artists", std::to_string(library.artist_count)},
+        {"status", library.status},
+        {"version", std::to_string(library.version)},
+    };
+}
+
+CliFields diagnosticsFields(const lofibox::runtime::DiagnosticsRuntimeSnapshot& diagnostics)
+{
+    return {
+        {"runtime", diagnostics.runtime_ok ? "OK" : "FAIL"},
+        {"audio", diagnostics.audio_ok ? "OK" : "FAIL"},
+        {"library", diagnostics.library_ok ? "OK" : "FAIL"},
+        {"remote", diagnostics.remote_ok ? "OK" : "FAIL"},
+        {"cache", diagnostics.cache_ok ? "OK" : "FAIL"},
+        {"backend", diagnostics.audio_backend.empty() ? "-" : diagnostics.audio_backend},
+        {"warnings", std::to_string(diagnostics.warnings.size())},
+        {"errors", std::to_string(diagnostics.errors.size())},
+        {"version", std::to_string(diagnostics.version)},
+    };
+}
+
+CliFields creatorFields(const lofibox::runtime::CreatorRuntimeSnapshot& creator)
+{
+    return {
+        {"available", creator.available ? "YES" : "NO"},
+        {"bpm", std::to_string(creator.bpm)},
+        {"key", creator.key.empty() ? "-" : creator.key},
+        {"lufs", std::to_string(creator.lufs)},
+        {"dynamic_range", std::to_string(creator.dynamic_range)},
+        {"waveform_points", std::to_string(creator.waveform_points.size())},
+        {"beats", std::to_string(creator.beat_grid_seconds.size())},
+        {"stems", creator.stem_status},
+        {"source", creator.analysis_source.empty() ? "-" : creator.analysis_source},
+        {"confidence", creator.confidence.empty() ? "-" : creator.confidence},
+        {"status", creator.status_message},
+        {"version", std::to_string(creator.version)},
     };
 }
 
@@ -345,6 +437,31 @@ void printFull(const lofibox::runtime::RuntimeSnapshot& snapshot, const CliOutpu
     out << "},\"settings\":{";
     first = true;
     for (const auto& [name, value] : settingsFields(snapshot.settings)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"visualization\":{";
+    first = true;
+    for (const auto& [name, value] : visualizationFields(snapshot.visualization)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"lyrics\":{";
+    first = true;
+    for (const auto& [name, value] : lyricsFields(snapshot.lyrics)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"library\":{";
+    first = true;
+    for (const auto& [name, value] : libraryFields(snapshot.library)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"diagnostics\":{";
+    first = true;
+    for (const auto& [name, value] : diagnosticsFields(snapshot.diagnostics)) {
+        printJsonField(out, name, value, first);
+    }
+    out << "},\"creator\":{";
+    first = true;
+    for (const auto& [name, value] : creatorFields(snapshot.creator)) {
         printJsonField(out, name, value, first);
     }
     out << "}}\n";
