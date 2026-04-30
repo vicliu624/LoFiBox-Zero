@@ -120,6 +120,9 @@ separate. Build tools such as `pkgconf` belong to the build architecture and mus
 be declared with a native build-dependency qualifier when needed. Target
 development libraries such as `libx11-dev`, `libxkbcommon-dev`, and
 `libfreetype-dev` belong to the host architecture selected by `--host-arch`.
+The source package rules must also select host-triplet compilers when
+`DEB_BUILD_GNU_TYPE` and `DEB_HOST_GNU_TYPE` differ, so cross-build publication
+does not silently compile native binaries into target architecture packages.
 
 The script-level repository generator accepts repeated `.changes` files so
 `amd64`, `arm64`, and `armhf` artifacts can be included in the same published

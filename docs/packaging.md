@@ -145,7 +145,9 @@ The GitHub-hosted preview workflow builds `amd64`, cross-builds `arm64`, and
 cross-builds Raspberry Pi ARMv6 hard-float `armhf`. Packaging must keep
 build-machine tools and target libraries separate: build tools such as
 `pkgconf` are native build dependencies, while target development libraries are
-resolved for the selected host architecture.
+resolved for the selected host architecture. `debian/rules` must select
+host-triplet compilers whenever `DEB_BUILD_GNU_TYPE` differs from
+`DEB_HOST_GNU_TYPE`.
 
 ## Autopkgtest
 
