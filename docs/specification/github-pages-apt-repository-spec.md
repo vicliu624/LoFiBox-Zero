@@ -106,9 +106,24 @@ forky
 Do not publish an ambiguous `stable` suite.
 
 The repository must support multiple architectures as package artifacts become
-available. The first supported architecture is `amd64`. The script-level
-repository generator accepts repeated `.changes` files so `arm64` artifacts from
-real device builds can be included in the same published snapshot.
+available. The current preview repository must publish `amd64`, `arm64`, and
+`armhf` package indexes when those package artifacts are available.
+
+The architecture meanings are:
+
+- `amd64`: desktop and x86_64 Linux validation hosts
+- `arm64`: Raspberry Pi Compute Module 4/5 class 64-bit systems
+- `armhf`: Raspberry Pi Compute Module 0 / ARMv6 hard-float systems
+
+Cross-built package artifacts must keep build-machine tools and target libraries
+separate. Build tools such as `pkgconf` belong to the build architecture and must
+be declared with a native build-dependency qualifier when needed. Target
+development libraries such as `libx11-dev`, `libxkbcommon-dev`, and
+`libfreetype-dev` belong to the host architecture selected by `--host-arch`.
+
+The script-level repository generator accepts repeated `.changes` files so
+`amd64`, `arm64`, and `armhf` artifacts can be included in the same published
+snapshot.
 
 ## 7. Tooling
 

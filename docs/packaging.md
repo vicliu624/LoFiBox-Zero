@@ -133,16 +133,19 @@ Local repository generation from existing `.changes` files uses:
 scripts/build-github-pages-apt-repository.sh \
   --suite trixie \
   --component main \
-  --architectures amd64,arm64 \
+  --architectures amd64,arm64,armhf \
   --output public \
   --gpg-key "$LOFIBOX_APT_GPG_KEY_ID" \
   --changes ../lofibox_0.1.0-1~lofibox1_amd64.changes \
-  --changes ../lofibox_0.1.0-1~lofibox1_arm64.changes
+  --changes ../lofibox_0.1.0-1~lofibox1_arm64.changes \
+  --changes ../lofibox_0.1.0-1~lofibox1_armhf.changes
 ```
 
-The current GitHub-hosted workflow builds `amd64`. `arm64` packages should be
-added from native real-device builds, for example from the Raspberry Pi class
-deployment target, or from a future protected self-hosted arm64 runner.
+The GitHub-hosted preview workflow builds `amd64`, cross-builds `arm64`, and
+cross-builds Raspberry Pi ARMv6 hard-float `armhf`. Packaging must keep
+build-machine tools and target libraries separate: build tools such as
+`pkgconf` are native build dependencies, while target development libraries are
+resolved for the selected host architecture.
 
 ## Autopkgtest
 
