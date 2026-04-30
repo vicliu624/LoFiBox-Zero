@@ -46,5 +46,37 @@ int main()
     handled = run({"lofibox", "source", "list"}, out);
     assert(!handled);
 
+    handled = run({"lofibox", "help"}, out);
+    assert(handled);
+    assert(out.find("Usage:") != std::string::npos);
+    assert(out.find("Direct commands:") != std::string::npos);
+
+    handled = run({"lofibox", "source", "--help"}, out);
+    assert(handled);
+    assert(out.find("LoFiBox command: source") != std::string::npos);
+    assert(out.find("Requires runtime: no") != std::string::npos);
+
+    handled = run({"lofibox", "tui", "--help"}, out);
+    assert(!handled);
+
+    handled = run({"lofibox", "commands", "--json"}, out);
+    assert(handled);
+    assert(out.find("\"commands\"") != std::string::npos);
+    assert(out.find("\"command\":\"metadata\"") != std::string::npos);
+    assert(out.find("\"examples\"") != std::string::npos);
+    assert(out.find("\"recovery\"") != std::string::npos);
+
+    handled = run({"lofibox", "help", "runtime", "playback", "--json"}, out);
+    assert(handled);
+    assert(out.find("\"command\":\"runtime playback\"") != std::string::npos);
+    assert(out.find("\"requires_runtime\":true") != std::string::npos);
+    assert(out.find("\"mutates\":false") != std::string::npos);
+    assert(out.find("\"fields\"") != std::string::npos);
+
+    handled = run({"lofibox", "runtime", "playback", "--schema"}, out);
+    assert(handled);
+    assert(out.find("\"command\":\"runtime playback\"") != std::string::npos);
+    assert(out.find("\"usage\"") != std::string::npos);
+
     return 0;
 }

@@ -100,7 +100,58 @@ If fingerprint identity and text metadata conflict:
 Lyrics providers must still validate their own returned candidates.
 Fingerprint identity improves the query seed; it does not make an arbitrary lyrics response safe.
 
-### 5.4 Tag Writeback
+For remote media, lyrics lookup must use the stable remote media cache key (`remote-media-<kind>-<profile>-<item>`) rather than a synthetic display path as the durable lookup identity. The synthetic path may still be used as a filename-like query hint, but cache, miss invalidation, and accepted lyrics must attach to the stable source/item identity.
+
+Remote catalog metadata and remote stream identity have different authority:
+
+- remote catalog fields are source facts and good display/query seeds
+- accepted high-confidence or fingerprint-verified `TrackIdentity` may govern the local display projection for title, artist, album, and duration
+- weak online identity may fill only missing or clearly broken catalog fields
+- read-only remote sources must receive local cache updates only; they must not be tag-written through the remote provider
+- lyrics lookup must prefer the accepted remote `TrackIdentity` when available, then fall back to catalog title/artist/album/duration seeds
+
+### 5.4 Enrichment End-To-End Observability
+
+Metadata and lyrics enrichment are core product behavior, not best-effort visual
+decoration. A release candidate is not acceptable if library rows, Now Playing,
+GUI, TUI, and runtime snapshots remain dominated by `UNKNOWN` when usable local
+tags, remote catalog facts, fingerprints, or online enrichment results exist.
+
+The enrichment pipeline must keep these stages distinguishable in logs,
+structured diagnostics, and tests:
+
+- source facts: embedded tags, local library facts, remote catalog facts, and
+  user-accepted local cache facts
+- fingerprint facts: generated fingerprint, duration, lookup request, lookup
+  hit/miss, and confidence
+- online metadata facts: MusicBrainz/AcoustID or future provider request inputs,
+  normalized candidate identity, confidence, and rejection reason
+- lyrics facts: embedded lyrics, sidecar lyrics, local cache, online provider
+  query terms, provider hit/miss, synced/plain distinction, and status message
+- acceptance policy: whether a candidate is strong enough to govern display
+  identity, only fill missing/broken facts, or be rejected
+- persistence/cache: stable cache key used, read/write success, and freshness
+- projection: runtime snapshot fields and GUI/TUI fields that consume the
+  accepted identity and lyrics state
+
+Remote media has the same observability requirement as local media. Remote
+tracks must not be sent to metadata or lyrics providers with an empty filesystem
+path as their effective identity. The stable remote cache key and the best
+available governed title/artist/album facts must be the query seed. If a remote
+server supplies weak or video-like catalog facts, the pipeline may improve the
+local display projection from strong fingerprint or accepted metadata, but must
+not write those facts back to the remote server.
+
+Tests must include at least one local fixture and one remote fixture where:
+
+- initial facts are incomplete or contain `UNKNOWN`
+- enrichment supplies stronger identity and/or lyrics
+- accepted results appear in runtime snapshot projection
+- GUI/TUI/CLI-visible fields consume the projection rather than stale row text
+- failed provider lookup produces a specific diagnostic reason instead of silent
+  absence
+
+### 5.5 Tag Writeback
 
 Tag writeback may persist accepted identity fields so other players can benefit from the resolution.
 

@@ -113,6 +113,106 @@ Rules:
 - `--quiet` suppresses stdout while preserving the exit code
 - command result text is a projection; it is not the product truth schema
 
+## 4.1 Agent Discovery And Error Contract
+
+The CLI is also an automation and agent interface. A capable agent must be able
+to discover commands, risks, fields, required runtime state, mutation behavior,
+and exit-code meaning without reading source code or scraping prose help.
+
+The installed executable must therefore expose a stable discovery surface:
+
+```text
+lofibox commands --json
+lofibox help --json
+lofibox help <family> [verb] --json
+lofibox <family> [verb] --schema
+```
+
+Discovery output must include at least:
+
+- command path
+- summary
+- whether the command mutates product or runtime state
+- whether the command requires a running runtime instance
+- accepted options and positional arguments
+- field names accepted by `--fields`
+- JSON output shape at the command-family level
+- stable exit-code meanings
+- security notes where secrets, remote URLs, writeback, or deletion are involved
+
+Human help and machine help must follow the same command routing rules.
+
+Required help behavior:
+
+```text
+lofibox help                 == lofibox --help
+lofibox <family> --help      shows family help
+lofibox <family> <verb> --help shows command help where implemented
+lofibox tui --help           shows TUI help, not global help
+```
+
+`lofibox help` is reserved for help. It must never be interpreted as a path,
+URL, open request, or GUI/X11 launch request.
+
+When `--json` is present and a CLI command fails before producing a domain
+object, stderr must contain a structured error object:
+
+```json
+{
+  "error": {
+    "code": "INVALID_ARGUMENT",
+    "message": "play --id requires a numeric track id.",
+    "argument": "--id",
+    "expected": "integer track id",
+    "exit_code": 2,
+    "usage": "lofibox play --id <track-id>"
+  }
+}
+```
+
+Structured error output must not be followed by a second generic error for the
+same parse failure. For example, a specific invalid argument error must not also
+print `Unknown runtime command.`
+
+`--fields` is a contract, not a best-effort typo sink. Runtime query commands
+and schema-published strict query commands must reject unknown fields with exit
+code `2` and list allowed fields in text or structured JSON. Direct command
+families that still share the legacy projection helper must at minimum emit a
+machine-readable JSON warning with `_unknown_fields` and `_allowed_fields`
+instead of silently returning `{}`. Full runtime snapshots must support nested
+fields such as:
+
+```text
+--fields playback.status,playback.title,queue.index
+```
+
+For backward compatibility, bare playback fields on full-snapshot commands may
+be interpreted as `playback.<field>`, but they must not cause unrelated domains
+such as a large queue to be emitted.
+
+State-setting commands must be idempotent when their vocabulary says they are
+sets. In particular:
+
+```text
+lofibox shuffle on
+lofibox shuffle off
+lofibox play --shuffle on
+lofibox play --shuffle off
+```
+
+must set shuffle to the requested state. They must not toggle.
+
+Secret-bearing help must prefer stdin forms:
+
+```text
+--password-stdin
+--token-stdin
+```
+
+Human help must not present `--password <secret>` or `--token <secret>` as the
+recommended path, because argv secrets leak through shell history, process
+inspection, logs, and agent transcripts.
+
 ## 5. Exit Code Contract
 
 Stable exit codes:

@@ -107,10 +107,13 @@ void PlaybackEnrichmentCoordinator::requestRemote(
             }
         }
 
-        if (services_snapshot.metadata.lyrics_provider
-            && services_snapshot.metadata.lyrics_provider->available()) {
+        if (services_snapshot.metadata.lyrics_provider) {
             const auto lyrics_metadata = mergeLyricsSeed(seed_metadata, result.metadata);
-            result.lyrics = services_snapshot.metadata.lyrics_provider->fetch(lookup_path, lyrics_metadata);
+            result.lyrics = services_snapshot.metadata.lyrics_provider->fetchRemoteIdentity(
+                stable_cache_key,
+                lookup_path,
+                lyrics_metadata,
+                result.identity);
         }
 
         if (services_snapshot.metadata.artwork_provider
@@ -145,7 +148,7 @@ void PlaybackEnrichmentCoordinator::applyPending(LibraryController& library_cont
                 continue;
             }
 
-            auto governed_track = mergeRemoteGovernedFacts(result.remote_track, result.metadata, result.lyrics);
+            auto governed_track = mergeRemoteGovernedFacts(result.remote_track, result.metadata, result.lyrics, result.identity);
             if (!result.identity.fingerprint.empty()) {
                 governed_track.fingerprint = result.identity.fingerprint;
             }

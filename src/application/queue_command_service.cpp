@@ -9,9 +9,9 @@ QueueCommandService::QueueCommandService(PlaybackCommandService playback) noexce
 {
 }
 
-void QueueCommandService::step(int delta, const PlaybackCommandService::RemoteTrackStarter& remote_starter) const
+bool QueueCommandService::step(int delta, const PlaybackCommandService::RemoteTrackStarter& remote_starter) const
 {
-    playback_.stepQueue(delta, remote_starter);
+    return playback_.stepQueue(delta, remote_starter);
 }
 
 bool QueueCommandService::jump(int queue_index, const PlaybackCommandService::RemoteTrackStarter& remote_starter) const

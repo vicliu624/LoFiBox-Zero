@@ -117,6 +117,11 @@ LoFiBoxApp
 
 `RuntimeServices` and `AppControllerSet` are owned by the non-GUI app core host path.
 `RuntimeHost` owns live runtime objects and advances them through `RuntimeHost::tick`.
+That tick is a runtime mutation and must be serialized through the same
+`RuntimeCommandBus` mutex used by external command dispatch and runtime queries.
+The host must not call `RuntimeSessionFacade::tick` directly while command
+clients can concurrently mutate playback, queue, EQ, remote, settings, or
+creator state.
 `AppRuntimeContext` receives `AppServiceHost&` and `RuntimeCommandClient&`; it must not construct or retain the runtime host internals.
 
 The external runtime CLI path is:
@@ -244,9 +249,71 @@ The full runtime snapshot may include projection-only domains such as visualizat
 Every public `RuntimeCommandKind` must either be implemented or removed from the contract.
 Formal command kinds must not remain as permanently unsupported placeholders.
 
+## 6.1 Runtime Truth And Projection Guardrails
+
+Runtime command/query code is the boundary between product truth and interface
+projection. It must not turn interface fallbacks into playback facts.
+
+Required guardrails:
+
+- A command must return `applied=false` when the requested runtime mutation could
+  not actually be applied. It must not report success and leave the session in a
+  half-updated state.
+- Queue stepping or queue jumping to a remote item must either use an explicit
+  resolved remote-library-track payload/starter or fail with `applied=false`.
+  It must not fall through to local path playback with an empty or synthetic
+  path.
+- Remote search confirmation and remote browse playback must enter playback
+  through a governed remote media projection. When a local library projection is
+  created for a remote item, that projection must carry the stable remote
+  identity needed by runtime snapshots, metadata governance, lyrics lookup, and
+  queue display.
+- Playback snapshots must describe the active session facts. They must not
+  derive title, artist, lyrics, stream URL, or queue truth from rendered GUI/TUI
+  rows.
+- A playback session may retain the selected/current item after backend failure,
+  but `PlaybackStatus::Playing` is only valid when the backend start/resume has
+  been accepted and the session is audio-active. Backend refusal, backend
+  failure, or inactive resume must remain `Paused` with `audio_active=false` and
+  must return `applied=false` for the runtime command that failed to create live
+  audio.
+- A local audio backend must not treat process creation alone as playback
+  acceptance. For local file playback, the backend must observe a bounded
+  output-start confirmation, or return failure to the playback runtime. A
+  one-time retry is allowed for transient sink teardown/startup races, but a
+  second unconfirmed start must remain a failed command rather than a fake
+  `PLAYING` projection.
+- Starting the currently active track id is idempotent. If the current session
+  already has the same track id, `PlaybackStatus::Playing`, and
+  `audio_active=true`, `PlaybackStartTrack` must return applied without
+  destroying and recreating the audio backend. Presentation targets may use this
+  to navigate from a list row to Now Playing without interrupting sound.
+- `Paused + current_track_id + audio_active=false` is not automatically a
+  resumable audio session. If the retained item is at or beyond its known
+  duration, `play`, `resume`, and GUI/TUI play-toggle commands must restart the
+  current media item from the beginning through the same runtime start path
+  used by `PlaybackStartTrack`. They must not seek to the exact end of the file
+  and report a successful play-toggle while the backend immediately exits.
+- Seek is a playback restart at a requested offset. If backend start refuses
+  that offset, including an offset at or beyond EOF, the session must become
+  `Paused` with `audio_active=false`, and the runtime command result must be
+  `applied=false`. The previous `PLAYING` projection must not survive a failed
+  seek.
+- Presentation targets may display honest fallback states, but those fallback
+  states must not feed back into runtime truth.
+
+Commands whose names describe setting a state must be idempotent. `shuffle on`
+and `shuffle off` are state-setting runtime commands, not toggles. Toggle
+semantics must remain explicit through `PlaybackToggleShuffle` or a command
+whose public spelling says `toggle`.
+
 ## 7. Serialization And Instance Boundary
 
 All live runtime mutations must pass through one serialized runtime command dispatcher in the running instance.
+Runtime ticking is also a live mutation. It advances playback time, backend
+state, visualization, lyrics-line projection, queue completion, and creator
+analysis. Therefore ticking must be serialized by the runtime bus, not by a
+parallel host-side shortcut around the bus.
 
 This applies equally to:
 

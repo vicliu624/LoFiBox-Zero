@@ -3,6 +3,7 @@
 #include "cli/runtime_cli.h"
 
 #include <array>
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
@@ -377,6 +378,326 @@ CliFields creatorFields(const lofibox::runtime::CreatorRuntimeSnapshot& creator)
     };
 }
 
+std::vector<std::string> fieldNames(const CliFields& fields)
+{
+    std::vector<std::string> names{};
+    names.reserve(fields.size());
+    for (const auto& [name, value] : fields) {
+        (void)value;
+        names.push_back(name);
+    }
+    return names;
+}
+
+bool validateObjectFields(
+    const CliOutputOptions& options,
+    const CliFields& fields,
+    std::string_view command_name,
+    std::ostream& err)
+{
+    if (options.fields.empty()) {
+        return true;
+    }
+    const auto allowed = fieldNames(fields);
+    for (const auto& field : options.fields) {
+        if (!containsField(allowed, field)) {
+            printCliError(err, options, CliStructuredError{
+                "INVALID_FIELD",
+                "Unknown field for " + std::string{command_name} + ": " + field,
+                "--fields",
+                "one of the allowed fields",
+                static_cast<int>(CliExitCode::Usage),
+                "lofibox " + std::string{command_name} + " --fields " + joinFields(allowed),
+                allowed});
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<std::string> fullSnapshotAllowedFields(const lofibox::runtime::RuntimeSnapshot& snapshot)
+{
+    std::vector<std::string> allowed{"version"};
+    const auto add = [&allowed](std::string_view domain, const CliFields& fields) {
+        for (const auto& [name, value] : fields) {
+            (void)value;
+            allowed.push_back(std::string{domain} + "." + name);
+        }
+    };
+    add("playback", playbackFields(snapshot.playback));
+    add("queue", queueFields(snapshot.queue));
+    add("eq", eqFields(snapshot.eq));
+    add("remote", remoteFields(snapshot.remote));
+    add("settings", settingsFields(snapshot.settings));
+    add("visualization", visualizationFields(snapshot.visualization));
+    add("lyrics", lyricsFields(snapshot.lyrics));
+    add("library", libraryFields(snapshot.library));
+    add("diagnostics", diagnosticsFields(snapshot.diagnostics));
+    add("creator", creatorFields(snapshot.creator));
+    return allowed;
+}
+
+bool playbackBareFieldAllowed(const lofibox::runtime::RuntimeSnapshot& snapshot, std::string_view name)
+{
+    return containsField(fieldNames(playbackFields(snapshot.playback)), name);
+}
+
+bool validateFullFields(
+    const CliOutputOptions& options,
+    const lofibox::runtime::RuntimeSnapshot& snapshot,
+    std::ostream& err)
+{
+    if (options.fields.empty()) {
+        return true;
+    }
+    const auto allowed = fullSnapshotAllowedFields(snapshot);
+    for (const auto& field : options.fields) {
+        if (containsField(allowed, field) || playbackBareFieldAllowed(snapshot, field)) {
+            continue;
+        }
+        printCliError(err, options, CliStructuredError{
+            "INVALID_FIELD",
+            "Unknown runtime snapshot field: " + field,
+            "--fields",
+            "nested field such as playback.status or queue.index",
+            static_cast<int>(CliExitCode::Usage),
+            "lofibox now --fields playback.status,playback.title --json",
+            allowed});
+        return false;
+    }
+    return true;
+}
+
+bool wantsFullField(
+    const CliOutputOptions& options,
+    std::string_view domain,
+    std::string_view field,
+    const lofibox::runtime::RuntimeSnapshot& snapshot)
+{
+    if (options.fields.empty()) {
+        return true;
+    }
+    const auto nested = std::string{domain} + "." + std::string{field};
+    if (containsField(options.fields, nested)) {
+        return true;
+    }
+    return domain == "playback" && playbackBareFieldAllowed(snapshot, field) && containsField(options.fields, field);
+}
+
+bool wantsFullDomain(
+    const CliOutputOptions& options,
+    std::string_view domain,
+    const CliFields& fields,
+    const lofibox::runtime::RuntimeSnapshot& snapshot)
+{
+    if (options.fields.empty()) {
+        return true;
+    }
+    for (const auto& [name, value] : fields) {
+        (void)value;
+        if (wantsFullField(options, domain, name, snapshot)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void printFullJsonDomain(
+    std::ostream& out,
+    std::string_view domain,
+    const CliFields& fields,
+    const CliOutputOptions& options,
+    const lofibox::runtime::RuntimeSnapshot& snapshot,
+    bool& first_top)
+{
+    if (!wantsFullDomain(options, domain, fields, snapshot)) {
+        return;
+    }
+    if (!first_top) {
+        out << ',';
+    }
+    first_top = false;
+    printJsonString(out, domain);
+    out << ":{";
+    bool first_field = true;
+    for (const auto& [name, value] : fields) {
+        if (wantsFullField(options, domain, name, snapshot)) {
+            printJsonField(out, name, value, first_field);
+        }
+    }
+    out << '}';
+}
+
+bool hasHelpRequest(const ParsedRuntimeArgs& args)
+{
+    if (optionPresent(args, "help")) {
+        return true;
+    }
+    for (const auto item : args.positional) {
+        if (item == "-h" || item == "help") {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool hasSchemaRequest(const ParsedRuntimeArgs& args)
+{
+    return optionPresent(args, "schema");
+}
+
+std::string commandPath(const ParsedRuntimeArgs& args)
+{
+    std::ostringstream out{};
+    bool first = true;
+    for (const auto item : args.positional) {
+        if (item == "help" || item == "-h") {
+            continue;
+        }
+        if (!first) {
+            out << ' ';
+        }
+        first = false;
+        out << item;
+    }
+    return out.str();
+}
+
+void printRuntimeHelp(const ParsedRuntimeArgs& args, std::ostream& out)
+{
+    const auto path = commandPath(args);
+    if (path == "runtime playback" || path == "runtime now" || path == "now") {
+        out << "Usage: lofibox runtime playback [--json] [--fields status,title,...]\n"
+            << "       lofibox now [--json] [--fields playback.status,queue.index,...]\n"
+            << "Query live playback or full runtime status through the running runtime socket.\n"
+            << "Fields: status,track,title,artist,album,source,source_type,elapsed,duration,live,seekable,audio,volume,codec,bitrate,shuffle,repeat,version\n";
+        return;
+    }
+    if (path == "play") {
+        out << "Usage: lofibox play [<path-or-url>|--id <track-id>|--source <profile-id> --item <remote-item-id>|--pause|--resume|--toggle|--next|--prev|--stop|--seek <seconds|MM:SS>|--shuffle on|off|--repeat off|one|all]\n"
+            << "Mutates the running playback session. --shuffle on/off is idempotent.\n";
+        return;
+    }
+    if (path == "queue" || path == "runtime queue") {
+        out << "Usage: lofibox queue show|set <index>|jump <index>|next|clear [--json] [--fields index,tracks,...]\n"
+            << "Mutates or queries the running active queue through the runtime command bus.\n"
+            << "Fields: index,tracks,visible,shuffle,repeat,version\n";
+        return;
+    }
+    if (path == "eq" || path == "runtime eq") {
+        out << "Usage: lofibox eq show|enable|disable|preset <name>|band <index> <gain>|reset [--json]\n"
+            << "Queries or mutates the live DSP/EQ runtime state.\n"
+            << "Fields: enabled,preset,bands,version\n";
+        return;
+    }
+    if (path == "remote" || path == "runtime remote") {
+        out << "Usage: lofibox remote reconnect\n"
+            << "       lofibox runtime remote [--json] [--fields profile,source,connection,...]\n"
+            << "Queries or reconnects the active remote runtime session.\n";
+        return;
+    }
+    out << "Runtime LoFiBox commands:\n"
+        << "  now [--json] [--fields playback.status,queue.index,...]\n"
+        << "  runtime status|playback|queue|eq|remote|settings [--json] [--fields ...]\n"
+        << "  play [<path-or-url>|--id <track-id>|--source <profile-id> --item <remote-item-id>|--pause|--resume|--toggle|--next|--prev|--stop|--seek <seconds>|--shuffle on|off|--repeat off|one|all]\n"
+        << "  pause|resume|toggle|stop|seek <seconds>|next|prev\n"
+        << "  queue show|set <index>|jump <index>|next|clear\n"
+        << "  shuffle on|off\n"
+        << "  repeat off|all|one\n"
+        << "  eq show|enable|disable|preset <name>|band <index> <gain>|reset\n"
+        << "  remote reconnect\n"
+        << "  runtime reload|runtime shutdown\n";
+}
+
+void printJsonStringArray(std::ostream& out, std::string_view name, const std::vector<std::string>& values, bool& first)
+{
+    if (!first) {
+        out << ',';
+    }
+    first = false;
+    printJsonString(out, name);
+    out << ":[";
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index > 0U) {
+            out << ',';
+        }
+        printJsonString(out, values[index]);
+    }
+    out << ']';
+}
+
+void printJsonStringArray(std::ostream& out, std::string_view name, std::initializer_list<std::string_view> values, bool& first)
+{
+    if (!first) {
+        out << ',';
+    }
+    first = false;
+    printJsonString(out, name);
+    out << ":[";
+    bool first_value = true;
+    for (const auto value : values) {
+        if (!first_value) {
+            out << ',';
+        }
+        first_value = false;
+        printJsonString(out, value);
+    }
+    out << ']';
+}
+
+void printRuntimeSchema(const ParsedRuntimeArgs& args, std::ostream& out)
+{
+    const auto path = commandPath(args);
+    const bool query = path == "now"
+        || path == "runtime"
+        || path == "runtime status"
+        || path == "runtime playback"
+        || path == "runtime queue"
+        || path == "runtime eq"
+        || path == "runtime remote"
+        || path == "runtime settings"
+        || path == "queue"
+        || path == "queue show"
+        || path == "eq"
+        || path == "eq show";
+    const bool mutates = !query;
+    const std::vector<std::string> fields = path == "runtime playback" ? fieldNames(playbackFields({}))
+        : (path == "runtime queue" || path == "queue" || path == "queue show") ? fieldNames(queueFields({}))
+        : (path == "runtime eq" || path == "eq" || path == "eq show") ? fieldNames(eqFields({}))
+        : path == "runtime remote" ? fieldNames(remoteFields({}))
+        : path == "runtime settings" ? fieldNames(settingsFields({}))
+        : std::vector<std::string>{
+            "version",
+            "playback.status",
+            "playback.title",
+            "playback.artist",
+            "playback.elapsed",
+            "playback.duration",
+            "queue.index",
+            "queue.visible",
+            "eq.enabled",
+            "remote.connection",
+            "lyrics.available",
+            "visualization.available"};
+
+    out << '{';
+    bool first = true;
+    printJsonField(out, "command", path.empty() ? "runtime" : path, first);
+    printJsonField(out, "kind", query ? "query" : "command", first);
+    printJsonBoolField(out, "requires_runtime", true, first);
+    printJsonBoolField(out, "mutates", mutates, first);
+    printJsonStringArray(out, "fields", fields, first);
+    printJsonStringArray(out, "global_options", {"--json", "--porcelain", "--fields", "--quiet", "--runtime-socket"}, first);
+    if (path == "play") {
+        printJsonStringArray(out, "options", {"--id <track-id>", "--source <profile-id>", "--item <remote-item-id>", "--pause", "--resume", "--toggle", "--next", "--prev", "--stop", "--seek <seconds|MM:SS>", "--shuffle on|off", "--repeat off|one|all"}, first);
+    }
+    if (!first) out << ',';
+    first = false;
+    printJsonString(out, "exit_codes");
+    out << ":{\"0\":\"success\",\"2\":\"usage or invalid argument\",\"5\":\"runtime transport unavailable\",\"6\":\"playback backend failure\"}";
+    out << "}\n";
+}
+
 void printPlayback(const lofibox::runtime::PlaybackRuntimeSnapshot& playback, const CliOutputOptions& options, std::ostream& out)
 {
     printObject(out, options, playbackFields(playback));
@@ -408,66 +729,72 @@ void printFull(const lofibox::runtime::RuntimeSnapshot& snapshot, const CliOutpu
         return;
     }
     if (!options.json) {
-        CliFields fields = {{"version", std::to_string(snapshot.version)}};
-        const auto playback = playbackFields(snapshot.playback);
-        fields.insert(fields.end(), playback.begin(), playback.end());
-        printObject(out, options, fields);
+        CliFields fields{};
+        if (options.fields.empty() || containsField(options.fields, "version")) {
+            fields.push_back({"version", std::to_string(snapshot.version)});
+        }
+        const auto add = [&fields, &options, &snapshot](std::string_view domain, const CliFields& domain_fields) {
+            for (const auto& [name, value] : domain_fields) {
+                if (!wantsFullField(options, domain, name, snapshot)) {
+                    continue;
+                }
+                fields.push_back({std::string{domain} + "." + name, value});
+            }
+        };
+        add("playback", playbackFields(snapshot.playback));
+        if (!options.fields.empty()) {
+            add("queue", queueFields(snapshot.queue));
+            add("eq", eqFields(snapshot.eq));
+            add("remote", remoteFields(snapshot.remote));
+            add("settings", settingsFields(snapshot.settings));
+            add("visualization", visualizationFields(snapshot.visualization));
+            add("lyrics", lyricsFields(snapshot.lyrics));
+            add("library", libraryFields(snapshot.library));
+            add("diagnostics", diagnosticsFields(snapshot.diagnostics));
+            add("creator", creatorFields(snapshot.creator));
+        }
+        auto unfiltered = options;
+        unfiltered.fields.clear();
+        printObject(out, unfiltered, fields);
         return;
     }
-    out << "{\"version\":" << snapshot.version << ",\"playback\":{";
-    bool first = true;
-    for (const auto& [name, value] : playbackFields(snapshot.playback)) {
-        if (wantsField(options, name)) printJsonField(out, name, value, first);
+    out << '{';
+    bool first_top = true;
+    if (options.fields.empty() || containsField(options.fields, "version")) {
+        printJsonNumberField(out, "version", std::to_string(snapshot.version), first_top);
     }
-    out << "},\"queue\":{";
-    first = true;
-    for (const auto& [name, value] : queueFields(snapshot.queue)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"eq\":{";
-    first = true;
-    for (const auto& [name, value] : eqFields(snapshot.eq)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"remote\":{";
-    first = true;
-    for (const auto& [name, value] : remoteFields(snapshot.remote)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"settings\":{";
-    first = true;
-    for (const auto& [name, value] : settingsFields(snapshot.settings)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"visualization\":{";
-    first = true;
-    for (const auto& [name, value] : visualizationFields(snapshot.visualization)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"lyrics\":{";
-    first = true;
-    for (const auto& [name, value] : lyricsFields(snapshot.lyrics)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"library\":{";
-    first = true;
-    for (const auto& [name, value] : libraryFields(snapshot.library)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"diagnostics\":{";
-    first = true;
-    for (const auto& [name, value] : diagnosticsFields(snapshot.diagnostics)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "},\"creator\":{";
-    first = true;
-    for (const auto& [name, value] : creatorFields(snapshot.creator)) {
-        printJsonField(out, name, value, first);
-    }
-    out << "}}\n";
+    printFullJsonDomain(out, "playback", playbackFields(snapshot.playback), options, snapshot, first_top);
+    printFullJsonDomain(out, "queue", queueFields(snapshot.queue), options, snapshot, first_top);
+    printFullJsonDomain(out, "eq", eqFields(snapshot.eq), options, snapshot, first_top);
+    printFullJsonDomain(out, "remote", remoteFields(snapshot.remote), options, snapshot, first_top);
+    printFullJsonDomain(out, "settings", settingsFields(snapshot.settings), options, snapshot, first_top);
+    printFullJsonDomain(out, "visualization", visualizationFields(snapshot.visualization), options, snapshot, first_top);
+    printFullJsonDomain(out, "lyrics", lyricsFields(snapshot.lyrics), options, snapshot, first_top);
+    printFullJsonDomain(out, "library", libraryFields(snapshot.library), options, snapshot, first_top);
+    printFullJsonDomain(out, "diagnostics", diagnosticsFields(snapshot.diagnostics), options, snapshot, first_top);
+    printFullJsonDomain(out, "creator", creatorFields(snapshot.creator), options, snapshot, first_top);
+    out << "}\n";
 }
 
-std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntimeArgs& args, std::ostream& err)
+CliStructuredError invalidArgument(
+    std::string message,
+    std::string argument,
+    std::string expected,
+    std::string usage)
+{
+    return CliStructuredError{
+        "INVALID_ARGUMENT",
+        std::move(message),
+        std::move(argument),
+        std::move(expected),
+        static_cast<int>(CliExitCode::Usage),
+        std::move(usage),
+        {}};
+}
+
+std::optional<lofibox::runtime::RuntimeCommand> buildCommand(
+    const ParsedRuntimeArgs& args,
+    std::optional<CliStructuredError>& parse_error)
 {
     const auto& p = args.positional;
     if (p.empty()) {
@@ -481,10 +808,37 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
         if (optionPresent(args, "next")) return command(lofibox::runtime::RuntimeCommandKind::QueueStep, lofibox::runtime::RuntimeCommandPayload::queueStep(1));
         if (optionPresent(args, "prev")) return command(lofibox::runtime::RuntimeCommandKind::QueueStep, lofibox::runtime::RuntimeCommandPayload::queueStep(-1));
         if (optionPresent(args, "stop")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackStop);
+        const auto source = optionValue(args, "source");
+        const auto item = optionValue(args, "item");
+        if (source || item) {
+            if (!source || source->empty()) {
+                parse_error = invalidArgument(
+                    "play --source/--item requires a remote source profile id.",
+                    "--source",
+                    "remote source profile id",
+                    "lofibox play --source <profile-id> --item <remote-item-id>");
+                return std::nullopt;
+            }
+            if (!item || item->empty()) {
+                parse_error = invalidArgument(
+                    "play --source/--item requires a remote item id.",
+                    "--item",
+                    "remote item id",
+                    "lofibox play --source <profile-id> --item <remote-item-id>");
+                return std::nullopt;
+            }
+            return command(
+                lofibox::runtime::RuntimeCommandKind::RemoteResolveAndStartTrack,
+                lofibox::runtime::RuntimeCommandPayload::remoteTrackRef(*source, *item));
+        }
         if (const auto id = optionValue(args, "id")) {
             const auto track_id = parseInt(*id);
             if (!track_id) {
-                err << "play --id requires a numeric track id.\n";
+                parse_error = invalidArgument(
+                    "play --id requires a numeric track id.",
+                    "--id",
+                    "integer track id",
+                    "lofibox play --id <track-id>");
                 return std::nullopt;
             }
             return command(lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack, lofibox::runtime::RuntimeCommandPayload::startTrack(*track_id));
@@ -492,15 +846,28 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
         if (const auto seek = optionValue(args, "seek")) {
             const auto seconds = parseDuration(*seek);
             if (!seconds) {
-                err << "play --seek requires seconds or MM:SS.\n";
+                parse_error = invalidArgument(
+                    "play --seek requires seconds or MM:SS.",
+                    "--seek",
+                    "seconds, +seconds, or MM:SS",
+                    "lofibox play --seek <seconds|MM:SS>");
                 return std::nullopt;
             }
             return command(lofibox::runtime::RuntimeCommandKind::PlaybackSeek, lofibox::runtime::RuntimeCommandPayload::seek(*seconds));
         }
         if (const auto shuffle = optionValue(args, "shuffle")) {
-            if (*shuffle == "on" || *shuffle == "off") {
-                return command(lofibox::runtime::RuntimeCommandKind::PlaybackToggleShuffle);
+            if (*shuffle == "on") {
+                return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetShuffle, lofibox::runtime::RuntimeCommandPayload::enabled(true));
             }
+            if (*shuffle == "off") {
+                return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetShuffle, lofibox::runtime::RuntimeCommandPayload::enabled(false));
+            }
+            parse_error = invalidArgument(
+                "play --shuffle requires on or off.",
+                "--shuffle",
+                "on|off",
+                "lofibox play --shuffle on|off");
+            return std::nullopt;
         }
         if (const auto repeat = optionValue(args, "repeat")) {
             if (*repeat == "all") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll, lofibox::runtime::RuntimeCommandPayload::enabled(true));
@@ -518,7 +885,11 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
     if (first == "seek" && p.size() >= 2) {
         const auto seconds = parseDuration(p[1]);
         if (!seconds) {
-            err << "seek requires seconds or MM:SS.\n";
+            parse_error = invalidArgument(
+                "seek requires seconds or MM:SS.",
+                "seek",
+                "seconds, +seconds, or MM:SS",
+                "lofibox seek <seconds|MM:SS>");
             return std::nullopt;
         }
         return command(lofibox::runtime::RuntimeCommandKind::PlaybackSeek, lofibox::runtime::RuntimeCommandPayload::seek(*seconds));
@@ -530,7 +901,11 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
         if (p[1] == "set" && p.size() >= 3) {
             const auto index = parseInt(p[2]);
             if (!index) {
-                err << "queue set requires numeric index.\n";
+                parse_error = invalidArgument(
+                    "queue set requires numeric index.",
+                    "index",
+                    "integer queue index",
+                    "lofibox queue set <index>");
                 return std::nullopt;
             }
             return command(lofibox::runtime::RuntimeCommandKind::QueueJump, lofibox::runtime::RuntimeCommandPayload::queueIndex(*index));
@@ -538,7 +913,11 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
         if (p[1] == "jump" && p.size() >= 3) {
             const auto index = parseInt(p[2]);
             if (!index) {
-                err << "queue jump requires numeric index.\n";
+                parse_error = invalidArgument(
+                    "queue jump requires numeric index.",
+                    "index",
+                    "integer queue index",
+                    "lofibox queue jump <index>");
                 return std::nullopt;
             }
             return command(lofibox::runtime::RuntimeCommandKind::QueueJump, lofibox::runtime::RuntimeCommandPayload::queueIndex(*index));
@@ -548,8 +927,14 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
         }
     }
     if (first == "shuffle" && p.size() >= 2) {
-        if (p[1] == "on") return command(lofibox::runtime::RuntimeCommandKind::PlaybackToggleShuffle);
-        if (p[1] == "off") return command(lofibox::runtime::RuntimeCommandKind::PlaybackToggleShuffle);
+        if (p[1] == "on") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetShuffle, lofibox::runtime::RuntimeCommandPayload::enabled(true));
+        if (p[1] == "off") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetShuffle, lofibox::runtime::RuntimeCommandPayload::enabled(false));
+        parse_error = invalidArgument(
+            "shuffle requires on or off.",
+            "shuffle",
+            "on|off",
+            "lofibox shuffle on|off");
+        return std::nullopt;
     }
     if (first == "repeat" && p.size() >= 2) {
         if (p[1] == "all") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll, lofibox::runtime::RuntimeCommandPayload::enabled(true));
@@ -565,7 +950,11 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(const ParsedRuntime
             const auto band = parseInt(p[2]);
             const auto gain = parseInt(p[3]);
             if (!band || !gain) {
-                err << "eq band requires numeric band and gain.\n";
+                parse_error = invalidArgument(
+                    "eq band requires numeric band and gain.",
+                    "band",
+                    "integer band index and integer gain dB",
+                    "lofibox eq band <index> <gain>");
                 return std::nullopt;
             }
             return command(lofibox::runtime::RuntimeCommandKind::EqSetBand, lofibox::runtime::RuntimeCommandPayload::eqSetBand(*band, *gain));
@@ -639,6 +1028,18 @@ std::optional<int> runRuntimeCliCommand(int argc, char** argv, std::ostream& out
         return std::nullopt;
     }
     const auto format = outputOptions(args);
+    if (hasHelpRequest(args)) {
+        if (format.json || hasSchemaRequest(args)) {
+            printRuntimeSchema(args, out);
+        } else {
+            printRuntimeHelp(args, out);
+        }
+        return 0;
+    }
+    if (hasSchemaRequest(args)) {
+        printRuntimeSchema(args, out);
+        return 0;
+    }
 
     lofibox::runtime::UnixSocketRuntimeCommandClient client{
         args.socket_path ? std::filesystem::path{*args.socket_path} : lofibox::runtime::defaultRuntimeSocketPath()};
@@ -646,28 +1047,72 @@ std::optional<int> runRuntimeCliCommand(int argc, char** argv, std::ostream& out
     if (const auto query = buildQuery(args)) {
         const auto snapshot = client.query(*query);
         if (!client.lastError().empty()) {
-            err << client.lastError() << '\n';
+            printCliError(err, format, CliStructuredError{
+                "RUNTIME_UNREACHABLE",
+                client.lastError(),
+                "--runtime-socket",
+                "reachable LoFiBox runtime socket",
+                static_cast<int>(CliExitCode::Network),
+                "lofibox runtime status",
+                {}});
             return static_cast<int>(CliExitCode::Network);
         }
         switch (query->kind) {
-        case lofibox::runtime::RuntimeQueryKind::PlaybackSnapshot: printPlayback(snapshot.playback, format, out); break;
-        case lofibox::runtime::RuntimeQueryKind::QueueSnapshot: printQueue(snapshot.queue, format, out); break;
-        case lofibox::runtime::RuntimeQueryKind::EqSnapshot: printEq(snapshot.eq, format, out); break;
-        case lofibox::runtime::RuntimeQueryKind::RemoteSessionSnapshot: printRemote(snapshot.remote, format, out); break;
-        case lofibox::runtime::RuntimeQueryKind::SettingsSnapshot: printSettings(snapshot.settings, format, out); break;
-        case lofibox::runtime::RuntimeQueryKind::FullSnapshot: printFull(snapshot, format, out); break;
+        case lofibox::runtime::RuntimeQueryKind::PlaybackSnapshot:
+            if (!validateObjectFields(format, playbackFields(snapshot.playback), "runtime playback", err)) return static_cast<int>(CliExitCode::Usage);
+            printPlayback(snapshot.playback, format, out);
+            break;
+        case lofibox::runtime::RuntimeQueryKind::QueueSnapshot:
+            if (!validateObjectFields(format, queueFields(snapshot.queue), "runtime queue", err)) return static_cast<int>(CliExitCode::Usage);
+            printQueue(snapshot.queue, format, out);
+            break;
+        case lofibox::runtime::RuntimeQueryKind::EqSnapshot:
+            if (!validateObjectFields(format, eqFields(snapshot.eq), "runtime eq", err)) return static_cast<int>(CliExitCode::Usage);
+            printEq(snapshot.eq, format, out);
+            break;
+        case lofibox::runtime::RuntimeQueryKind::RemoteSessionSnapshot:
+            if (!validateObjectFields(format, remoteFields(snapshot.remote), "runtime remote", err)) return static_cast<int>(CliExitCode::Usage);
+            printRemote(snapshot.remote, format, out);
+            break;
+        case lofibox::runtime::RuntimeQueryKind::SettingsSnapshot:
+            if (!validateObjectFields(format, settingsFields(snapshot.settings), "runtime settings", err)) return static_cast<int>(CliExitCode::Usage);
+            printSettings(snapshot.settings, format, out);
+            break;
+        case lofibox::runtime::RuntimeQueryKind::FullSnapshot:
+            if (!validateFullFields(format, snapshot, err)) return static_cast<int>(CliExitCode::Usage);
+            printFull(snapshot, format, out);
+            break;
         }
         return 0;
     }
 
-    const auto command_value = buildCommand(args, err);
+    std::optional<CliStructuredError> parse_error{};
+    const auto command_value = buildCommand(args, parse_error);
     if (!command_value) {
-        err << "Unknown runtime command.\n";
+        if (parse_error) {
+            printCliError(err, format, *parse_error);
+        } else {
+            printCliError(err, format, CliStructuredError{
+                "UNKNOWN_COMMAND",
+                "Unknown runtime command.",
+                "",
+                "known runtime command",
+                static_cast<int>(CliExitCode::Usage),
+                "lofibox runtime --help",
+                {}});
+        }
         return static_cast<int>(CliExitCode::Usage);
     }
     const auto result = client.dispatch(*command_value);
     if (!client.lastError().empty()) {
-        err << client.lastError() << '\n';
+        printCliError(err, format, CliStructuredError{
+            "RUNTIME_UNREACHABLE",
+            client.lastError(),
+            "--runtime-socket",
+            "reachable LoFiBox runtime socket",
+            static_cast<int>(CliExitCode::Network),
+            "lofibox runtime status",
+            {}});
         return static_cast<int>(CliExitCode::Network);
     }
     printResult(result, format, out);

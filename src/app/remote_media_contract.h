@@ -25,5 +25,10 @@ namespace lofibox::app {
 [[nodiscard]] TrackMetadata remoteTrackMetadataSeed(const RemoteTrack& track);
 [[nodiscard]] std::filesystem::path remoteTrackSyntheticLookupPath(const RemoteServerProfile& profile, const RemoteTrack& track);
 [[nodiscard]] RemoteTrack mergeRemoteGovernedFacts(RemoteTrack current, const TrackMetadata& metadata, const TrackLyrics& lyrics);
+[[nodiscard]] RemoteTrack mergeRemoteGovernedFacts(
+    RemoteTrack current,
+    const TrackMetadata& metadata,
+    const TrackLyrics& lyrics,
+    const TrackIdentity& identity);
 
 } // namespace lofibox::app

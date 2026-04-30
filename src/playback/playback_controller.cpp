@@ -163,6 +163,9 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     if (!track) {
         return false;
     }
+    if (track->remote) {
+        return false;
+    }
 
     queue_.active_index = queue_index;
     session_.current_track_id = track->id;
@@ -178,7 +181,14 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     runtime_.beginTrack(session_);
     refreshMetadata(library_controller, MetadataReadMode::LocalOnly);
     refreshArtwork(library_controller, ArtworkReadMode::LocalOnly);
-    (void)runtime_.startBackend(track->path, session_);
+    const bool started = runtime_.startBackend(track->path, session_);
+    if (!started) {
+        session_.status = PlaybackStatus::Paused;
+        session_.audio_active = false;
+        session_.visualization_pending = false;
+        session_.visualization_frame = {};
+        return false;
+    }
     recordPlaybackStarted(*track);
     enrichment_.request(*track);
     return true;
@@ -191,7 +201,10 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     }
 
     if (const auto* track = library_controller.findTrack(queue_.active_ids[static_cast<std::size_t>(queue_index)]);
-        track && track->remote && remote_starter) {
+        track && track->remote) {
+        if (!remote_starter) {
+            return false;
+        }
         queue_.active_index = queue_index;
         return remote_starter(track->id);
     }
@@ -199,22 +212,22 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     return playQueueIndex(library_controller, queue_index);
 }
 
-void PlaybackController::stepQueue(LibraryController& library_controller, int delta)
+bool PlaybackController::stepQueue(LibraryController& library_controller, int delta)
 {
     if (queue_.active_ids.empty()) {
-        return;
+        return false;
     }
-    runtime_.stepQueue(queue_, session_, delta, [this, &library_controller](int index) {
+    return runtime_.stepQueue(queue_, session_, delta, [this, &library_controller](int index) {
         return playQueueIndex(library_controller, index);
     });
 }
 
-void PlaybackController::stepQueue(LibraryController& library_controller, int delta, const RemoteTrackStarter& remote_starter)
+bool PlaybackController::stepQueue(LibraryController& library_controller, int delta, const RemoteTrackStarter& remote_starter)
 {
     if (queue_.active_ids.empty()) {
-        return;
+        return false;
     }
-    runtime_.stepQueue(queue_, session_, delta, [this, &library_controller, &remote_starter](int index) {
+    return runtime_.stepQueue(queue_, session_, delta, [this, &library_controller, &remote_starter](int index) {
         return playQueueIndex(library_controller, index, remote_starter);
     });
 }

@@ -17,8 +17,7 @@ bool QueueRuntime::step(int delta) const
     if (delta == 0) {
         return false;
     }
-    services_.queueCommands().step(delta);
-    return true;
+    return services_.queueCommands().step(delta);
 }
 
 bool QueueRuntime::jump(int queue_index) const
@@ -42,6 +41,11 @@ void QueueRuntime::cycleMainMenuPlaybackMode() const
 void QueueRuntime::toggleShuffle() const
 {
     services_.playbackCommands().toggleShuffle();
+}
+
+void QueueRuntime::setShuffleEnabled(bool enabled) const noexcept
+{
+    services_.playbackCommands().setShuffleEnabled(enabled);
 }
 
 void QueueRuntime::cycleRepeatMode() const noexcept

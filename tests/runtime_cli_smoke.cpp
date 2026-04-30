@@ -92,6 +92,101 @@ int main()
         return 1;
     }
 
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "now", "--fields", "playback.status,queue.index", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0
+        || out.str().find("\"playback\"") == std::string::npos
+        || out.str().find("\"queue\"") == std::string::npos
+        || out.str().find("\"eq\"") != std::string::npos) {
+        std::cerr << "Expected full snapshot nested fields to include only requested domains: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "now", "--fields", "status,title", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0
+        || out.str().find("\"playback\"") == std::string::npos
+        || out.str().find("\"queue\"") != std::string::npos) {
+        std::cerr << "Expected bare full-snapshot fields to remain playback-scoped: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "runtime", "playback", "--fields", "does_not_exist", "--json"}, out, err);
+    if (!exit_code || *exit_code != 2
+        || err.str().find("\"code\":\"INVALID_FIELD\"") == std::string::npos
+        || err.str().find("\"allowed\"") == std::string::npos) {
+        std::cerr << "Expected unknown playback fields to return structured exit 2: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "play", "--id", "nope", "--json"}, out, err);
+    if (!exit_code || *exit_code != 2
+        || err.str().find("\"code\":\"INVALID_ARGUMENT\"") == std::string::npos
+        || err.str().find("Unknown runtime command") != std::string::npos) {
+        std::cerr << "Expected invalid play id to produce one structured error only: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "shuffle", "on", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0) {
+        std::cerr << "Expected shuffle on to dispatch: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "shuffle", "on", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0) {
+        std::cerr << "Expected repeated shuffle on to remain idempotent: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "runtime", "playback", "--fields", "shuffle", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0 || out.str().find("\"shuffle\":\"ON\"") == std::string::npos) {
+        std::cerr << "Expected repeated shuffle on to leave shuffle ON: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "play", "--shuffle", "off", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0) {
+        std::cerr << "Expected play --shuffle off to dispatch: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+    out.str({});
+    out.clear();
+    err.str({});
+    err.clear();
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "runtime", "playback", "--fields", "shuffle", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0 || out.str().find("\"shuffle\":\"OFF\"") == std::string::npos) {
+        std::cerr << "Expected play --shuffle off to set shuffle OFF: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+
     runtime_host.stopExternalTransport();
     std::filesystem::remove(socket_path, ec);
 #endif

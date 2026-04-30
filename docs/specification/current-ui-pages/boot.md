@@ -36,6 +36,13 @@
 ## 6. Required Elements
 
 - Product mark or text identity
+  - When the product mark is rendered from an image asset, the asset `MUST`
+    preserve real alpha transparency. A flattened editor preview, checkerboard
+    transparency placeholder, or opaque white/off-white background is invalid.
+    Near-transparent antialiasing at the extreme edge is acceptable.
+  - Boot rendering `MUST` alpha-composite the product mark over the boot page
+    background; it `MUST NOT` erase the boot background around transparent logo
+    pixels.
 - Loading message
 - Optional progress indicator if real progress is available
 

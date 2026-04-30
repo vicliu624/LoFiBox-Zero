@@ -44,7 +44,7 @@ void RuntimeHost::setRemoteSessionSnapshot(RemoteSessionSnapshot snapshot)
 
 void RuntimeHost::tick(double delta_seconds)
 {
-    session_.tick(delta_seconds);
+    bus_.tick(delta_seconds);
 }
 
 void RuntimeHost::resetEq()

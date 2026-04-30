@@ -25,6 +25,7 @@
 #elif defined(__linux__)
 #include <fcntl.h>
 #include <csignal>
+#include <spawn.h>
 #include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -32,6 +33,10 @@
 #endif
 
 namespace fs = std::filesystem;
+
+#if defined(__linux__)
+extern char** environ;
+#endif
 
 namespace lofibox::platform::host::runtime_detail {
 
@@ -671,38 +676,44 @@ bool spawnPipeProcess(RunningPipeProcess& process, const fs::path& executable, c
         return false;
     }
 
-    const pid_t child = fork();
-    if (child < 0) {
+    std::vector<std::string> owned_args{};
+    owned_args.reserve(args.size() + 1);
+    owned_args.push_back(executable.filename().string());
+    owned_args.insert(owned_args.end(), args.begin(), args.end());
+
+    std::vector<char*> argv{};
+    argv.reserve(owned_args.size() + 1);
+    for (auto& arg : owned_args) {
+        argv.push_back(arg.data());
+    }
+    argv.push_back(nullptr);
+
+    posix_spawn_file_actions_t actions{};
+    posix_spawnattr_t attributes{};
+    if (posix_spawn_file_actions_init(&actions) != 0 || posix_spawnattr_init(&attributes) != 0) {
         close(pipe_fds[0]);
         close(pipe_fds[1]);
         return false;
     }
 
-    if (child == 0) {
-        bindChildToParentDeath();
-        setsid();
-        dup2(pipe_fds[1], STDOUT_FILENO);
-        const int devnull = open("/dev/null", O_WRONLY);
-        if (devnull >= 0) {
-            dup2(devnull, STDERR_FILENO);
-            close(devnull);
-        }
+    short spawn_flags = 0;
+#if defined(POSIX_SPAWN_SETSID)
+    spawn_flags |= POSIX_SPAWN_SETSID;
+#endif
+    (void)posix_spawnattr_setflags(&attributes, spawn_flags);
+    (void)posix_spawn_file_actions_adddup2(&actions, pipe_fds[1], STDOUT_FILENO);
+    (void)posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[0]);
+    (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[1]);
+
+    pid_t child = -1;
+    const int spawned = posix_spawn(&child, executable.string().c_str(), &actions, &attributes, argv.data(), ::environ);
+    posix_spawn_file_actions_destroy(&actions);
+    posix_spawnattr_destroy(&attributes);
+    if (spawned != 0) {
         close(pipe_fds[0]);
         close(pipe_fds[1]);
-
-        std::vector<std::string> owned_args{};
-        owned_args.reserve(args.size() + 1);
-        owned_args.push_back(executable.filename().string());
-        owned_args.insert(owned_args.end(), args.begin(), args.end());
-
-        std::vector<char*> argv{};
-        argv.reserve(owned_args.size() + 1);
-        for (auto& arg : owned_args) {
-            argv.push_back(arg.data());
-        }
-        argv.push_back(nullptr);
-        execv(executable.string().c_str(), argv.data());
-        _exit(127);
+        return false;
     }
 
     close(pipe_fds[1]);
@@ -769,39 +780,45 @@ bool spawnInputProcess(RunningInputProcess& process, const fs::path& executable,
         return false;
     }
 
-    const pid_t child = fork();
-    if (child < 0) {
+    std::vector<std::string> owned_args{};
+    owned_args.reserve(args.size() + 1);
+    owned_args.push_back(executable.filename().string());
+    owned_args.insert(owned_args.end(), args.begin(), args.end());
+
+    std::vector<char*> argv{};
+    argv.reserve(owned_args.size() + 1);
+    for (auto& arg : owned_args) {
+        argv.push_back(arg.data());
+    }
+    argv.push_back(nullptr);
+
+    posix_spawn_file_actions_t actions{};
+    posix_spawnattr_t attributes{};
+    if (posix_spawn_file_actions_init(&actions) != 0 || posix_spawnattr_init(&attributes) != 0) {
         close(pipe_fds[0]);
         close(pipe_fds[1]);
         return false;
     }
 
-    if (child == 0) {
-        bindChildToParentDeath();
-        setsid();
-        dup2(pipe_fds[0], STDIN_FILENO);
-        const int devnull = open("/dev/null", O_WRONLY);
-        if (devnull >= 0) {
-            dup2(devnull, STDOUT_FILENO);
-            dup2(devnull, STDERR_FILENO);
-            close(devnull);
-        }
+    short spawn_flags = 0;
+#if defined(POSIX_SPAWN_SETSID)
+    spawn_flags |= POSIX_SPAWN_SETSID;
+#endif
+    (void)posix_spawnattr_setflags(&attributes, spawn_flags);
+    (void)posix_spawn_file_actions_adddup2(&actions, pipe_fds[0], STDIN_FILENO);
+    (void)posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    (void)posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[0]);
+    (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[1]);
+
+    pid_t child = -1;
+    const int spawned = posix_spawn(&child, executable.string().c_str(), &actions, &attributes, argv.data(), ::environ);
+    posix_spawn_file_actions_destroy(&actions);
+    posix_spawnattr_destroy(&attributes);
+    if (spawned != 0) {
         close(pipe_fds[0]);
         close(pipe_fds[1]);
-
-        std::vector<std::string> owned_args{};
-        owned_args.reserve(args.size() + 1);
-        owned_args.push_back(executable.filename().string());
-        owned_args.insert(owned_args.end(), args.begin(), args.end());
-
-        std::vector<char*> argv{};
-        argv.reserve(owned_args.size() + 1);
-        for (auto& arg : owned_args) {
-            argv.push_back(arg.data());
-        }
-        argv.push_back(nullptr);
-        execv(executable.string().c_str(), argv.data());
-        _exit(127);
+        return false;
     }
 
     close(pipe_fds[0]);

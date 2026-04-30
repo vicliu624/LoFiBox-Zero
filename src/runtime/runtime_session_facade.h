@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "application/app_service_registry.h"
 #include "runtime/creator_analysis_runtime.h"
 #include "runtime/eq_runtime_state.h"
@@ -30,6 +32,13 @@ public:
     [[nodiscard]] const RemoteSessionRuntime& remote() const noexcept;
     [[nodiscard]] SettingsRuntime& settings() noexcept;
     [[nodiscard]] const SettingsRuntime& settings() const noexcept;
+    [[nodiscard]] bool playFirstAvailable();
+    [[nodiscard]] bool resumePlayback();
+    [[nodiscard]] bool togglePlayPause();
+    [[nodiscard]] bool startTrack(int track_id);
+    [[nodiscard]] bool startRemoteItem(const std::string& profile_id, const std::string& item_id);
+    [[nodiscard]] bool stepQueue(int delta);
+    [[nodiscard]] bool jumpQueue(int queue_index);
     void tick(double delta_seconds);
     [[nodiscard]] RuntimeSnapshot snapshot(std::uint64_t version) const;
 

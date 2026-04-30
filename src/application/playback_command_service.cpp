@@ -2,11 +2,24 @@
 
 #include "application/playback_command_service.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "application/library_mutation_service.h"
 
 namespace lofibox::application {
+namespace {
+
+bool isAtOrBeyondKnownEnd(const app::PlaybackSession& session, const app::TrackRecord& track) noexcept
+{
+    if (track.duration_seconds <= 0) {
+        return false;
+    }
+    const auto restart_threshold = std::max(0.0, static_cast<double>(track.duration_seconds) - 0.25);
+    return session.elapsed_seconds >= restart_threshold;
+}
+
+} // namespace
 
 PlaybackCommandService::PlaybackCommandService(app::PlaybackController& playback, app::LibraryController& library) noexcept
     : playback_(playback),
@@ -39,16 +52,23 @@ void PlaybackCommandService::setDspProfile(::lofibox::audio::dsp::DspChainProfil
 bool PlaybackCommandService::playFirstAvailable(const RemoteTrackStarter& remote_starter) const
 {
     const auto& current = playback_.session();
-    if (current.status == app::PlaybackStatus::Paused && (current.current_track_id || !current.current_stream_title.empty())) {
-        playback_.resume();
-        return true;
+    if (current.status == app::PlaybackStatus::Paused && current.current_track_id) {
+        if (resume()) {
+            return true;
+        }
+        return startTrack(*current.current_track_id, remote_starter);
+    }
+    if (current.status == app::PlaybackStatus::Paused && !current.current_stream_title.empty()) {
+        return resume();
     }
     if (current.status == app::PlaybackStatus::Playing) {
-        return true;
+        return current.audio_active;
     }
-    if (current.current_track_id || !current.current_stream_title.empty()) {
-        playback_.resume();
-        return true;
+    if (current.current_track_id) {
+        return startTrack(*current.current_track_id, remote_starter);
+    }
+    if (!current.current_stream_title.empty()) {
+        return resume();
     }
 
     const auto ids = library_.allSongIdsSorted();
@@ -65,6 +85,15 @@ bool PlaybackCommandService::startTrack(int track_id, const RemoteTrackStarter& 
     if (track == nullptr) {
         return false;
     }
+    const auto& current = playback_.session();
+    if (current.current_track_id == track_id) {
+        if (current.status == app::PlaybackStatus::Playing && current.audio_active) {
+            return true;
+        }
+        if (current.status == app::PlaybackStatus::Paused && current.audio_active) {
+            return resume();
+        }
+    }
     if (!track->remote) {
         return playback_.startTrack(library_, track_id);
     }
@@ -77,13 +106,12 @@ void PlaybackCommandService::prepareQueueForTrack(int track_id) const
     playback_.prepareQueueForTrack(library_, track_id);
 }
 
-void PlaybackCommandService::stepQueue(int delta, const RemoteTrackStarter& remote_starter) const
+bool PlaybackCommandService::stepQueue(int delta, const RemoteTrackStarter& remote_starter) const
 {
     if (remote_starter) {
-        playback_.stepQueue(library_, delta, remote_starter);
-        return;
+        return playback_.stepQueue(library_, delta, remote_starter);
     }
-    playback_.stepQueue(library_, delta);
+    return playback_.stepQueue(library_, delta);
 }
 
 bool PlaybackCommandService::jumpQueue(int queue_index, const RemoteTrackStarter& remote_starter) const
@@ -104,9 +132,19 @@ void PlaybackCommandService::pause() const noexcept
     playback_.pause();
 }
 
-void PlaybackCommandService::resume() const noexcept
+bool PlaybackCommandService::resume() const
 {
+    const auto& before = playback_.session();
+    if (before.status == app::PlaybackStatus::Paused && before.current_track_id && !before.audio_active) {
+        if (const auto* track = library_.findTrack(*before.current_track_id);
+            track != nullptr && isAtOrBeyondKnownEnd(before, *track)) {
+            return startTrack(*before.current_track_id);
+        }
+        return playback_.seek(library_, before.elapsed_seconds);
+    }
     playback_.resume();
+    const auto& after = playback_.session();
+    return after.status == app::PlaybackStatus::Playing && after.audio_active;
 }
 
 void PlaybackCommandService::stop() const noexcept
@@ -119,9 +157,17 @@ bool PlaybackCommandService::seek(double seconds) const
     return playback_.seek(library_, seconds);
 }
 
-void PlaybackCommandService::togglePlayPause() const noexcept
+bool PlaybackCommandService::togglePlayPause() const
 {
-    playback_.togglePlayPause();
+    const auto& current = playback_.session();
+    if (current.status == app::PlaybackStatus::Playing) {
+        playback_.pause();
+        return playback_.session().status == app::PlaybackStatus::Paused;
+    }
+    if (current.status == app::PlaybackStatus::Paused) {
+        return resume();
+    }
+    return false;
 }
 
 void PlaybackCommandService::setShuffleEnabled(bool enabled) const

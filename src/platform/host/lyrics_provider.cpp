@@ -430,7 +430,7 @@ public:
 
     [[nodiscard]] bool available() const override
     {
-        return online_lyrics_resolver_.available();
+        return true;
     }
 
     [[nodiscard]] std::string displayName() const override
@@ -440,16 +440,53 @@ public:
 
     [[nodiscard]] app::TrackLyrics fetch(const fs::path& path, const app::TrackMetadata& metadata) const override
     {
+        return fetchForCacheKey(cacheKeyForPath(path), path, metadata, {}, false);
+    }
+
+    [[nodiscard]] app::TrackLyrics fetchRemoteIdentity(
+        std::string_view stable_cache_key,
+        const fs::path& lookup_path,
+        const app::TrackMetadata& metadata,
+        const app::TrackIdentity& accepted_identity = {}) const override
+    {
+        if (stable_cache_key.empty()) {
+            return fetch(lookup_path, metadata);
+        }
+        return fetchForCacheKey(std::string{stable_cache_key}, lookup_path, metadata, accepted_identity, true);
+    }
+
+private:
+    [[nodiscard]] app::TrackLyrics fetchForCacheKey(
+        const std::string& key,
+        const fs::path& path,
+        const app::TrackMetadata& metadata,
+        const app::TrackIdentity& accepted_identity,
+        bool remote_lookup) const
+    {
         app::TrackLyrics lyrics{};
         if (!cache_) {
             return lyrics;
         }
 
-        const auto key = cacheKeyForPath(path);
         auto& entry = cache_->entries[key];
+        std::error_code ec{};
+        if (!entry.online_metadata_attempted
+            && !entry.online_lyrics_attempted
+            && !entry.track_identity_attempted
+            && entry.lyrics_lookup_version == 0
+            && fs::exists(metadataCachePath(*cache_, key), ec)
+            && !ec) {
+            entry = loadMetadataCache(*cache_, key);
+            logRuntime(
+                RuntimeLogLevel::Debug,
+                "lyrics",
+                std::string(remote_lookup ? "Remote lyrics cache loaded for " : "Lyrics cache loaded for ")
+                    + pathUtf8String(path));
+        }
+
         bool embedded_lyrics_rejected = false;
-        const auto embedded_lyrics = embedded_reader_.read(path);
-        if (embedded_lyrics.plain || embedded_lyrics.synced) {
+        const auto embedded_lyrics = remote_lookup ? app::TrackLyrics{} : embedded_reader_.read(path);
+        if (!remote_lookup && (embedded_lyrics.plain || embedded_lyrics.synced)) {
             if (embeddedLyricsLookMismatched(embedded_lyrics, path, metadata)) {
                 embedded_lyrics_rejected = true;
                 entry.lyrics = {};
@@ -475,8 +512,21 @@ public:
         }
 
         app::TrackMetadata lyrics_metadata = metadata;
-        app::TrackIdentity identity{};
-        if (track_identity_provider_ && track_identity_provider_->available()) {
+        app::TrackIdentity identity = accepted_identity.found ? accepted_identity : entry.identity;
+        if (identity.found) {
+            if (identity.metadata.title) lyrics_metadata.title = identity.metadata.title;
+            if (identity.metadata.artist) lyrics_metadata.artist = identity.metadata.artist;
+            if (identity.metadata.album) lyrics_metadata.album = identity.metadata.album;
+            if (identity.metadata.duration_seconds) lyrics_metadata.duration_seconds = identity.metadata.duration_seconds;
+            entry.identity = identity;
+            logRuntime(
+                RuntimeLogLevel::Debug,
+                "lyrics",
+                std::string(remote_lookup ? "Remote lyrics lookup using accepted identity from " : "Lyrics lookup using cached identity from ")
+                    + identity.source
+                    + " for "
+                    + pathUtf8String(path));
+        } else if (track_identity_provider_ && track_identity_provider_->available() && !remote_lookup) {
             identity = track_identity_provider_->resolve(path, metadata);
             if (identity.found) {
                 if (identity.metadata.title) lyrics_metadata.title = identity.metadata.title;
@@ -494,7 +544,7 @@ public:
         if (entry.lyrics.plain || entry.lyrics.synced) {
             lyrics_cache_.storeHit(*cache_, key, entry);
             logRuntime(RuntimeLogLevel::Info, "lyrics", "Online lyrics hit for " + pathUtf8String(path));
-            if (tag_writer_ && tag_writer_->available()) {
+            if (!remote_lookup && tag_writer_ && tag_writer_->available()) {
                 app::TagWriteRequest request{};
                 request.lyrics = entry.lyrics;
                 if (identity.found) {
@@ -518,7 +568,6 @@ public:
         return entry.lyrics;
     }
 
-private:
     std::shared_ptr<SharedRuntimeCache> cache_{};
     std::shared_ptr<app::ConnectivityProvider> connectivity_{};
     std::shared_ptr<app::TagWriter> tag_writer_{};

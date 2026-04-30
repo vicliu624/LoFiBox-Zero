@@ -11,7 +11,7 @@
 
 namespace lofibox::platform::host::runtime_detail {
 
-inline constexpr int kLyricsLookupVersion = 5;
+inline constexpr int kLyricsLookupVersion = 6;
 
 class LyricsCache {
 public:

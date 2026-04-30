@@ -38,8 +38,8 @@ public:
         const RemoteTrack& remote_track,
         const std::string& source,
         bool cache_remote_facts);
-    void stepQueue(LibraryController& library_controller, int delta);
-    void stepQueue(LibraryController& library_controller, int delta, const RemoteTrackStarter& remote_starter);
+    [[nodiscard]] bool stepQueue(LibraryController& library_controller, int delta);
+    [[nodiscard]] bool stepQueue(LibraryController& library_controller, int delta, const RemoteTrackStarter& remote_starter);
     [[nodiscard]] bool jumpQueue(LibraryController& library_controller, int queue_index);
     [[nodiscard]] bool jumpQueue(LibraryController& library_controller, int queue_index, const RemoteTrackStarter& remote_starter);
     void clearQueue() noexcept;

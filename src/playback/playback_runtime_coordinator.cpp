@@ -44,8 +44,12 @@ bool PlaybackRuntimeCoordinator::seekBackend(const std::filesystem::path& path, 
     session.audio_active = audio_pipeline_.startFile(path, session.elapsed_seconds);
     if (session.audio_active) {
         session.status = PlaybackStatus::Playing;
+        return true;
     }
-    return session.audio_active;
+    session.status = PlaybackStatus::Paused;
+    session.visualization_pending = false;
+    session.visualization_frame = {};
+    return false;
 }
 
 void PlaybackRuntimeCoordinator::pause(PlaybackSession& session) noexcept
@@ -58,9 +62,32 @@ void PlaybackRuntimeCoordinator::pause(PlaybackSession& session) noexcept
 
 void PlaybackRuntimeCoordinator::resume(PlaybackSession& session) noexcept
 {
-    if (session.status == PlaybackStatus::Paused) {
-        audio_pipeline_.resume();
+    if (session.status != PlaybackStatus::Paused) {
+        return;
+    }
+    if (!session.audio_active) {
+        session.visualization_pending = false;
+        session.visualization_frame = {};
+        return;
+    }
+
+    audio_pipeline_.resume();
+    switch (audio_pipeline_.state()) {
+    case AudioPlaybackState::Starting:
+    case AudioPlaybackState::Playing:
         session.status = PlaybackStatus::Playing;
+        break;
+    case AudioPlaybackState::Paused:
+        session.status = PlaybackStatus::Paused;
+        break;
+    case AudioPlaybackState::Idle:
+    case AudioPlaybackState::Finished:
+    case AudioPlaybackState::Failed:
+        session.status = PlaybackStatus::Paused;
+        session.audio_active = false;
+        session.visualization_pending = false;
+        session.visualization_frame = {};
+        break;
     }
 }
 
@@ -74,12 +101,13 @@ void PlaybackRuntimeCoordinator::stop(PlaybackSession& session) noexcept
     session.visualization_frame = {};
 }
 
-void PlaybackRuntimeCoordinator::stepQueue(const QueueState& queue, const PlaybackSession& session, int delta, const PlayIndexCallback& play_index) const
+bool PlaybackRuntimeCoordinator::stepQueue(const QueueState& queue, const PlaybackSession& session, int delta, const PlayIndexCallback& play_index) const
 {
     const int index = completion_policy_.steppedIndex(queue, session, delta);
     if (index >= 0) {
-        (void)play_index(index);
+        return play_index(index);
     }
+    return false;
 }
 
 bool PlaybackRuntimeCoordinator::advanceAfterFinish(const QueueState& queue, const PlaybackSession& session, const PlayIndexCallback& play_index) const

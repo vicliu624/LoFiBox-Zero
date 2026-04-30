@@ -13,20 +13,18 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
 {
     switch (command.kind) {
     case RuntimeCommandKind::PlaybackPlay:
-        return applied(command, "PLAYBACK_PLAY", "Playback play submitted.", session_.playback().playFirstAvailable());
+        return applied(command, "PLAYBACK_PLAY", "Playback play submitted.", session_.playFirstAvailable());
     case RuntimeCommandKind::PlaybackPause:
         session_.playback().pause();
         return applied(command, "PLAYBACK_PAUSE", "Playback pause submitted.", true);
     case RuntimeCommandKind::PlaybackResume:
-        session_.playback().resume();
-        return applied(command, "PLAYBACK_RESUME", "Playback resume submitted.", true);
+        return applied(command, "PLAYBACK_RESUME", "Playback resume submitted.", session_.resumePlayback());
     case RuntimeCommandKind::PlaybackToggle:
-        session_.playback().togglePlayPause();
-        return applied(command, "PLAYBACK_TOGGLE", "Playback toggle submitted.", true);
+        return applied(command, "PLAYBACK_TOGGLE", "Playback toggle submitted.", session_.togglePlayPause());
     case RuntimeCommandKind::PlaybackStartTrack:
         {
             const auto* payload = command.payload.get<PlaybackStartTrackPayload>();
-            return applied(command, "PLAYBACK_START_TRACK", "Playback start-track submitted.", payload != nullptr && session_.playback().startTrack(payload->track_id));
+            return applied(command, "PLAYBACK_START_TRACK", "Playback start-track submitted.", payload != nullptr && session_.startTrack(payload->track_id));
         }
     case RuntimeCommandKind::PlaybackStop:
         session_.playback().stop();
@@ -39,12 +37,12 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
     case RuntimeCommandKind::QueueStep:
         {
             const auto* payload = command.payload.get<QueueStepPayload>();
-            return applied(command, "QUEUE_STEP", "Queue step submitted.", payload != nullptr && session_.queue().step(payload->delta));
+            return applied(command, "QUEUE_STEP", "Queue step submitted.", payload != nullptr && session_.stepQueue(payload->delta));
         }
     case RuntimeCommandKind::QueueJump:
         {
             const auto* payload = command.payload.get<QueueIndexPayload>();
-            return applied(command, "QUEUE_JUMP", "Queue jump submitted.", payload != nullptr && session_.queue().jump(payload->queue_index));
+            return applied(command, "QUEUE_JUMP", "Queue jump submitted.", payload != nullptr && session_.jumpQueue(payload->queue_index));
         }
     case RuntimeCommandKind::QueueClear:
         session_.queue().clear();
@@ -52,6 +50,15 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
     case RuntimeCommandKind::PlaybackToggleShuffle:
         session_.queue().toggleShuffle();
         return applied(command, "PLAYBACK_SHUFFLE", "Playback shuffle submitted.", true);
+    case RuntimeCommandKind::PlaybackSetShuffle:
+        {
+            const auto* payload = command.payload.get<RuntimeEnabledPayload>();
+            if (payload == nullptr) {
+                return applied(command, "PLAYBACK_SHUFFLE", "Shuffle payload missing.", false);
+            }
+            session_.queue().setShuffleEnabled(payload->enabled);
+            return applied(command, "PLAYBACK_SHUFFLE", "Playback shuffle submitted.", true);
+        }
     case RuntimeCommandKind::PlaybackCycleRepeat:
         session_.queue().cycleRepeatMode();
         return applied(command, "PLAYBACK_REPEAT", "Playback repeat mode submitted.", true);
@@ -75,6 +82,15 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
             }
             session_.queue().setRepeatOne(payload->enabled);
             return applied(command, "PLAYBACK_REPEAT_ONE", "Repeat-one submitted.", true);
+        }
+    case RuntimeCommandKind::RemoteResolveAndStartTrack:
+        {
+            const auto* payload = command.payload.get<RemoteTrackRefPayload>();
+            return applied(
+                command,
+                "REMOTE_RESOLVE_AND_START_TRACK",
+                "Remote item resolve/start submitted.",
+                payload != nullptr && session_.startRemoteItem(payload->profile_id, payload->item_id));
         }
     case RuntimeCommandKind::RemoteStartActiveStream:
         {

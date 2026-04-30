@@ -56,6 +56,23 @@ inline bool wantsField(const CliOutputOptions& options, std::string_view name)
         || std::find(options.fields.begin(), options.fields.end(), name) != options.fields.end();
 }
 
+inline bool containsField(const std::vector<std::string>& fields, std::string_view name)
+{
+    return std::find(fields.begin(), fields.end(), name) != fields.end();
+}
+
+inline std::string joinFields(const std::vector<std::string>& fields)
+{
+    std::ostringstream out{};
+    for (std::size_t index = 0; index < fields.size(); ++index) {
+        if (index > 0U) {
+            out << ',';
+        }
+        out << fields[index];
+    }
+    return out.str();
+}
+
 inline std::string jsonEscape(std::string_view value)
 {
     std::ostringstream out{};
@@ -116,6 +133,117 @@ inline void printJsonNumberField(std::ostream& out, std::string_view name, std::
     out << ':' << value;
 }
 
+inline std::vector<std::string> fieldNames(const CliFields& fields)
+{
+    std::vector<std::string> names{};
+    names.reserve(fields.size());
+    for (const auto& [name, value] : fields) {
+        (void)value;
+        names.push_back(name);
+    }
+    return names;
+}
+
+inline std::vector<std::string> unknownRequestedFields(const CliOutputOptions& options, const std::vector<std::string>& allowed)
+{
+    std::vector<std::string> unknown{};
+    for (const auto& field : options.fields) {
+        if (!containsField(allowed, field)) {
+            unknown.push_back(field);
+        }
+    }
+    return unknown;
+}
+
+inline void printJsonStringVector(std::ostream& out, std::string_view name, const std::vector<std::string>& values, bool& first)
+{
+    if (!first) {
+        out << ',';
+    }
+    first = false;
+    printJsonString(out, name);
+    out << ":[";
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index > 0U) {
+            out << ',';
+        }
+        printJsonString(out, values[index]);
+    }
+    out << ']';
+}
+
+inline void printUnknownFieldsWarning(
+    std::ostream& out,
+    const CliOutputOptions& options,
+    const std::vector<std::string>& allowed,
+    bool& first)
+{
+    if (options.fields.empty()) {
+        return;
+    }
+    const auto unknown = unknownRequestedFields(options, allowed);
+    if (unknown.empty()) {
+        return;
+    }
+    printJsonField(out, "_warning", "unknown fields ignored: " + joinFields(unknown), first);
+    printJsonStringVector(out, "_unknown_fields", unknown, first);
+    printJsonStringVector(out, "_allowed_fields", allowed, first);
+}
+
+struct CliStructuredError {
+    std::string code{"ERROR"};
+    std::string message{};
+    std::string argument{};
+    std::string expected{};
+    int exit_code{static_cast<int>(CliExitCode::Usage)};
+    std::string usage{};
+    std::vector<std::string> allowed{};
+};
+
+inline void printCliError(std::ostream& err, const CliOutputOptions& options, const CliStructuredError& error)
+{
+    if (!options.json) {
+        err << error.message << '\n';
+        if (!error.allowed.empty()) {
+            err << "Allowed fields: " << joinFields(error.allowed) << '\n';
+        }
+        if (!error.usage.empty()) {
+            err << "Usage: " << error.usage << '\n';
+        }
+        return;
+    }
+    err << "{\"error\":{";
+    bool first = true;
+    printJsonField(err, "code", error.code, first);
+    printJsonField(err, "message", error.message, first);
+    if (!error.argument.empty()) {
+        printJsonField(err, "argument", error.argument, first);
+    }
+    if (!error.expected.empty()) {
+        printJsonField(err, "expected", error.expected, first);
+    }
+    printJsonNumberField(err, "exit_code", std::to_string(error.exit_code), first);
+    if (!error.usage.empty()) {
+        printJsonField(err, "usage", error.usage, first);
+    }
+    if (!error.allowed.empty()) {
+        if (!first) {
+            err << ',';
+        }
+        first = false;
+        printJsonString(err, "allowed");
+        err << ":[";
+        for (std::size_t index = 0; index < error.allowed.size(); ++index) {
+            if (index > 0U) {
+                err << ',';
+            }
+            printJsonString(err, error.allowed[index]);
+        }
+        err << ']';
+    }
+    err << "}}\n";
+}
+
 inline void printObject(std::ostream& out, const CliOutputOptions& options, const CliFields& fields)
 {
     if (options.quiet) {
@@ -124,6 +252,8 @@ inline void printObject(std::ostream& out, const CliOutputOptions& options, cons
     if (options.json) {
         out << '{';
         bool first = true;
+        const auto allowed = fieldNames(fields);
+        printUnknownFieldsWarning(out, options, allowed, first);
         for (const auto& [name, value] : fields) {
             if (wantsField(options, name)) {
                 printJsonField(out, name, value, first);
@@ -162,6 +292,20 @@ inline void printPorcelainRows(
         return;
     }
     if (options.json) {
+        const auto allowed = fieldNames(rows.front());
+        const auto unknown = unknownRequestedFields(options, allowed);
+        if (!unknown.empty()) {
+            out << '{';
+            bool first = true;
+            printJsonField(out, "_warning", "unknown fields ignored: " + joinFields(unknown), first);
+            printJsonStringVector(out, "_unknown_fields", unknown, first);
+            printJsonStringVector(out, "_allowed_fields", allowed, first);
+            if (!first) {
+                out << ',';
+            }
+            printJsonString(out, "rows");
+            out << ':';
+        }
         out << '[';
         bool first_row = true;
         for (const auto& row : rows) {
@@ -178,7 +322,11 @@ inline void printPorcelainRows(
             }
             out << '}';
         }
-        out << "]\n";
+        out << ']';
+        if (!unknown.empty()) {
+            out << '}';
+        }
+        out << '\n';
         return;
     }
     for (const auto& row : rows) {

@@ -21,9 +21,11 @@ public:
     [[nodiscard]] RuntimeSnapshot query(const RuntimeQuery& query) const;
     [[nodiscard]] RuntimeSnapshot snapshot() const;
     [[nodiscard]] std::uint64_t version() const noexcept;
+    void tick(double delta_seconds);
 
 private:
     mutable std::mutex mutex_{};
+    RuntimeSessionFacade& session_;
     RuntimeCommandDispatcher commands_;
     RuntimeQueryDispatcher queries_;
 };

@@ -20,8 +20,8 @@ public:
     void stop() const noexcept;
     [[nodiscard]] bool seek(double seconds) const;
     void pause() const noexcept;
-    void resume() const noexcept;
-    void togglePlayPause() const noexcept;
+    [[nodiscard]] bool resume() const;
+    [[nodiscard]] bool togglePlayPause() const;
     [[nodiscard]] PlaybackRuntimeSnapshot snapshot(std::uint64_t version) const;
 
 private:

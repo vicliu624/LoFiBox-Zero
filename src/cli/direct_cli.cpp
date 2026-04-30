@@ -11,6 +11,7 @@
 #include <iostream>
 #include <optional>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -43,6 +44,10 @@ bool isDirectCommand(std::string_view value) noexcept
         || value == "library"
         || value == "search"
         || value == "remote"
+        || value == "metadata"
+        || value == "lyrics"
+        || value == "artwork"
+        || value == "fingerprint"
         || value == "doctor"
         || value == "cache"
         || value == "credentials";
@@ -95,6 +100,19 @@ bool optionPresent(const ParsedArgs& args, std::string_view name)
     return optionValue(args, name).has_value();
 }
 
+bool helpRequested(const ParsedArgs& args)
+{
+    if (optionPresent(args, "help")) {
+        return true;
+    }
+    for (const auto item : args.positional) {
+        if (item == "help" || item == "-h") {
+            return true;
+        }
+    }
+    return false;
+}
+
 CliOutputOptions outputOptions(const ParsedArgs& args)
 {
     CliOutputOptions options{};
@@ -105,6 +123,27 @@ CliOutputOptions outputOptions(const ParsedArgs& args)
         options.fields = splitFields(*fields);
     }
     return options;
+}
+
+int directError(
+    const ParsedArgs& args,
+    std::ostream& err,
+    CliExitCode exit_code,
+    std::string message,
+    std::string code = "INVALID_ARGUMENT",
+    std::string argument = {},
+    std::string expected = {},
+    std::string usage = {})
+{
+    printCliError(err, outputOptions(args), CliStructuredError{
+        std::move(code),
+        std::move(message),
+        std::move(argument),
+        std::move(expected),
+        static_cast<int>(exit_code),
+        std::move(usage),
+        {}});
+    return static_cast<int>(exit_code);
 }
 
 std::optional<std::size_t> findProfileById(const std::vector<app::RemoteServerProfile>& profiles, std::string_view id)
@@ -134,6 +173,92 @@ std::optional<std::size_t> findProfileByIdOrCredentialRef(
 std::string boolLabel(bool value)
 {
     return value ? "true" : "false";
+}
+
+std::string optionalLabel(const std::optional<std::string>& value)
+{
+    return value && !value->empty() ? *value : "-";
+}
+
+std::string optionalNumberLabel(const std::optional<int>& value)
+{
+    return value ? std::to_string(*value) : "0";
+}
+
+std::string previewText(const std::optional<std::string>& value, std::size_t limit = 160U)
+{
+    if (!value || value->empty()) {
+        return "-";
+    }
+    std::string preview = *value;
+    for (auto& ch : preview) {
+        if (ch == '\n' || ch == '\r' || ch == '\t') {
+            ch = ' ';
+        }
+    }
+    if (preview.size() > limit) {
+        preview.resize(limit);
+        preview += "...";
+    }
+    return preview;
+}
+
+std::string lineCountLabel(const std::optional<std::string>& value)
+{
+    if (!value || value->empty()) {
+        return "0";
+    }
+    int lines = 1;
+    for (const auto ch : *value) {
+        if (ch == '\n') {
+            ++lines;
+        }
+    }
+    return std::to_string(lines);
+}
+
+bool coreMetadataPresent(const app::TrackMetadata& metadata)
+{
+    return metadata.title.has_value()
+        || metadata.artist.has_value()
+        || metadata.album.has_value()
+        || metadata.genre.has_value()
+        || metadata.composer.has_value()
+        || metadata.duration_seconds.has_value();
+}
+
+std::optional<std::filesystem::path> targetPathArg(
+    const ParsedArgs& args,
+    std::ostream& err,
+    std::string_view command,
+    std::string_view verb)
+{
+    if (args.positional.size() < 3U) {
+        (void)directError(
+            args,
+            err,
+            CliExitCode::Usage,
+            std::string{command} + " " + std::string{verb} + " requires a path.",
+            "INVALID_ARGUMENT",
+            "path",
+            "audio file path",
+            "lofibox " + std::string{command} + " " + std::string{verb} + " <path>");
+        return std::nullopt;
+    }
+    std::filesystem::path path{std::string{args.positional[2]}};
+    if (!std::filesystem::exists(path)) {
+        (void)directError(
+            args,
+            err,
+            CliExitCode::NotFound,
+            "file not found: " + path.string(),
+            "NOT_FOUND",
+            "path",
+            "existing audio file path",
+            "lofibox " + std::string{command} + " " + std::string{verb} + " <path>");
+        return std::nullopt;
+    }
+    return path;
 }
 
 bool parseBool(std::string_view value, bool fallback)
@@ -234,8 +359,8 @@ void printDirectHelp(std::ostream& out)
         << "  Global: [--json] [--porcelain] [--fields a,b] [--quiet]\n"
         << "  lofibox source list\n"
         << "  lofibox source show <profile-id>\n"
-        << "  lofibox source add <kind> --id <id> --name <label> --base-url <url> [--username <user>] [--password <secret>] [--token <secret>]\n"
-        << "  lofibox source update <id> [--name <label>] [--base-url <url>] [--username <user>] [--password <secret>] [--token <secret>]\n"
+        << "  lofibox source add <kind> --id <id> --name <label> --base-url <url> [--username <user>] [--credential-ref <ref>]\n"
+        << "  lofibox source update <id> [--name <label>] [--base-url <url>] [--username <user>] [--credential-ref <ref>]\n"
         << "  lofibox source remove <profile-id>\n"
         << "  lofibox source probe <id>\n"
         << "  lofibox source auth-status <profile-id>\n"
@@ -243,6 +368,8 @@ void printDirectHelp(std::ostream& out)
         << "  lofibox credentials list\n"
         << "  lofibox credentials show-ref <profile-id-or-ref>\n"
         << "  lofibox credentials set <profile-id-or-ref> [--username <user>] [--password-stdin] [--token-stdin]\n"
+        << "  Example: printf '%s\\n' \"$LOFIBOX_TOKEN\" | lofibox credentials set jellyfin-home --token-stdin\n"
+        << "  Avoid argv secrets such as --password <secret> or --token <secret>; they can leak through shell history and process inspection.\n"
         << "  lofibox credentials status|validate <profile-id-or-ref>\n"
         << "  lofibox credentials delete <profile-id-or-ref>\n"
         << "  lofibox library scan [path...]\n"
@@ -255,6 +382,11 @@ void printDirectHelp(std::ostream& out)
         << "  lofibox remote recent <profile-id>\n"
         << "  lofibox remote search <profile-id> <text>\n"
         << "  lofibox remote resolve|stream-info <profile-id> <item-id>\n"
+        << "  lofibox metadata show|lookup|apply <path>\n"
+        << "  lofibox lyrics show|lookup|apply <path>\n"
+        << "  lofibox artwork show|lookup <path>\n"
+        << "  lofibox fingerprint show|generate|match <path>\n"
+        << "  metadata lookup/apply and lyrics lookup/apply may update governed local cache and write missing tags when the authority policy allows it.\n"
         << "  lofibox cache status\n"
         << "  lofibox cache purge|clear\n"
         << "  lofibox cache gc\n"
@@ -417,6 +549,207 @@ CliFields remoteTrackFields(const app::RemoteTrack& track, std::string_view grou
     };
 }
 
+CliFields metadataFields(
+    const std::filesystem::path& path,
+    const app::TrackMetadata& metadata,
+    std::string_view provider,
+    std::string_view status)
+{
+    return {
+        {"status", std::string{status}},
+        {"path", path.string()},
+        {"provider", std::string{provider}},
+        {"title", optionalLabel(metadata.title)},
+        {"artist", optionalLabel(metadata.artist)},
+        {"album", optionalLabel(metadata.album)},
+        {"genre", optionalLabel(metadata.genre)},
+        {"composer", optionalLabel(metadata.composer)},
+        {"duration", optionalNumberLabel(metadata.duration_seconds)},
+        {"found", boolLabel(coreMetadataPresent(metadata))},
+    };
+}
+
+CliFields lyricsFields(
+    const std::filesystem::path& path,
+    const app::TrackLyrics& lyrics,
+    std::string_view provider,
+    std::string_view status)
+{
+    return {
+        {"status", std::string{status}},
+        {"path", path.string()},
+        {"provider", std::string{provider}},
+        {"source", lyrics.source.empty() ? "-" : lyrics.source},
+        {"plain_available", boolLabel(lyrics.plain.has_value() && !lyrics.plain->empty())},
+        {"synced_available", boolLabel(lyrics.synced.has_value() && !lyrics.synced->empty())},
+        {"plain_lines", lineCountLabel(lyrics.plain)},
+        {"synced_lines", lineCountLabel(lyrics.synced)},
+        {"plain_preview", previewText(lyrics.plain)},
+        {"synced_preview", previewText(lyrics.synced)},
+    };
+}
+
+CliFields identityFields(
+    const std::filesystem::path& path,
+    const app::TrackIdentity& identity,
+    std::string_view provider,
+    std::string_view status)
+{
+    return {
+        {"status", std::string{status}},
+        {"path", path.string()},
+        {"provider", std::string{provider}},
+        {"found", boolLabel(identity.found)},
+        {"source", identity.source.empty() ? "-" : identity.source},
+        {"confidence", std::to_string(identity.confidence)},
+        {"fingerprint", identity.fingerprint.empty() ? "-" : identity.fingerprint},
+        {"recording_mbid", identity.recording_mbid.empty() ? "-" : identity.recording_mbid},
+        {"release_mbid", identity.release_mbid.empty() ? "-" : identity.release_mbid},
+        {"release_group_mbid", identity.release_group_mbid.empty() ? "-" : identity.release_group_mbid},
+        {"title", optionalLabel(identity.metadata.title)},
+        {"artist", optionalLabel(identity.metadata.artist)},
+        {"album", optionalLabel(identity.metadata.album)},
+        {"audio_fingerprint_verified", boolLabel(identity.audio_fingerprint_verified)},
+    };
+}
+
+int runMetadataCommand(const ParsedArgs& args, application::AppServiceRegistry&, app::RuntimeServices& services, std::ostream& out, std::ostream& err)
+{
+    if (args.positional.size() < 2U || args.positional[1] == "help") {
+        printDirectHelp(out);
+        return 0;
+    }
+    const auto format = outputOptions(args);
+    const auto verb = args.positional[1];
+    if (verb != "show" && verb != "lookup" && verb != "apply") {
+        return directError(args, err, CliExitCode::Usage, "unknown metadata command: " + std::string{verb}, "UNKNOWN_COMMAND", "verb", "metadata subcommand", "lofibox metadata show|lookup|apply <path>");
+    }
+    if (args.positional.size() < 3U) {
+        return directError(args, err, CliExitCode::Usage, "metadata " + std::string{verb} + " requires a path.", "INVALID_ARGUMENT", "path", "audio file path", "lofibox metadata " + std::string{verb} + " <path>");
+    }
+    const auto path = targetPathArg(args, err, "metadata", verb);
+    if (!path) {
+        return static_cast<int>(CliExitCode::NotFound);
+    }
+    if (!services.metadata.metadata_provider || !services.metadata.metadata_provider->available()) {
+        return directError(args, err, CliExitCode::Persistence, "metadata provider unavailable.", "UNAVAILABLE", "metadata", "available metadata provider");
+    }
+    const auto mode = verb == "show" ? app::MetadataReadMode::LocalOnly : app::MetadataReadMode::AllowOnline;
+    const auto metadata = services.metadata.metadata_provider->read(*path, mode);
+    printObject(out, format, metadataFields(
+        *path,
+        metadata,
+        services.metadata.metadata_provider->displayName(),
+        verb == "show" ? "READ" : (verb == "apply" ? "APPLIED" : "LOOKED_UP")));
+    return coreMetadataPresent(metadata) ? 0 : static_cast<int>(CliExitCode::NotFound);
+}
+
+int runLyricsCommand(const ParsedArgs& args, application::AppServiceRegistry&, app::RuntimeServices& services, std::ostream& out, std::ostream& err)
+{
+    if (args.positional.size() < 2U || args.positional[1] == "help") {
+        printDirectHelp(out);
+        return 0;
+    }
+    const auto format = outputOptions(args);
+    const auto verb = args.positional[1];
+    if (verb != "show" && verb != "lookup" && verb != "apply") {
+        return directError(args, err, CliExitCode::Usage, "unknown lyrics command: " + std::string{verb}, "UNKNOWN_COMMAND", "verb", "lyrics subcommand", "lofibox lyrics show|lookup|apply <path>");
+    }
+    if (args.positional.size() < 3U) {
+        return directError(args, err, CliExitCode::Usage, "lyrics " + std::string{verb} + " requires a path.", "INVALID_ARGUMENT", "path", "audio file path", "lofibox lyrics " + std::string{verb} + " <path>");
+    }
+    const auto path = targetPathArg(args, err, "lyrics", verb);
+    if (!path) {
+        return static_cast<int>(CliExitCode::NotFound);
+    }
+    if (!services.metadata.lyrics_provider || !services.metadata.lyrics_provider->available()) {
+        return directError(args, err, CliExitCode::Persistence, "lyrics provider unavailable.", "UNAVAILABLE", "lyrics", "available lyrics provider");
+    }
+    app::TrackMetadata metadata{};
+    if (services.metadata.metadata_provider && services.metadata.metadata_provider->available()) {
+        metadata = services.metadata.metadata_provider->read(
+            *path,
+            verb == "show" ? app::MetadataReadMode::LocalOnly : app::MetadataReadMode::AllowOnline);
+    }
+    const auto lyrics = services.metadata.lyrics_provider->fetch(*path, metadata);
+    const bool found = (lyrics.plain && !lyrics.plain->empty()) || (lyrics.synced && !lyrics.synced->empty());
+    printObject(out, format, lyricsFields(
+        *path,
+        lyrics,
+        services.metadata.lyrics_provider->displayName(),
+        found ? (verb == "show" ? "FOUND" : (verb == "apply" ? "APPLIED" : "LOOKED_UP")) : "MISSING"));
+    return found ? 0 : static_cast<int>(CliExitCode::NotFound);
+}
+
+int runArtworkCommand(const ParsedArgs& args, application::AppServiceRegistry&, app::RuntimeServices& services, std::ostream& out, std::ostream& err)
+{
+    if (args.positional.size() < 2U || args.positional[1] == "help") {
+        printDirectHelp(out);
+        return 0;
+    }
+    const auto format = outputOptions(args);
+    const auto verb = args.positional[1];
+    if (verb != "show" && verb != "lookup") {
+        return directError(args, err, CliExitCode::Usage, "unknown artwork command: " + std::string{verb}, "UNKNOWN_COMMAND", "verb", "artwork subcommand", "lofibox artwork show|lookup <path>");
+    }
+    if (args.positional.size() < 3U) {
+        return directError(args, err, CliExitCode::Usage, "artwork " + std::string{verb} + " requires a path.", "INVALID_ARGUMENT", "path", "audio file path", "lofibox artwork " + std::string{verb} + " <path>");
+    }
+    const auto path = targetPathArg(args, err, "artwork", verb);
+    if (!path) {
+        return static_cast<int>(CliExitCode::NotFound);
+    }
+    if (!services.metadata.artwork_provider || !services.metadata.artwork_provider->available()) {
+        return directError(args, err, CliExitCode::Persistence, "artwork provider unavailable.", "UNAVAILABLE", "artwork", "available artwork provider");
+    }
+    const auto artwork = services.metadata.artwork_provider->read(
+        *path,
+        verb == "show" ? app::ArtworkReadMode::LocalOnly : app::ArtworkReadMode::AllowOnline);
+    printObject(out, format, {
+        {"status", artwork ? "FOUND" : "MISSING"},
+        {"path", path->string()},
+        {"provider", services.metadata.artwork_provider->displayName()},
+        {"available", boolLabel(artwork.has_value())},
+        {"width", artwork ? std::to_string(artwork->width()) : "0"},
+        {"height", artwork ? std::to_string(artwork->height()) : "0"},
+    });
+    return artwork ? 0 : static_cast<int>(CliExitCode::NotFound);
+}
+
+int runFingerprintCommand(const ParsedArgs& args, application::AppServiceRegistry&, app::RuntimeServices& services, std::ostream& out, std::ostream& err)
+{
+    if (args.positional.size() < 2U || args.positional[1] == "help") {
+        printDirectHelp(out);
+        return 0;
+    }
+    const auto format = outputOptions(args);
+    const auto verb = args.positional[1];
+    if (verb != "show" && verb != "generate" && verb != "match") {
+        return directError(args, err, CliExitCode::Usage, "unknown fingerprint command: " + std::string{verb}, "UNKNOWN_COMMAND", "verb", "fingerprint subcommand", "lofibox fingerprint show|generate|match <path>");
+    }
+    if (args.positional.size() < 3U) {
+        return directError(args, err, CliExitCode::Usage, "fingerprint " + std::string{verb} + " requires a path.", "INVALID_ARGUMENT", "path", "audio file path", "lofibox fingerprint " + std::string{verb} + " <path>");
+    }
+    const auto path = targetPathArg(args, err, "fingerprint", verb);
+    if (!path) {
+        return static_cast<int>(CliExitCode::NotFound);
+    }
+    if (!services.metadata.track_identity_provider || !services.metadata.track_identity_provider->available()) {
+        return directError(args, err, CliExitCode::Persistence, "fingerprint provider unavailable.", "UNAVAILABLE", "fingerprint", "available fingerprint/identity provider");
+    }
+    app::TrackMetadata metadata{};
+    if (services.metadata.metadata_provider && services.metadata.metadata_provider->available()) {
+        metadata = services.metadata.metadata_provider->read(*path, app::MetadataReadMode::LocalOnly);
+    }
+    const auto identity = services.metadata.track_identity_provider->resolve(*path, metadata);
+    printObject(out, format, identityFields(
+        *path,
+        identity,
+        services.metadata.track_identity_provider->displayName(),
+        identity.found ? (verb == "match" ? "MATCHED" : "GENERATED") : "MISSING"));
+    return identity.found || !identity.fingerprint.empty() ? 0 : static_cast<int>(CliExitCode::NotFound);
+}
+
 int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out, std::ostream& err)
 {
     if (args.positional.size() < 2U || args.positional[1] == "help") {
@@ -439,13 +772,11 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
 
     if (verb == "show") {
         if (args.positional.size() < 3U) {
-            err << "source show requires a source id.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "source show requires a source id.", "INVALID_ARGUMENT", "profile-id", "source profile id", "lofibox source show <profile-id>");
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
-            err << "source not found: " << args.positional[2] << '\n';
-            return static_cast<int>(CliExitCode::NotFound);
+            return directError(args, err, CliExitCode::NotFound, "source not found: " + std::string{args.positional[2]}, "NOT_FOUND", "profile-id", "existing source profile id", "lofibox source list");
         }
         printObject(out, format, profileFields(profiles[*index], registry.sourceProfiles()));
         return 0;
@@ -453,8 +784,7 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
 
     if (verb == "add") {
         if (args.positional.size() < 3U) {
-            err << "source add requires a kind.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "source add requires a kind.", "INVALID_ARGUMENT", "kind", "source kind", "lofibox source add <kind> --id <id> --name <name> --base-url <url>");
         }
         auto profile = registry.sourceProfiles().createProfile(app::remoteServerKindFromString(std::string{args.positional[2]}), profiles.size());
         if (const auto id = optionValue(args, "id")) {
@@ -473,8 +803,7 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
         }
         profiles.push_back(std::move(profile));
         if (!registry.sourceProfiles().persistProfiles(profiles)) {
-            err << "failed to save source profiles.\n";
-            return static_cast<int>(CliExitCode::Persistence);
+            return directError(args, err, CliExitCode::Persistence, "failed to save source profiles.", "PERSISTENCE_FAILED");
         }
         auto fields = profileFields(profiles.back(), registry.sourceProfiles());
         fields.insert(fields.begin(), {"status", "ADDED"});
@@ -484,13 +813,11 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
 
     if (verb == "update") {
         if (args.positional.size() < 3U) {
-            err << "source update requires a source id.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "source update requires a source id.", "INVALID_ARGUMENT", "profile-id", "source profile id", "lofibox source update <profile-id>");
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
-            err << "source not found: " << args.positional[2] << '\n';
-            return static_cast<int>(CliExitCode::NotFound);
+            return directError(args, err, CliExitCode::NotFound, "source not found: " + std::string{args.positional[2]}, "NOT_FOUND", "profile-id", "existing source profile id", "lofibox source list");
         }
         auto& profile = profiles[*index];
         applyProfileOptions(args, registry.sourceProfiles(), profile, profiles.size());
@@ -503,8 +830,7 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
             }
         }
         if (!registry.sourceProfiles().persistProfiles(profiles)) {
-            err << "failed to save source profiles.\n";
-            return static_cast<int>(CliExitCode::Persistence);
+            return directError(args, err, CliExitCode::Persistence, "failed to save source profiles.", "PERSISTENCE_FAILED");
         }
         auto fields = profileFields(profile, registry.sourceProfiles());
         fields.insert(fields.begin(), {"status", "UPDATED"});
@@ -514,19 +840,16 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
 
     if (verb == "remove") {
         if (args.positional.size() < 3U) {
-            err << "source remove requires a source id.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "source remove requires a source id.", "INVALID_ARGUMENT", "profile-id", "source profile id", "lofibox source remove <profile-id>");
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
-            err << "source not found: " << args.positional[2] << '\n';
-            return static_cast<int>(CliExitCode::NotFound);
+            return directError(args, err, CliExitCode::NotFound, "source not found: " + std::string{args.positional[2]}, "NOT_FOUND", "profile-id", "existing source profile id", "lofibox source list");
         }
         const auto removed_id = profiles[*index].id;
         profiles.erase(profiles.begin() + static_cast<std::ptrdiff_t>(*index));
         if (!registry.sourceProfiles().persistProfiles(profiles)) {
-            err << "failed to save source profiles.\n";
-            return static_cast<int>(CliExitCode::Persistence);
+            return directError(args, err, CliExitCode::Persistence, "failed to save source profiles.", "PERSISTENCE_FAILED");
         }
         printObject(out, format, {{"status", "REMOVED"}, {"id", removed_id}});
         return 0;
@@ -534,13 +857,11 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
 
     if (verb == "probe") {
         if (args.positional.size() < 3U) {
-            err << "source probe requires a source id.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "source probe requires a source id.", "INVALID_ARGUMENT", "profile-id", "source profile id", "lofibox source probe <profile-id>");
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
-            err << "source not found: " << args.positional[2] << '\n';
-            return static_cast<int>(CliExitCode::NotFound);
+            return directError(args, err, CliExitCode::NotFound, "source not found: " + std::string{args.positional[2]}, "NOT_FOUND", "profile-id", "existing source profile id", "lofibox source list");
         }
         const auto probe = registry.sourceProfiles().probe(profiles[*index], profiles.size());
         printObject(out, format, {
@@ -555,13 +876,11 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
 
     if (verb == "auth-status") {
         if (args.positional.size() < 3U) {
-            err << "source auth-status requires a source id.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "source auth-status requires a source id.", "INVALID_ARGUMENT", "profile-id", "source profile id", "lofibox source auth-status <profile-id>");
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
-            err << "source not found: " << args.positional[2] << '\n';
-            return static_cast<int>(CliExitCode::NotFound);
+            return directError(args, err, CliExitCode::NotFound, "source not found: " + std::string{args.positional[2]}, "NOT_FOUND", "profile-id", "existing source profile id", "lofibox source list");
         }
         const auto status = registry.credentials().status(profiles[*index]);
         printObject(out, format, credentialStatusFields(profiles[*index], status));
@@ -571,13 +890,11 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
 
     if (verb == "capabilities") {
         if (args.positional.size() < 3U) {
-            err << "source capabilities requires a source id.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "source capabilities requires a source id.", "INVALID_ARGUMENT", "profile-id", "source profile id", "lofibox source capabilities <profile-id>");
         }
         const auto index = findProfileById(profiles, args.positional[2]);
         if (!index) {
-            err << "source not found: " << args.positional[2] << '\n';
-            return static_cast<int>(CliExitCode::NotFound);
+            return directError(args, err, CliExitCode::NotFound, "source not found: " + std::string{args.positional[2]}, "NOT_FOUND", "profile-id", "existing source profile id", "lofibox source list");
         }
         const auto& profile = profiles[*index];
         printObject(out, format, {
@@ -593,8 +910,7 @@ int runSourceCommand(const ParsedArgs& args, application::AppServiceRegistry& re
         return 0;
     }
 
-    err << "unknown source command: " << verb << '\n';
-    return static_cast<int>(CliExitCode::Usage);
+    return directError(args, err, CliExitCode::Usage, "unknown source command: " + std::string{verb}, "UNKNOWN_COMMAND", "verb", "source subcommand", "lofibox source --help");
 }
 
 int runCredentialsCommand(const ParsedArgs& args, application::AppServiceRegistry& registry, std::ostream& out, std::ostream& err)
@@ -618,14 +934,12 @@ int runCredentialsCommand(const ParsedArgs& args, application::AppServiceRegistr
     }
 
     if (args.positional.size() < 3U) {
-        err << "credentials " << verb << " requires a source id or credential ref.\n";
-        return static_cast<int>(CliExitCode::Usage);
+        return directError(args, err, CliExitCode::Usage, "credentials " + std::string{verb} + " requires a source id or credential ref.", "INVALID_ARGUMENT", "profile-id-or-ref", "source profile id or credential ref", "lofibox credentials " + std::string{verb} + " <profile-id-or-ref>");
     }
 
     const auto index = findProfileByIdOrCredentialRef(profiles, args.positional[2]);
     if (!index) {
-        err << "credential ref not found: " << args.positional[2] << '\n';
-        return static_cast<int>(CliExitCode::NotFound);
+        return directError(args, err, CliExitCode::NotFound, "credential ref not found: " + std::string{args.positional[2]}, "NOT_FOUND", "profile-id-or-ref", "existing source profile id or credential ref", "lofibox credentials list");
     }
     auto& profile = profiles[*index];
 
@@ -640,8 +954,7 @@ int runCredentialsCommand(const ParsedArgs& args, application::AppServiceRegistr
     if (verb == "set") {
         auto patch = credentialPatchFromOptions(args);
         if (!hasCredentialPatch(patch)) {
-            err << "credentials set requires --username, --password, --token, --password-stdin, or --token-stdin.\n";
-            return static_cast<int>(CliExitCode::Usage);
+            return directError(args, err, CliExitCode::Usage, "credentials set requires --username, --password-stdin, or --token-stdin.", "INVALID_ARGUMENT", "credential secret", "stdin secret input or username", "lofibox credentials set <profile-id-or-ref> --password-stdin");
         }
         const auto result = registry.credentials().setSecret(profile, patch);
         if (!result.accepted) {
@@ -649,8 +962,7 @@ int runCredentialsCommand(const ParsedArgs& args, application::AppServiceRegistr
             return static_cast<int>(CliExitCode::Credential);
         }
         if (!registry.sourceProfiles().persistProfiles(profiles)) {
-            err << "failed to save credential reference.\n";
-            return static_cast<int>(CliExitCode::Persistence);
+            return directError(args, err, CliExitCode::Persistence, "failed to save credential reference.", "PERSISTENCE_FAILED");
         }
         printObject(out, format, {
             {"status", "SAVED"},
@@ -666,8 +978,7 @@ int runCredentialsCommand(const ParsedArgs& args, application::AppServiceRegistr
             return static_cast<int>(CliExitCode::Credential);
         }
         if (!registry.sourceProfiles().persistProfiles(profiles)) {
-            err << "failed to save credential reference.\n";
-            return static_cast<int>(CliExitCode::Persistence);
+            return directError(args, err, CliExitCode::Persistence, "failed to save credential reference.", "PERSISTENCE_FAILED");
         }
         printObject(out, format, {
             {"status", "DELETED"},
@@ -677,8 +988,7 @@ int runCredentialsCommand(const ParsedArgs& args, application::AppServiceRegistr
         return 0;
     }
 
-    err << "unknown credentials command: " << verb << '\n';
-    return static_cast<int>(CliExitCode::Usage);
+    return directError(args, err, CliExitCode::Usage, "unknown credentials command: " + std::string{verb}, "UNKNOWN_COMMAND", "verb", "credentials subcommand", "lofibox credentials --help");
 }
 
 int runLibraryCommand(
@@ -1167,6 +1477,10 @@ std::optional<int> runDirectCliCommand(
     if (!isDirectCommand(command)) {
         return std::nullopt;
     }
+    if (helpRequested(args)) {
+        printDirectHelp(out);
+        return 0;
+    }
 
     application::AppServiceHost service_host{services};
     auto registry = service_host.registry();
@@ -1191,6 +1505,18 @@ std::optional<int> runDirectCliCommand(
     }
     if (command == "remote") {
         return runRemoteCommand(args, registry, out, err);
+    }
+    if (command == "metadata") {
+        return runMetadataCommand(args, registry, services, out, err);
+    }
+    if (command == "lyrics") {
+        return runLyricsCommand(args, registry, services, out, err);
+    }
+    if (command == "artwork") {
+        return runArtworkCommand(args, registry, services, out, err);
+    }
+    if (command == "fingerprint") {
+        return runFingerprintCommand(args, registry, services, out, err);
     }
     return std::nullopt;
 }

@@ -32,10 +32,12 @@ enum class RuntimeCommandKind {
     QueueJump,
     QueueClear,
     PlaybackToggleShuffle,
+    PlaybackSetShuffle,
     PlaybackCycleRepeat,
     PlaybackCycleMainMenuMode,
     PlaybackSetRepeatAll,
     PlaybackSetRepeatOne,
+    RemoteResolveAndStartTrack,
     RemoteStartActiveStream,
     EqEnable,
     EqDisable,
@@ -79,6 +81,11 @@ struct QueueIndexPayload {
 
 struct RuntimeEnabledPayload {
     bool enabled{false};
+};
+
+struct RemoteTrackRefPayload {
+    std::string profile_id{};
+    std::string item_id{};
 };
 
 struct EqSetBandPayload {
@@ -129,6 +136,7 @@ using RuntimeCommandData = std::variant<
     QueueStepPayload,
     QueueIndexPayload,
     RuntimeEnabledPayload,
+    RemoteTrackRefPayload,
     EqSetBandPayload,
     EqAdjustBandPayload,
     EqCyclePresetPayload,
@@ -146,6 +154,10 @@ struct RuntimeCommandPayload {
     [[nodiscard]] static RuntimeCommandPayload queueStep(int delta) { return {{QueueStepPayload{delta}}}; }
     [[nodiscard]] static RuntimeCommandPayload queueIndex(int queue_index) { return {{QueueIndexPayload{queue_index}}}; }
     [[nodiscard]] static RuntimeCommandPayload enabled(bool value) { return {{RuntimeEnabledPayload{value}}}; }
+    [[nodiscard]] static RuntimeCommandPayload remoteTrackRef(std::string profile_id, std::string item_id)
+    {
+        return {{RemoteTrackRefPayload{std::move(profile_id), std::move(item_id)}}};
+    }
     [[nodiscard]] static RuntimeCommandPayload eqSetBand(int band_index, int gain_db) { return {{EqSetBandPayload{band_index, gain_db}}}; }
     [[nodiscard]] static RuntimeCommandPayload eqAdjustBand(int band_index, int delta_db) { return {{EqAdjustBandPayload{band_index, delta_db}}}; }
     [[nodiscard]] static RuntimeCommandPayload eqCyclePreset(int delta) { return {{EqCyclePresetPayload{delta}}}; }

@@ -73,14 +73,14 @@ void PlaybackRuntime::pause() const noexcept
     services_.playbackCommands().pause();
 }
 
-void PlaybackRuntime::resume() const noexcept
+bool PlaybackRuntime::resume() const
 {
-    services_.playbackCommands().resume();
+    return services_.playbackCommands().resume();
 }
 
-void PlaybackRuntime::togglePlayPause() const noexcept
+bool PlaybackRuntime::togglePlayPause() const
 {
-    services_.playbackCommands().togglePlayPause();
+    return services_.playbackCommands().togglePlayPause();
 }
 
 PlaybackRuntimeSnapshot PlaybackRuntime::snapshot(std::uint64_t version) const

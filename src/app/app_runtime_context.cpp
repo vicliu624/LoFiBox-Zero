@@ -1289,10 +1289,31 @@ bool AppRuntimeContext::handleSearchConfirm(int selected)
         track.lyrics_synced,
         track.lyrics_source,
         track.fingerprint};
-    const auto payload = selectedRemoteStreamPayload();
-    if (payload.get<::lofibox::runtime::RemotePlayResolvedStreamPayload>() == nullptr) {
+
+    appServices().libraryMutations().mergeRemoteTracks(state_.remote_profiles[profile_index], std::vector<RemoteTrack>{track});
+    int selected_track_id = 0;
+    for (const auto& library_track : appServices().libraryQueries().model().tracks) {
+        if (library_track.remote
+            && library_track.remote_profile_id == profile_it->id
+            && library_track.remote_track_id == track.id) {
+            selected_track_id = library_track.id;
+            break;
+        }
+    }
+    if (selected_track_id == 0) {
         return false;
     }
+    const auto source = !track.source_label.empty()
+        ? track.source_label
+        : sourceProfileService().profileLabel(*profile_it);
+    const auto payload = ::lofibox::runtime::RuntimeCommandPayload::remoteResolvedLibraryTrack(
+        selected_track_id,
+        *profile_it,
+        track,
+        *state_.selected_remote_stream,
+        source,
+        sourceProfileService().keepsLocalFacts(profile_it->kind),
+        remoteSessionSnapshotFor(*profile_it, *state_.selected_remote_stream, track, source));
     const auto result = submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::RemoteStartActiveStream,
         payload,

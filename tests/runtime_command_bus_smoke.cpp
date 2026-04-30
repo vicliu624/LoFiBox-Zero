@@ -17,9 +17,16 @@ class RuntimeBusAudioBackend final : public lofibox::app::AudioPlaybackBackend {
 public:
     [[nodiscard]] bool available() const override { return true; }
     [[nodiscard]] std::string displayName() const override { return "RUNTIME-BUS-TEST"; }
-    bool playFile(const std::filesystem::path& path, double) override
+    bool playFile(const std::filesystem::path& path, double start_seconds) override
     {
         last_path = path;
+        last_start_seconds = start_seconds;
+        ++play_file_calls;
+        if (reject_start_at_or_after >= 0.0 && start_seconds >= reject_start_at_or_after) {
+            playing = false;
+            paused = false;
+            return false;
+        }
         playing = true;
         paused = false;
         return true;
@@ -31,6 +38,9 @@ public:
     [[nodiscard]] bool isFinished() override { return false; }
 
     std::filesystem::path last_path{};
+    double last_start_seconds{0.0};
+    double reject_start_at_or_after{-1.0};
+    int play_file_calls{0};
     bool playing{false};
     bool paused{false};
 };
@@ -53,6 +63,12 @@ int main()
     auto& model = controllers.library.mutableModel();
     model.tracks.push_back(lofibox::app::TrackRecord{11, std::filesystem::path{"alpha.mp3"}, "Alpha", "Artist", "Album"});
     model.tracks.push_back(lofibox::app::TrackRecord{12, std::filesystem::path{"beta.mp3"}, "Beta", "Artist", "Album"});
+    lofibox::app::TrackRecord remote{13, {}, "Remote", "Remote Artist", "Remote Album"};
+    remote.remote = true;
+    remote.remote_profile_id = "remote-a";
+    remote.remote_track_id = "remote-track";
+    remote.source_label = "REMOTE A";
+    model.tracks.push_back(remote);
     controllers.library.setSongsContextAll();
 
     lofibox::runtime::EqRuntimeState eq{};
@@ -89,10 +105,54 @@ int main()
     if (snapshot.playback.status != lofibox::runtime::RuntimePlaybackStatus::Playing
         || snapshot.playback.current_track_id != 11
         || snapshot.playback.title != "Alpha"
-        || snapshot.queue.active_ids.size() != 2U) {
+        || snapshot.queue.active_ids.size() != 3U) {
         std::cerr << "Expected runtime playback and queue snapshots to reflect the active track.\n";
         return 1;
     }
+    const int play_count_after_start = backend->play_file_calls;
+    result = bus.dispatch(lofibox::runtime::RuntimeCommand{
+        lofibox::runtime::RuntimeCommandKind::PlaybackStartTrack,
+        lofibox::runtime::RuntimeCommandPayload::startTrack(11),
+        lofibox::runtime::CommandOrigin::DirectTest});
+    if (!result.applied || backend->play_file_calls != play_count_after_start || controllers.playback.session().current_track_id != 11) {
+        std::cerr << "Expected starting the already-active track to be idempotent and avoid restarting the backend.\n";
+        return 1;
+    }
+    controllers.playback.mutableSession().status = lofibox::app::PlaybackStatus::Paused;
+    controllers.playback.mutableSession().audio_active = false;
+    controllers.playback.mutableSession().elapsed_seconds = 180.0;
+    backend->playing = false;
+    backend->paused = false;
+    const int play_count_before_restart = backend->play_file_calls;
+    result = bus.dispatch(command(lofibox::runtime::RuntimeCommandKind::PlaybackToggle));
+    if (!result.applied
+        || backend->play_file_calls != play_count_before_restart + 1
+        || backend->last_start_seconds != 0.0
+        || controllers.playback.session().status != lofibox::app::PlaybackStatus::Playing
+        || !controllers.playback.session().audio_active) {
+        std::cerr << "Expected GUI-style toggle from an inactive paused end-of-track state to restart the current track.\n";
+        return 1;
+    }
+    backend->reject_start_at_or_after = 180.0;
+    result = bus.dispatch(lofibox::runtime::RuntimeCommand{
+        lofibox::runtime::RuntimeCommandKind::PlaybackSeek,
+        lofibox::runtime::RuntimeCommandPayload::seek(180.0),
+        lofibox::runtime::CommandOrigin::DirectTest});
+    if (result.applied
+        || controllers.playback.session().status != lofibox::app::PlaybackStatus::Paused
+        || controllers.playback.session().audio_active) {
+        std::cerr << "Expected a backend-refused seek to return to paused inactive truth instead of leaving fake PLAYING.\n";
+        return 1;
+    }
+    result = bus.dispatch(command(lofibox::runtime::RuntimeCommandKind::PlaybackToggle));
+    if (!result.applied
+        || backend->last_start_seconds != 0.0
+        || controllers.playback.session().status != lofibox::app::PlaybackStatus::Playing
+        || !controllers.playback.session().audio_active) {
+        std::cerr << "Expected toggle after a refused end seek to restart playback from the beginning.\n";
+        return 1;
+    }
+    backend->reject_start_at_or_after = -1.0;
 
     result = bus.dispatch(lofibox::runtime::RuntimeCommand{
         lofibox::runtime::RuntimeCommandKind::QueueStep,
@@ -100,6 +160,14 @@ int main()
         lofibox::runtime::CommandOrigin::DirectTest});
     if (!result.applied || controllers.playback.session().current_track_id != 12) {
         std::cerr << "Expected queue stepping to mutate playback through the runtime bus.\n";
+        return 1;
+    }
+    result = bus.dispatch(lofibox::runtime::RuntimeCommand{
+        lofibox::runtime::RuntimeCommandKind::QueueStep,
+        lofibox::runtime::RuntimeCommandPayload::queueStep(1),
+        lofibox::runtime::CommandOrigin::DirectTest});
+    if (result.applied || controllers.playback.session().current_track_id != 12 || backend->last_path != std::filesystem::path{"beta.mp3"}) {
+        std::cerr << "Expected runtime queue stepping without a remote starter to reject remote tracks instead of playing an empty local path.\n";
         return 1;
     }
 

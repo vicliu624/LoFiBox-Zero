@@ -90,6 +90,24 @@ public:
     fs::path last_path{};
 };
 
+class RejectingAudioBackend final : public lofibox::app::AudioPlaybackBackend {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "REJECT-TEST"; }
+    bool playFile(const fs::path& path, double) override
+    {
+        last_path = path;
+        ++play_count;
+        return false;
+    }
+    void stop() override {}
+    [[nodiscard]] bool isPlaying() override { return false; }
+    [[nodiscard]] bool isFinished() override { return false; }
+
+    int play_count{0};
+    fs::path last_path{};
+};
+
 class StartingThenPlayingBackend final : public lofibox::app::AudioPlaybackBackend {
 public:
     [[nodiscard]] bool available() const override { return true; }
@@ -219,6 +237,25 @@ int main()
         return 1;
     }
 
+    auto rejecting_services = lofibox::app::withNullRuntimeServices();
+    auto rejecting_backend = std::make_shared<RejectingAudioBackend>();
+    rejecting_services.playback.audio_backend = rejecting_backend;
+    lofibox::app::PlaybackController rejecting_playback{};
+    rejecting_playback.setServices(rejecting_services);
+    if (rejecting_playback.startTrack(library, ids.front())) {
+        std::cerr << "Expected playback controller to reject a track when the backend refuses to start.\n";
+        return 1;
+    }
+    if (rejecting_playback.session().status == lofibox::app::PlaybackStatus::Playing || rejecting_playback.session().audio_active) {
+        std::cerr << "Expected backend start refusal not to be projected as active playback.\n";
+        return 1;
+    }
+    rejecting_playback.togglePlayPause();
+    if (rejecting_playback.session().status == lofibox::app::PlaybackStatus::Playing || rejecting_playback.session().audio_active) {
+        std::cerr << "Expected toggle after a rejected backend start not to create fake playback.\n";
+        return 1;
+    }
+
     lofibox::app::PlaybackController playback{};
     playback.setServices(services);
     if (!playback.startTrack(library, ids.front())) {
@@ -267,7 +304,7 @@ int main()
     }
 
     const auto first_track_id = *playback.session().current_track_id;
-    playback.stepQueue(library, 1);
+    (void)playback.stepQueue(library, 1);
     if (!playback.session().current_track_id || *playback.session().current_track_id == first_track_id) {
         std::cerr << "Expected queue step to move to the next track.\n";
         return 1;
@@ -275,7 +312,7 @@ int main()
 
     playback.setRepeatOne(true);
     const int repeat_one_track_id = *playback.session().current_track_id;
-    playback.stepQueue(library, 1);
+    (void)playback.stepQueue(library, 1);
     if (!playback.session().current_track_id || *playback.session().current_track_id == repeat_one_track_id) {
         std::cerr << "Expected manual next to work even in repeat-one mode.\n";
         return 1;
@@ -320,12 +357,12 @@ int main()
         std::cerr << "Expected last track to restart for repeat-all test.\n";
         return 1;
     }
-    playback.stepQueue(library, 1);
+    (void)playback.stepQueue(library, 1);
     if (!playback.session().current_track_id || *playback.session().current_track_id != ids.front()) {
         std::cerr << "Expected repeat-all next from last track to wrap to first track.\n";
         return 1;
     }
-    playback.stepQueue(library, -1);
+    (void)playback.stepQueue(library, -1);
     if (!playback.session().current_track_id || *playback.session().current_track_id != ids.back()) {
         std::cerr << "Expected repeat-all previous from first track to wrap to last track.\n";
         return 1;
@@ -363,7 +400,7 @@ int main()
     std::set<int> visited{};
     visited.insert(*playback.session().current_track_id);
     for (int index = 0; index < static_cast<int>(ids.size()) * 2; ++index) {
-        playback.stepQueue(library, 1);
+        (void)playback.stepQueue(library, 1);
         if (playback.session().current_track_id) {
             visited.insert(*playback.session().current_track_id);
         }

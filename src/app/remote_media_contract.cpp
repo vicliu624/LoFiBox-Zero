@@ -10,6 +10,7 @@
 #include <string>
 
 #include "app/remote_profile_store.h"
+#include "metadata/match_confidence_guard.h"
 
 namespace lofibox::app {
 namespace {
@@ -97,6 +98,19 @@ bool shouldAcceptGovernedText(
     return candidate
         && !candidate->empty()
         && (current == *candidate || governedTextNeedsReplacement(current, fallback_id));
+}
+
+bool shouldAcceptGovernedText(
+    const std::string& current,
+    const std::optional<std::string>& candidate,
+    const std::string& fallback_id,
+    bool authoritative_identity) noexcept
+{
+    return candidate
+        && !candidate->empty()
+        && (authoritative_identity
+            || current == *candidate
+            || governedTextNeedsReplacement(current, fallback_id));
 }
 
 std::string pathSafeToken(std::string value)
@@ -358,6 +372,27 @@ RemoteTrack mergeRemoteGovernedFacts(RemoteTrack current, const TrackMetadata& m
     if (shouldAcceptGovernedText(current.artist, metadata.artist, {})) current.artist = *metadata.artist;
     if (shouldAcceptGovernedText(current.album, metadata.album, {})) current.album = *metadata.album;
     if (metadata.duration_seconds && *metadata.duration_seconds > 0 && current.duration_seconds <= 0) {
+        current.duration_seconds = *metadata.duration_seconds;
+    }
+    if (lyrics.plain && !lyrics.plain->empty()) current.lyrics_plain = *lyrics.plain;
+    if (lyrics.synced && !lyrics.synced->empty()) current.lyrics_synced = *lyrics.synced;
+    if (!lyrics.source.empty()) current.lyrics_source = lyrics.source;
+    return current;
+}
+
+RemoteTrack mergeRemoteGovernedFacts(
+    RemoteTrack current,
+    const TrackMetadata& metadata,
+    const TrackLyrics& lyrics,
+    const TrackIdentity& identity)
+{
+    const bool authoritative_identity = ::lofibox::metadata::MatchConfidenceGuard{}.acceptsIdentity(identity);
+    if (shouldAcceptGovernedText(current.title, metadata.title, current.id, authoritative_identity)) current.title = *metadata.title;
+    if (shouldAcceptGovernedText(current.artist, metadata.artist, {}, authoritative_identity)) current.artist = *metadata.artist;
+    if (shouldAcceptGovernedText(current.album, metadata.album, {}, authoritative_identity)) current.album = *metadata.album;
+    if (metadata.duration_seconds
+        && *metadata.duration_seconds > 0
+        && (current.duration_seconds <= 0 || authoritative_identity)) {
         current.duration_seconds = *metadata.duration_seconds;
     }
     if (lyrics.plain && !lyrics.plain->empty()) current.lyrics_plain = *lyrics.plain;

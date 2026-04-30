@@ -24,7 +24,9 @@ These are the small self-created PNG assets carried over from the author's legac
 
 The formal application logo source is `data/io.github.vicliu624.lofibox.svg`.
 The `logo.png` file in this directory is the raster hicolor/runtime projection
-of that source and should not be edited independently.
+of that source and should not be edited independently. Both projections must
+preserve real alpha transparency; a flattened checkerboard preview or opaque
+white export matte is not a valid LoFiBox logo asset.
 
 ## Current Rule
 

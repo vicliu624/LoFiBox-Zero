@@ -37,19 +37,26 @@ std::string recoveryLabel(const app::StreamingRecoveryPlan& plan)
 
 app::RemoteTrack preferCachedRemoteTrackFacts(app::RemoteTrack current, const app::RemoteTrack& cached)
 {
-    if (!cached.title.empty()) current.title = cached.title;
-    if (!cached.artist.empty()) current.artist = cached.artist;
-    if (!cached.album.empty()) current.album = cached.album;
-    if (!cached.album_id.empty()) current.album_id = cached.album_id;
+    const auto missingText = [](std::string_view value) {
+        return value.empty() || value == "-" || value == "UNKNOWN";
+    };
+    const auto missingTitle = [&current, &missingText]() {
+        return missingText(current.title) || (!current.id.empty() && current.title == current.id);
+    };
+
+    if (missingTitle() && !cached.title.empty()) current.title = cached.title;
+    if (missingText(current.artist) && !cached.artist.empty()) current.artist = cached.artist;
+    if (missingText(current.album) && !cached.album.empty()) current.album = cached.album;
+    if (current.album_id.empty() && !cached.album_id.empty()) current.album_id = cached.album_id;
     if (cached.duration_seconds > 0) current.duration_seconds = cached.duration_seconds;
-    if (!cached.source_id.empty()) current.source_id = cached.source_id;
-    if (!cached.source_label.empty()) current.source_label = cached.source_label;
-    if (!cached.artwork_key.empty()) current.artwork_key = cached.artwork_key;
-    if (!cached.artwork_url.empty()) current.artwork_url = cached.artwork_url;
-    if (!cached.lyrics_plain.empty()) current.lyrics_plain = cached.lyrics_plain;
-    if (!cached.lyrics_synced.empty()) current.lyrics_synced = cached.lyrics_synced;
-    if (!cached.lyrics_source.empty()) current.lyrics_source = cached.lyrics_source;
-    if (!cached.fingerprint.empty()) current.fingerprint = cached.fingerprint;
+    if (current.source_id.empty() && !cached.source_id.empty()) current.source_id = cached.source_id;
+    if (current.source_label.empty() && !cached.source_label.empty()) current.source_label = cached.source_label;
+    if (current.artwork_key.empty() && !cached.artwork_key.empty()) current.artwork_key = cached.artwork_key;
+    if (current.artwork_url.empty() && !cached.artwork_url.empty()) current.artwork_url = cached.artwork_url;
+    if (current.lyrics_plain.empty() && !cached.lyrics_plain.empty()) current.lyrics_plain = cached.lyrics_plain;
+    if (current.lyrics_synced.empty() && !cached.lyrics_synced.empty()) current.lyrics_synced = cached.lyrics_synced;
+    if (current.lyrics_source.empty() && !cached.lyrics_source.empty()) current.lyrics_source = cached.lyrics_source;
+    if (current.fingerprint.empty() && !cached.fingerprint.empty()) current.fingerprint = cached.fingerprint;
     return current;
 }
 

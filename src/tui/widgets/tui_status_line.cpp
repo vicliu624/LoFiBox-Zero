@@ -5,6 +5,14 @@
 #include "tui/widgets/tui_text.h"
 
 namespace lofibox::tui::widgets {
+namespace {
+
+std::string listSeparator(TuiCharset charset)
+{
+    return charset == TuiCharset::Ascii || charset == TuiCharset::Minimal ? " - " : " · ";
+}
+
+} // namespace
 
 std::string renderStatusLine(const TuiModel& model, int width)
 {
@@ -13,13 +21,19 @@ std::string renderStatusLine(const TuiModel& model, int width)
     const std::string output = model.snapshot.diagnostics.audio_backend.empty()
         ? "output: unknown"
         : "output: " + model.snapshot.diagnostics.audio_backend;
-    return fitText(joinNonEmpty({runtime, output, view}, " · "), width);
+    return fitText(joinNonEmpty({runtime, output, view}, listSeparator(model.options.charset)), width);
 }
 
-std::string renderFooterLine(const TuiModel&, int width)
+std::string renderFooterLine(const TuiModel& model, int width)
 {
-    return fitText("q quit · space play/pause · n next · p prev · l lyrics · v spectrum · ? help", width);
+    return fitText(joinNonEmpty({
+        "q quit",
+        "space play/pause",
+        "n next",
+        "p prev",
+        "l lyrics",
+        "v spectrum",
+        "? help"}, listSeparator(model.options.charset)), width);
 }
 
 } // namespace lofibox::tui::widgets
-

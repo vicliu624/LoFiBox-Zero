@@ -80,6 +80,20 @@ The X11 desktop-widget shell `MUST` remain chromeless without a traditional menu
 
 The application icon must be installed through the hicolor icon theme under the desktop id `io.github.vicliu624.lofibox`, including the SVG metadata icon and a product-logo PNG fallback where available.
 
+## 6.1 Pointer Projection Constraint
+
+The X11 desktop-widget shell is a keyboard-first, compact product surface.
+Pointer input may be translated by the shell for development convenience, but the
+pointer graphic is not product information and must not be projected into the
+LoFiBox canvas.
+
+The X11 presentation adapter therefore `MUST` define an invisible cursor for the
+LoFiBox window. VNC, PocketFrame, and other screenshot harnesses used to validate
+the 320x170 surface `MUST` hide the server/root cursor before capture. Public
+documentation screenshots, release screenshots, and visual smoke evidence are
+invalid if they contain the VNC/X11 cursor cross, pointer outline, or any other
+capture-shell cursor artifact over the application surface.
+
 ## 7. Desktop Input Method Integration
 
 The X11 desktop-widget shell must participate in the user's Debian/Linux text-input session.

@@ -27,14 +27,14 @@ public:
     [[nodiscard]] bool playFirstAvailable(const RemoteTrackStarter& remote_starter = {}) const;
     [[nodiscard]] bool startTrack(int track_id, const RemoteTrackStarter& remote_starter = {}) const;
     void prepareQueueForTrack(int track_id) const;
-    void stepQueue(int delta, const RemoteTrackStarter& remote_starter = {}) const;
+    [[nodiscard]] bool stepQueue(int delta, const RemoteTrackStarter& remote_starter = {}) const;
     [[nodiscard]] bool jumpQueue(int queue_index, const RemoteTrackStarter& remote_starter = {}) const;
     void clearQueue() const noexcept;
     void pause() const noexcept;
-    void resume() const noexcept;
+    [[nodiscard]] bool resume() const;
     void stop() const noexcept;
     [[nodiscard]] bool seek(double seconds) const;
-    void togglePlayPause() const noexcept;
+    [[nodiscard]] bool togglePlayPause() const;
     void setShuffleEnabled(bool enabled) const;
     void toggleShuffle() const;
     void setRepeatAll(bool enabled) const noexcept;

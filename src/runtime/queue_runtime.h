@@ -16,6 +16,7 @@ public:
     void clear() const noexcept;
     void cycleMainMenuPlaybackMode() const;
     void toggleShuffle() const;
+    void setShuffleEnabled(bool enabled) const noexcept;
     void cycleRepeatMode() const noexcept;
     void setRepeatAll(bool enabled) const noexcept;
     void setRepeatOne(bool enabled) const noexcept;

@@ -39,14 +39,28 @@ int main()
     lofibox::tui::TuiRenderer renderer{};
     auto model = sampleModel();
     auto normal = renderer.render(model, {80, 24}).toString();
-    if (normal.find("Night Walk") == std::string::npos || normal.find("Spectrum") == std::string::npos) {
-        std::cerr << "Expected normal dashboard to show now playing and spectrum.\n";
+    if (normal.find("Night Walk") == std::string::npos
+        || normal.find("LoFi Garden") == std::string::npos
+        || normal.find("Spectrum") == std::string::npos
+        || normal.find("Lyrics") == std::string::npos
+        || normal.find("Queue") == std::string::npos
+        || normal.find("EQ Focus ON") == std::string::npos) {
+        std::cerr << "Expected normal dashboard to match the active playback contract.\n";
+        return 1;
+    }
+
+    if (normal.find("│├") != std::string::npos || normal.find("├") != std::string::npos) {
+        std::cerr << "Expected normal dashboard section dividers to live inside the outer TUI box without nested box corners.\n";
         return 1;
     }
 
     auto wide = renderer.render(model, {120, 40}).toString();
-    if (wide.find("Queue") == std::string::npos || wide.find("time moves slowly") == std::string::npos) {
-        std::cerr << "Expected wide dashboard to show queue and lyrics.\n";
+    if (wide.find("Spectrum") == std::string::npos
+        || wide.find("Lyrics") == std::string::npos
+        || wide.find("Queue") == std::string::npos
+        || wide.find("time moves slowly") == std::string::npos
+        || wide.find("31 63 125") == std::string::npos) {
+        std::cerr << "Expected wide dashboard to show side-by-side spectrum, lyrics, and queue.\n";
         return 1;
     }
 
@@ -62,6 +76,18 @@ int main()
         std::cerr << "Expected ASCII dashboard to use ASCII border/progress glyphs.\n";
         return 1;
     }
+    if (ascii.find("\xC2\xB7") != std::string::npos) {
+        std::cerr << "Expected ASCII dashboard to avoid Unicode middle-dot separators.\n";
+        return 1;
+    }
+
+    model.options.charset = lofibox::tui::TuiCharset::Unicode;
+    model.snapshot.playback.status = lofibox::runtime::RuntimePlaybackStatus::Paused;
+    auto micro = renderer.render(model, {40, 10}).toString();
+    if (micro.find("PAUSED") == std::string::npos || micro.find("PLAYING") != std::string::npos) {
+        std::cerr << "Expected micro dashboard status to reflect runtime playback truth.\n";
+        return 1;
+    }
 
     model.runtime_connected = false;
     model.runtime_error = "Runtime is not reachable";
@@ -72,4 +98,3 @@ int main()
     }
     return 0;
 }
-

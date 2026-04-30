@@ -213,6 +213,25 @@ The current visual roles are:
 - Blank, iconless color blocks `MUST NOT` be used as final card rendering.
 - Main menu card chrome `MUST NOT` become visually noisy or toy-like.
 
+## 6.4.1 Product Logo Transparency
+
+- The formal LoFiBox application logo is a governed product asset, not a page
+  background.
+- Runtime and installable logo projections `MUST` preserve real alpha
+  transparency. Flattened white backgrounds, off-white export mattes, and
+  checkerboard transparency previews are invalid logo assets.
+- Corner pixels `SHOULD` be fully transparent; near-transparent antialiasing at
+  the extreme edge is acceptable when it is visually invisible on the boot
+  background.
+- Startup, About, desktop metadata, hicolor icon, and documentation projections
+  `MUST` derive from the same transparent logo source semantics.
+- Rendering code `MUST` alpha-composite the logo over the current page
+  background; it `MUST NOT` make logo transparency dependent on the boot page
+  using a matching solid background color.
+- A smoke test `MUST` verify that the runtime logo asset has transparent
+  corners and that scaled logo blitting preserves the destination background
+  behind transparent pixels.
+
 ## 6.5 Progress Bar
 
 - The current progress bar `MUST` use a cool blue fill.

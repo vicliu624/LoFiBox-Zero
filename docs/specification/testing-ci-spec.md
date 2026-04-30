@@ -16,6 +16,9 @@ Unit tests should cover:
 - application command/query services returning structured command results without depending on GUI page selection state
 - runtime command/query contract behavior for accepted/applied result semantics, correlation ids, versioning, and invalid command rejection
 - runtime host ownership behavior proving live runtime can run without `AppRuntimeContext` owning or constructing runtime internals
+- runtime host tick serialization through the runtime command bus, proving that
+  external playback commands cannot race the host tick loop against the same
+  playback backend or session facade
 - runtime domain behavior for playback, active queue, active EQ, active remote session, live settings, and full snapshot assembly without going through GUI pages
 - runtime snapshots for playback, active queue, active EQ, and active remote session before GUI row or terminal projection
 - remote browse query service behavior for root browsing, child browsing, search, stream resolution, degraded facts, directory cache reuse, and local read-only remote fact caching
@@ -50,6 +53,38 @@ Integration tests should cover:
 - local and remote search result grouping over normalized media items
 - GUI Remote Browse, Server Diagnostics, Stream Detail, and Search consuming application-service query results instead of calling remote providers directly
 - Search matching and display with non-ASCII metadata fixtures
+
+Product-path integration tests must cover the real user routes that join
+domains together, not only isolated class smoke tests. The minimum product-path
+coverage is:
+
+- selecting or starting a local library item results in an active playback
+  session and a `RuntimeSnapshot.playback.status` of `PLAYING` or `PAUSED`
+  with the expected `current_track_id`
+- backend start refusal and inactive resume/toggle paths are covered so
+  `PLAYING` cannot be projected when `audio_active=false`
+- starting the already-active track id is covered as an idempotent runtime
+  command that does not restart or tear down the backend
+- local Linux playback backend smoke coverage must distinguish process-spawn
+  acceptance from confirmed audio output; a decoder/sink path that exits before
+  first output confirmation is a failed start, not successful playback
+- selecting or starting a remote library/search item enters playback through a
+  resolved remote-library-track path, not an empty local file path
+- queue step/jump to a remote item without a remote resolver returns
+  `applied=false` rather than corrupting playback state
+- runtime snapshot queue projection includes displayable title/artist/source
+  facts for visible queue items
+- metadata and lyrics enrichment for remote items uses stable remote identity
+  and cache keys instead of synthetic empty paths
+- CLI field filtering and JSON errors are covered through installed-binary style
+  invocations, including invalid fields and invalid command arguments
+- TUI render tests include active playback snapshots for wide, normal, compact,
+  micro, and tiny layouts, not only disconnected fallbacks
+- non-ASCII title/artist fixtures are rendered in CLI and documentation capture
+  paths with fonts that can display CJK/Japanese text
+- product logo asset tests verify real alpha transparency, transparent corners,
+  retained opaque foreground artwork, and scaled blitting that preserves the
+  destination background behind transparent logo pixels
 
 ## 3.1 Platform Input Adapter Tests
 
@@ -131,3 +166,17 @@ CI should include:
 
 CI failures must not be solved by skipping tests.
 They must drive boundary, dependency, packaging, or implementation fixes.
+
+Smoke tests that only prove construction, static rendering, or help output are
+not sufficient as release confidence. Before publishing packages or refreshing
+public documentation screenshots, a real Linux target smoke run must install the
+built package over any older installed LoFiBox version, launch the runtime, play
+at least one local track and one remote track where configured, query runtime
+JSON, render TUI once in active playback state, and capture GUI/TUI/CLI evidence
+from that installed binary.
+
+GUI capture evidence must be cursor-clean. The X11 application window and any
+VNC/PocketFrame root display used for the capture must hide their pointer cursor
+before screenshots are accepted. A screenshot containing the VNC/X11 cross cursor
+or pointer overlay is a failed visual smoke artifact, even if the product pixels
+behind it are otherwise correct.

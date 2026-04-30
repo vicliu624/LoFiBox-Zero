@@ -6,7 +6,10 @@ namespace lofibox::platform::host::runtime_detail {
 
 bool LyricsCache::loadCurrentCachedLyrics(const SharedRuntimeCache& cache, std::string_view key, CacheEntry& entry) const
 {
-    if (!entry.online_lyrics_attempted && entry.lyrics_lookup_version >= kLyricsLookupVersion && fs::exists(lyricsCachePath(cache, key))) {
+    if ((!entry.lyrics.plain || entry.lyrics.plain->empty())
+        && (!entry.lyrics.synced || entry.lyrics.synced->empty())
+        && entry.lyrics_lookup_version >= kLyricsLookupVersion
+        && fs::exists(lyricsCachePath(cache, key))) {
         entry.lyrics = loadLyricsCache(cache, key);
     }
     return entry.lyrics.plain || entry.lyrics.synced;

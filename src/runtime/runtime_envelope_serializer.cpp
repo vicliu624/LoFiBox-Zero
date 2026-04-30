@@ -21,7 +21,7 @@ struct EnumName {
     std::string_view name;
 };
 
-constexpr std::array<EnumName<RuntimeCommandKind>, 27> kCommandNames{{
+constexpr std::array<EnumName<RuntimeCommandKind>, 29> kCommandNames{{
     {RuntimeCommandKind::PlaybackPlay, "PlaybackPlay"},
     {RuntimeCommandKind::PlaybackPause, "PlaybackPause"},
     {RuntimeCommandKind::PlaybackResume, "PlaybackResume"},
@@ -33,10 +33,12 @@ constexpr std::array<EnumName<RuntimeCommandKind>, 27> kCommandNames{{
     {RuntimeCommandKind::QueueJump, "QueueJump"},
     {RuntimeCommandKind::QueueClear, "QueueClear"},
     {RuntimeCommandKind::PlaybackToggleShuffle, "PlaybackToggleShuffle"},
+    {RuntimeCommandKind::PlaybackSetShuffle, "PlaybackSetShuffle"},
     {RuntimeCommandKind::PlaybackCycleRepeat, "PlaybackCycleRepeat"},
     {RuntimeCommandKind::PlaybackCycleMainMenuMode, "PlaybackCycleMainMenuMode"},
     {RuntimeCommandKind::PlaybackSetRepeatAll, "PlaybackSetRepeatAll"},
     {RuntimeCommandKind::PlaybackSetRepeatOne, "PlaybackSetRepeatOne"},
+    {RuntimeCommandKind::RemoteResolveAndStartTrack, "RemoteResolveAndStartTrack"},
     {RuntimeCommandKind::RemoteStartActiveStream, "RemoteStartActiveStream"},
     {RuntimeCommandKind::EqEnable, "EqEnable"},
     {RuntimeCommandKind::EqDisable, "EqDisable"},
@@ -395,6 +397,10 @@ void appendPayload(std::ostringstream& out, const RuntimeCommandPayload& payload
         } else if constexpr (std::is_same_v<Payload, RuntimeEnabledPayload>) {
             appendStringField(out, "payload", "RuntimeEnabled");
             appendBoolField(out, "enabled", data.enabled);
+        } else if constexpr (std::is_same_v<Payload, RemoteTrackRefPayload>) {
+            appendStringField(out, "payload", "RemoteTrackRef");
+            appendStringField(out, "profile_id", data.profile_id);
+            appendStringField(out, "item_id", data.item_id);
         } else if constexpr (std::is_same_v<Payload, EqSetBandPayload>) {
             appendStringField(out, "payload", "EqSetBand");
             out << ",\"eq_band_index\":" << data.eq_band_index << ",\"eq_gain_db\":" << data.eq_gain_db;
@@ -440,6 +446,11 @@ RuntimeCommandPayload parsePayload(std::string_view json)
     }
     if (payload == "RuntimeEnabled") {
         return RuntimeCommandPayload::enabled(boolField(json, "enabled").value_or(false));
+    }
+    if (payload == "RemoteTrackRef") {
+        return RuntimeCommandPayload::remoteTrackRef(
+            stringField(json, "profile_id").value_or(std::string{}),
+            stringField(json, "item_id").value_or(std::string{}));
     }
     if (payload == "EqSetBand") {
         return RuntimeCommandPayload::eqSetBand(numberField<int>(json, "eq_band_index").value_or(0), numberField<int>(json, "eq_gain_db").value_or(0));

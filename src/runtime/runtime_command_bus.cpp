@@ -5,7 +5,8 @@
 namespace lofibox::runtime {
 
 RuntimeCommandBus::RuntimeCommandBus(RuntimeSessionFacade& session) noexcept
-    : commands_(session),
+    : session_(session),
+      commands_(session),
       queries_(session)
 {
 }
@@ -25,6 +26,12 @@ RuntimeSnapshot RuntimeCommandBus::query(const RuntimeQuery& query) const
 RuntimeSnapshot RuntimeCommandBus::snapshot() const
 {
     return query(RuntimeQuery{RuntimeQueryKind::FullSnapshot});
+}
+
+void RuntimeCommandBus::tick(double delta_seconds)
+{
+    const std::lock_guard lock{mutex_};
+    session_.tick(delta_seconds);
 }
 
 std::uint64_t RuntimeCommandBus::version() const noexcept

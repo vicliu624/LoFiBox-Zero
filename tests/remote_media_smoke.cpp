@@ -5,16 +5,150 @@
 #include <iostream>
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <thread>
 
+#include "app/remote_media_contract.h"
 #include "app/runtime_services.h"
+#include "application/remote_browse_query_service.h"
+#include "cache/cache_manager.h"
 #include "platform/host/runtime_services_factory.h"
 #include "media_fixture_utils.h"
 
 namespace fs = std::filesystem;
 
+namespace {
+
+bool verifyRemoteGovernance()
+{
+    lofibox::app::RemoteTrack remote{};
+    remote.id = "remote-1";
+    remote.title = "Server Title";
+    remote.artist = "Server Artist";
+    remote.album = "Server Album";
+    remote.duration_seconds = 120;
+
+    lofibox::app::TrackMetadata metadata{};
+    metadata.title = "Accepted Title";
+    metadata.artist = "Accepted Artist";
+    metadata.album = "Accepted Album";
+    metadata.duration_seconds = 121;
+
+    lofibox::app::TrackLyrics lyrics{};
+    lyrics.plain = "accepted lyric";
+    lyrics.source = "LRCLIB";
+
+    lofibox::app::TrackIdentity weak{};
+    weak.found = true;
+    weak.confidence = 0.20;
+    weak.source = "MUSICBRAINZ";
+    const auto weak_merge = lofibox::app::mergeRemoteGovernedFacts(remote, metadata, lyrics, weak);
+    if (weak_merge.title != "Server Title" || weak_merge.artist != "Server Artist" || weak_merge.album != "Server Album") {
+        std::cerr << "Weak remote identity must not overwrite plausible server catalog metadata.\n";
+        return false;
+    }
+    if (weak_merge.lyrics_plain != "accepted lyric" || weak_merge.lyrics_source != "LRCLIB") {
+        std::cerr << "Lyrics should still be cached as governed local remote facts.\n";
+        return false;
+    }
+
+    lofibox::app::TrackIdentity strong = weak;
+    strong.confidence = 0.94;
+    const auto strong_merge = lofibox::app::mergeRemoteGovernedFacts(remote, metadata, lyrics, strong);
+    if (strong_merge.title != "Accepted Title"
+        || strong_merge.artist != "Accepted Artist"
+        || strong_merge.album != "Accepted Album"
+        || strong_merge.duration_seconds != 121) {
+        std::cerr << "Strong remote identity should govern the local display projection.\n";
+        return false;
+    }
+    return true;
+}
+
+class FakeRemoteSourceProvider final : public lofibox::app::RemoteSourceProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "fake-source"; }
+    [[nodiscard]] lofibox::app::RemoteSourceSession probe(const lofibox::app::RemoteServerProfile&) const override
+    {
+        return lofibox::app::RemoteSourceSession{true, "fake", "user", "token", "OK"};
+    }
+};
+
+class FakeRemoteCatalogProvider final : public lofibox::app::RemoteCatalogProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "fake-catalog"; }
+    [[nodiscard]] std::vector<lofibox::app::RemoteTrack> searchTracks(
+        const lofibox::app::RemoteServerProfile& profile,
+        const lofibox::app::RemoteSourceSession&,
+        std::string_view,
+        int) const override
+    {
+        lofibox::app::RemoteTrack track{};
+        track.id = "30496";
+        track.title = "Bad Bad You, Bad Bad Me";
+        track.artist = "Stephen Fretwell";
+        track.album = "Magpie";
+        track.source_id = profile.id;
+        track.source_label = profile.name;
+        return {track};
+    }
+
+    [[nodiscard]] std::vector<lofibox::app::RemoteTrack> recentTracks(
+        const lofibox::app::RemoteServerProfile&,
+        const lofibox::app::RemoteSourceSession&,
+        int) const override
+    {
+        return {};
+    }
+};
+
+bool verifyRemoteCatalogFactsBeatStaleCache(const fs::path& root)
+{
+    auto services = lofibox::app::withNullRuntimeServices();
+    services.remote.remote_source_provider = std::make_shared<FakeRemoteSourceProvider>();
+    services.remote.remote_catalog_provider = std::make_shared<FakeRemoteCatalogProvider>();
+    services.cache.cache_manager = std::make_shared<lofibox::cache::CacheManager>(root / "cache");
+
+    lofibox::app::RemoteServerProfile profile{
+        lofibox::app::RemoteServerKind::Emby,
+        "emby-lan",
+        "Emby LAN",
+        "http://example.invalid",
+        "user",
+        "",
+        ""};
+
+    lofibox::app::RemoteTrack stale{};
+    stale.id = "30496";
+    stale.title = "Magpie";
+    stale.artist = "Stephen Fretwell";
+    stale.album = "Magpie";
+    stale.source_id = profile.id;
+    stale.source_label = profile.name;
+    services.cache.cache_manager->putText(
+        lofibox::cache::CacheBucket::Metadata,
+        lofibox::app::remoteMediaCacheKey(profile, stale.id),
+        lofibox::app::serializeRemoteTrackCache(stale));
+
+    auto mutable_profile = profile;
+    const auto result = lofibox::application::RemoteBrowseQueryService{services}.search(mutable_profile, 1, "Bad Bad You", 10);
+    if (result.tracks.empty() || result.tracks.front().title != "Bad Bad You, Bad Bad Me") {
+        std::cerr << "Remote catalog facts must beat stale enrichment cache when provider data is plausible.\n";
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
 int main()
 {
+    if (!verifyRemoteGovernance()) {
+        return 1;
+    }
+
 #if defined(_WIN32)
     const auto python_path = test_media_fixture::resolveExecutablePath(L"PYTHON_EXECUTABLE", L"python.exe");
 #elif defined(__linux__)
@@ -33,6 +167,10 @@ int main()
     fs::create_directories(root, ec);
     if (ec) {
         std::cerr << "Failed to create temp directory.\n";
+        return 1;
+    }
+    if (!verifyRemoteCatalogFactsBeatStaleCache(root)) {
+        fs::remove_all(root, ec);
         return 1;
     }
     const int port = 18000 + static_cast<int>((std::chrono::steady_clock::now().time_since_epoch().count() % 1000 + 1000) % 1000);

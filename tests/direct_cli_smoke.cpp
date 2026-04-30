@@ -13,6 +13,7 @@
 #include "app/runtime_services.h"
 #include "cache/cache_manager.h"
 #include "cli/direct_cli.h"
+#include "core/canvas.h"
 #include "security/credential_policy.h"
 
 namespace {
@@ -90,6 +91,63 @@ public:
     std::string displayName() const override { return "ONLINE"; }
 };
 
+class FakeMetadataProvider final : public lofibox::app::MetadataProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE-METADATA"; }
+    [[nodiscard]] lofibox::app::TrackMetadata read(const std::filesystem::path&, lofibox::app::MetadataReadMode mode) const override
+    {
+        lofibox::app::TrackMetadata metadata{};
+        metadata.title = mode == lofibox::app::MetadataReadMode::AllowOnline ? "Looked Up Song" : "Local Song";
+        metadata.artist = "CLI Artist";
+        metadata.album = "CLI Album";
+        metadata.duration_seconds = 123;
+        return metadata;
+    }
+};
+
+class FakeLyricsProvider final : public lofibox::app::LyricsProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE-LYRICS"; }
+    [[nodiscard]] lofibox::app::TrackLyrics fetch(const std::filesystem::path&, const lofibox::app::TrackMetadata&) const override
+    {
+        lofibox::app::TrackLyrics lyrics{};
+        lyrics.plain = "hello\nworld";
+        lyrics.synced = "[00:01.00]hello\n[00:02.00]world";
+        lyrics.source = "LRCLIB";
+        return lyrics;
+    }
+};
+
+class FakeTrackIdentityProvider final : public lofibox::app::TrackIdentityProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE-FINGERPRINT"; }
+    [[nodiscard]] lofibox::app::TrackIdentity resolve(const std::filesystem::path&, const lofibox::app::TrackMetadata&) const override
+    {
+        lofibox::app::TrackIdentity identity{};
+        identity.found = true;
+        identity.source = "AcoustID";
+        identity.confidence = 0.91;
+        identity.fingerprint = "fp-test";
+        identity.recording_mbid = "recording-test";
+        identity.metadata.title = "Identified Song";
+        identity.audio_fingerprint_verified = true;
+        return identity;
+    }
+};
+
+class FakeArtworkProvider final : public lofibox::app::ArtworkProvider {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE-ARTWORK"; }
+    [[nodiscard]] std::optional<lofibox::core::Canvas> read(const std::filesystem::path&, lofibox::app::ArtworkReadMode) const override
+    {
+        return lofibox::core::Canvas{4, 3};
+    }
+};
+
 std::optional<int> run(std::vector<std::string> args, lofibox::app::RuntimeServices& services, std::string& out_text, std::string& err_text)
 {
     std::vector<char*> argv{};
@@ -130,6 +188,10 @@ int main()
     services.remote.remote_stream_resolver = std::make_shared<FakeRemoteStreamResolver>();
     services.cache.cache_manager = std::make_shared<lofibox::cache::CacheManager>(root / "cache");
     services.cache.cache_manager->putText(lofibox::cache::CacheBucket::Metadata, "probe", "value");
+    services.metadata.metadata_provider = std::make_shared<FakeMetadataProvider>();
+    services.metadata.lyrics_provider = std::make_shared<FakeLyricsProvider>();
+    services.metadata.track_identity_provider = std::make_shared<FakeTrackIdentityProvider>();
+    services.metadata.artwork_provider = std::make_shared<FakeArtworkProvider>();
 
     std::string out{};
     std::string err{};
@@ -175,9 +237,9 @@ int main()
     assert(code && *code == 0);
     assert(out.find("Song") != std::string::npos);
 
-    code = run({"lofibox", "library", "query", "tracks", "--artist", "Artist", "--root", root.string(), "--json"}, services, out, err);
+    code = run({"lofibox", "library", "query", "tracks", "--artist", "CLI Artist", "--root", root.string(), "--json"}, services, out, err);
     assert(code && *code == 0);
-    assert(out.find("\"artist\":\"Artist\"") != std::string::npos);
+    assert(out.find("\"artist\":\"CLI Artist\"") != std::string::npos);
 
     code = run({"lofibox", "library", "query", "Song", "--root", root.string()}, services, out, err);
     assert(code && *code == 0);
@@ -190,6 +252,29 @@ int main()
     code = run({"lofibox", "remote", "browse", "emby-home", "--porcelain"}, services, out, err);
     assert(code && *code == 0);
     assert(out.find("ARTISTS") != std::string::npos);
+
+    const auto song_path = root / "Artist" / "Album" / "Song.mp3";
+    code = run({"lofibox", "metadata", "show", song_path.string(), "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"title\":\"Local Song\"") != std::string::npos);
+
+    code = run({"lofibox", "metadata", "lookup", song_path.string(), "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"status\":\"LOOKED_UP\"") != std::string::npos);
+    assert(out.find("\"title\":\"Looked Up Song\"") != std::string::npos);
+
+    code = run({"lofibox", "lyrics", "lookup", song_path.string(), "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"source\":\"LRCLIB\"") != std::string::npos);
+    assert(out.find("\"plain_available\":\"true\"") != std::string::npos);
+
+    code = run({"lofibox", "fingerprint", "generate", song_path.string(), "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"fingerprint\":\"fp-test\"") != std::string::npos);
+
+    code = run({"lofibox", "artwork", "lookup", song_path.string(), "--json"}, services, out, err);
+    assert(code && *code == 0);
+    assert(out.find("\"width\":\"4\"") != std::string::npos);
 
     code = run({"lofibox", "cache", "status", "--json"}, services, out, err);
     assert(code && *code == 0);

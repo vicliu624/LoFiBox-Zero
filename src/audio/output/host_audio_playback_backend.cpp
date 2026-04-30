@@ -22,6 +22,10 @@
 #include <thread>
 #include <vector>
 
+#if defined(__linux__)
+#include <unistd.h>
+#endif
+
 #include "audio/dsp/realtime_dsp_engine.h"
 #include "platform/host/png_canvas_loader.h"
 #include "platform/host/runtime_logger.h"
@@ -163,8 +167,34 @@ AudioExecutable resolveAnalyzerExecutable()
 }
 
 #if defined(__linux__)
+bool pipeWireRuntimeAvailable()
+{
+    std::vector<fs::path> candidates{};
+    if (const char* runtime_dir = std::getenv("PIPEWIRE_RUNTIME_DIR"); runtime_dir != nullptr && *runtime_dir != '\0') {
+        candidates.emplace_back(runtime_dir);
+    }
+    if (const char* runtime_dir = std::getenv("XDG_RUNTIME_DIR"); runtime_dir != nullptr && *runtime_dir != '\0') {
+        candidates.emplace_back(runtime_dir);
+    }
+    candidates.emplace_back(fs::path{"/run/user"} / std::to_string(static_cast<long long>(getuid())));
+
+    for (const auto& candidate : candidates) {
+        std::error_code ec{};
+        if (!candidate.empty() && fs::exists(candidate / "pipewire-0", ec)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 PcmOutputSink resolvePcmOutputSink(const AudioExecutable& ffplay)
 {
+    if (pipeWireRuntimeAvailable()) {
+        if (auto path = resolveExecutableFromPath("pw-cat")) {
+            return PcmOutputSink{*path, PcmOutputSinkKind::PipeWireCat};
+        }
+    }
+
     if (auto path = resolveExecutableFromPath("aplay")) {
         return PcmOutputSink{*path, PcmOutputSinkKind::Aplay};
     }
@@ -676,6 +706,13 @@ private:
         }
 
         if (!stop_requested_) {
+            if (!hasWrittenOutput()) {
+                closeInputProcess(sink_process_);
+                stopPipeProcess(decoder_process_);
+                stopInputProcess(sink_process_);
+                markFailed("Realtime PCM decoder ended before output was confirmed");
+                return;
+            }
             closeInputProcess(sink_process_);
             for (int attempts = 0; attempts < 120 && inputProcessRunning(sink_process_); ++attempts) {
                 std::this_thread::sleep_for(std::chrono::milliseconds{25});
@@ -756,6 +793,12 @@ private:
         frames_written_ += frame_count;
     }
 
+    [[nodiscard]] bool hasWrittenOutput() const
+    {
+        std::lock_guard lock(state_mutex_);
+        return first_output_write_at_ != std::chrono::steady_clock::time_point{};
+    }
+
     [[nodiscard]] bool outputStartConfirmedLocked(std::chrono::steady_clock::time_point now) const
     {
         if (first_output_write_at_ == std::chrono::steady_clock::time_point{}) {
@@ -797,10 +840,10 @@ private:
         return sink_kind_ == PcmOutputSinkKind::PipeWireCat ? "PipeWire" : "ffplay";
     }
 
-    void markFailed()
+    void markFailed(std::string_view message = "Realtime PCM playback pipeline failed before output completion")
     {
         stop_requested_ = true;
-        logRuntime(RuntimeLogLevel::Warn, "audio", "Realtime PCM playback pipeline failed before output completion");
+        logRuntime(RuntimeLogLevel::Warn, "audio", std::string(message));
         std::lock_guard lock(state_mutex_);
         failed_ = true;
         paused_ = false;
@@ -926,7 +969,18 @@ public:
         }
 #if defined(__linux__)
         if (!pcm_sink_executable_.path.empty() && !analyzer_executable_.path.empty()) {
-            const bool ok = pcm_pipeline_.start(analyzer_executable_, pcm_sink_executable_, analyzer_input, start_seconds, active_profile);
+            const bool requires_confirmation = !networkInput(analyzer_input);
+            bool ok = pcm_pipeline_.start(analyzer_executable_, pcm_sink_executable_, analyzer_input, start_seconds, active_profile);
+            if (ok && requires_confirmation && !waitForLocalPcmStartConfirmation()) {
+                pcm_pipeline_.stop();
+                std::this_thread::sleep_for(std::chrono::milliseconds{180});
+                logRuntime(RuntimeLogLevel::Warn, "audio", "Retrying realtime PCM local playback after unconfirmed start");
+                ok = pcm_pipeline_.start(analyzer_executable_, pcm_sink_executable_, analyzer_input, start_seconds, active_profile)
+                    && waitForLocalPcmStartConfirmation();
+            }
+            if (!ok) {
+                pcm_pipeline_.stop();
+            }
             using_pcm_pipeline_ = ok;
             logRuntime(
                 ok ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn,
@@ -1120,6 +1174,31 @@ public:
     }
 
 private:
+#if defined(__linux__)
+    [[nodiscard]] bool waitForLocalPcmStartConfirmation()
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+        while (std::chrono::steady_clock::now() < deadline) {
+            switch (pcm_pipeline_.state()) {
+            case app::AudioPlaybackState::Playing:
+                return true;
+            case app::AudioPlaybackState::Idle:
+            case app::AudioPlaybackState::Paused:
+            case app::AudioPlaybackState::Finished:
+            case app::AudioPlaybackState::Failed:
+                logRuntime(RuntimeLogLevel::Warn, "audio", "Realtime PCM local playback failed before output confirmation");
+                return false;
+            case app::AudioPlaybackState::Starting:
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{25});
+        }
+
+        logRuntime(RuntimeLogLevel::Warn, "audio", "Realtime PCM local playback did not confirm output before timeout");
+        return false;
+    }
+#endif
+
     void startAnalyzerIfNeeded()
     {
         if (analyzer_started_ || analyzer_executable_.path.empty() || pending_analyzer_input_.empty()) {

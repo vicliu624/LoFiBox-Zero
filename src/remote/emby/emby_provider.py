@@ -28,7 +28,7 @@ def playable_item_query(
         "Recursive": "true",
         "Filters": "IsNotFolder",
         "MediaTypes": "Video",
-        "Fields": "RunTimeTicks,MediaSources,Path,SeriesName",
+        "Fields": "RunTimeTicks,Album,AlbumId,Artists,ArtistItems,AlbumArtists,AlbumArtist,MediaSources,Path,SeriesName,ParentName",
         "Limit": str(limit),
         "SortBy": sort_by,
         "SortOrder": sort_order,

@@ -163,6 +163,16 @@ public:
     [[nodiscard]] virtual bool available() const = 0;
     [[nodiscard]] virtual std::string displayName() const = 0;
     [[nodiscard]] virtual TrackLyrics fetch(const std::filesystem::path& path, const TrackMetadata& metadata) const = 0;
+    [[nodiscard]] virtual TrackLyrics fetchRemoteIdentity(
+        std::string_view stable_cache_key,
+        const std::filesystem::path& lookup_path,
+        const TrackMetadata& metadata,
+        const TrackIdentity& accepted_identity = {}) const
+    {
+        (void)stable_cache_key;
+        (void)accepted_identity;
+        return fetch(lookup_path, metadata);
+    }
 };
 
 class TagWriter {

@@ -123,6 +123,19 @@ void safelyFocusWindow(Display* display, Window window)
     XSetErrorHandler(previous_handler);
 }
 
+[[nodiscard]] Cursor createHiddenCursor(Display* display, Window window, Pixmap& source, Pixmap& mask)
+{
+    static constexpr char kEmptyBitmap[] = {0};
+    source = XCreateBitmapFromData(display, window, kEmptyBitmap, 1, 1);
+    mask = XCreateBitmapFromData(display, window, kEmptyBitmap, 1, 1);
+    if (source == None || mask == None) {
+        return None;
+    }
+
+    XColor transparent{};
+    return XCreatePixmapCursor(display, source, mask, &transparent, &transparent, 0, 0);
+}
+
 void waitUntilMapped(Display* display, Window window)
 {
     XWindowAttributes attributes{};
@@ -276,6 +289,10 @@ struct X11Presenter::Impl {
 
         XStoreName(display, window, "LoFiBox Zero");
         makeChromelessManagedWindow(display, window);
+        hidden_cursor = createHiddenCursor(display, window, cursor_source_pixmap, cursor_mask_pixmap);
+        if (hidden_cursor != None) {
+            XDefineCursor(display, window, hidden_cursor);
+        }
         XSelectInput(display, window, ExposureMask | KeyPressMask | StructureNotifyMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
         XMapRaised(display, window);
         XFlush(display);
@@ -316,6 +333,15 @@ struct X11Presenter::Impl {
         if (gc != nullptr) {
             XFreeGC(display, gc);
         }
+        if (hidden_cursor != None) {
+            XFreeCursor(display, hidden_cursor);
+        }
+        if (cursor_source_pixmap != None) {
+            XFreePixmap(display, cursor_source_pixmap);
+        }
+        if (cursor_mask_pixmap != None) {
+            XFreePixmap(display, cursor_mask_pixmap);
+        }
         if (window != 0) {
             XDestroyWindow(display, window);
         }
@@ -334,6 +360,9 @@ struct X11Presenter::Impl {
     int window_x{};
     int window_y{};
     GC gc{};
+    Cursor hidden_cursor{None};
+    Pixmap cursor_source_pixmap{None};
+    Pixmap cursor_mask_pixmap{None};
     XIM input_method{};
     XIC input_context{};
     bool running{true};
