@@ -66,7 +66,7 @@ public:
         const lofibox::app::RemoteSourceSession&,
         int) const override
     {
-        return {{profile.base_url, "Library Hit", "Remote Artist", "Remote Album", "", 123}};
+        return {{profile.base_url, profile.base_url, "", "", "", 0}};
     }
 
     std::vector<lofibox::app::RemoteCatalogNode> browse(

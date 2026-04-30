@@ -14,6 +14,41 @@
 
 namespace {
 
+class FakeAudioBackend final : public lofibox::app::AudioPlaybackBackend {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE"; }
+    bool playFile(const std::filesystem::path&, double) override
+    {
+        playing = true;
+        paused = false;
+        return true;
+    }
+    bool playUri(const std::string&, double) override
+    {
+        playing = true;
+        paused = false;
+        return true;
+    }
+    void stop() override
+    {
+        playing = false;
+        paused = false;
+    }
+    void pause() override { paused = true; }
+    void resume() override
+    {
+        playing = true;
+        paused = false;
+    }
+    [[nodiscard]] bool isPlaying() override { return playing && !paused; }
+    [[nodiscard]] bool isFinished() override { return false; }
+
+private:
+    bool playing{false};
+    bool paused{false};
+};
+
 class MemoryRemoteProfileStore final : public lofibox::app::RemoteProfileStore {
 public:
     [[nodiscard]] std::vector<lofibox::app::RemoteServerProfile> loadProfiles() const override
@@ -73,6 +108,7 @@ int main()
 {
     auto runtime = lofibox::app::withNullRuntimeServices();
     auto profile_store = std::make_shared<MemoryRemoteProfileStore>();
+    runtime.playback.audio_backend = std::make_shared<FakeAudioBackend>();
     runtime.remote.remote_profile_store = profile_store;
     runtime.remote.remote_source_provider = std::make_shared<ProbeRemoteSourceProvider>();
 

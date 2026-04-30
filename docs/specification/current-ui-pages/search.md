@@ -32,8 +32,17 @@ It does not own input-method engines, remote provider protocol details, or final
 - optional transient preedit text from the active runtime shell
 - local library catalog search provider
 - configured remote providers that expose search capability
-- normalized `MediaItem` values for local and remote results
+- normalized audio `MediaItem` values for local and remote results
 - current selected row
+
+## 4.1 Remote Media-Type Contract
+
+- `Search` is a music-player search surface.
+- Remote provider results `MUST` be filtered to audio-playable music items before they become `MediaItem` rows.
+- Jellyfin, Emby, DLNA, playlist, share, or future remote providers `MUST NOT` project movie, episode, series, trailer, music-video, or generic video objects into Search results.
+- Server items that only expose video media streams are not valid search results even if the server offers an audio-stream endpoint for them.
+- If a media server has no audio catalog matches, the correct Search result for that source is empty or degraded, not a video fallback row.
+- UI pages must not hide videos after projection; filtering belongs at provider normalization and remote-query boundaries.
 
 ## 5. State Enumeration
 

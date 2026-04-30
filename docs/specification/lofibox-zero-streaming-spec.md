@@ -179,7 +179,9 @@ For each provider family marked supported by `RemoteSourceRegistry`, the impleme
 
 `EmbySource` is a first-batch real provider.
 It must use Emby-compatible authentication, catalog, latest-item, search, and audio-stream endpoints rather than being represented only by a capability row in Source Manager.
-When an Emby server exposes no `Audio` catalog items but exposes media items that can be resolved through Emby's audio-stream endpoint, the provider may map those items as audio-playable remote items while preserving the same `RemoteTrack` and `ResolvedRemoteStream` boundaries.
+It must only project server items that are audio catalog items or that explicitly expose audio-only media streams into `RemoteTrack`.
+Movie, episode, series, trailer, music-video, and generic video objects are not valid `RemoteTrack` values, even when the server exposes an endpoint that could extract or transcode an audio stream from them.
+When no audio result exists, search and browse must return an empty or degraded result rather than falling back to video items.
 Real Emby credentials must never be committed, persisted in the profile store, printed in logs, or embedded in tests.
 
 ### 6.3 Catalog Browse And Search

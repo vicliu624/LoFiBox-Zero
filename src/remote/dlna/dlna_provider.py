@@ -17,6 +17,20 @@ DIDL_NS = {
 }
 
 
+VIDEO_EXTENSIONS = (
+    ".mp4",
+    ".m4v",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".webm",
+    ".wmv",
+    ".flv",
+    ".mpeg",
+    ".mpg",
+)
+
+
 def _read(url: str, body: bytes | None = None, headers: Dict[str, str] | None = None) -> bytes:
     request = urllib.request.Request(url, data=body, headers=headers or {}, method="POST" if body is not None else "GET")
     with urllib.request.urlopen(request, timeout=20) as response:
@@ -74,6 +88,32 @@ def _text(element: ET.Element, path: str) -> str:
     return found.text if found is not None and found.text else ""
 
 
+def _looks_video_url(url: str) -> bool:
+    path = urllib.parse.urlparse(url).path.casefold()
+    return path.endswith(VIDEO_EXTENSIONS)
+
+
+def _resource_protocol(item: ET.Element) -> Tuple[str, str]:
+    resource = item.find("didl:res", DIDL_NS)
+    if resource is None:
+        return "", ""
+    return resource.attrib.get("protocolInfo", "").casefold(), resource.text or ""
+
+
+def _is_audio_item(item: ET.Element) -> bool:
+    item_class = _text(item, "upnp:class").casefold()
+    if "videoitem" in item_class or "movie" in item_class:
+        return False
+    if "audioitem" in item_class or "musictrack" in item_class:
+        return True
+    protocol, url = _resource_protocol(item)
+    if "video/" in protocol or _looks_video_url(url):
+        return False
+    if "audio/" in protocol:
+        return True
+    return bool(url)
+
+
 def _item_track(profile: Dict[str, Any], item: ET.Element) -> Dict[str, Any]:
     item_id = item.attrib.get("id", "")
     title = _text(item, "dc:title") or item_id
@@ -118,6 +158,8 @@ def _children(profile: Dict[str, Any], object_id: str, limit: int) -> List[Dict[
     for container in didl.findall("didl:container", DIDL_NS):
         result.append(_container_node(profile, container))
     for item in didl.findall("didl:item", DIDL_NS):
+        if not _is_audio_item(item):
+            continue
         result.append(_item_node(profile, item))
     return result[:limit]
 
@@ -125,7 +167,7 @@ def _children(profile: Dict[str, Any], object_id: str, limit: int) -> List[Dict[
 def _metadata(profile: Dict[str, Any], object_id: str) -> Dict[str, Any]:
     didl = _browse(profile, object_id, "BrowseMetadata", 1)
     item = didl.find("didl:item", DIDL_NS)
-    if item is None:
+    if item is None or not _is_audio_item(item):
         return {}
     return _item_track(profile, item)
 

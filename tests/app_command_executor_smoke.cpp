@@ -10,11 +10,47 @@
 
 namespace {
 
+class FakeAudioBackend final : public lofibox::app::AudioPlaybackBackend {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE"; }
+    bool playFile(const std::filesystem::path&, double) override
+    {
+        playing = true;
+        paused = false;
+        return true;
+    }
+    bool playUri(const std::string&, double) override
+    {
+        playing = true;
+        paused = false;
+        return true;
+    }
+    void stop() override
+    {
+        playing = false;
+        paused = false;
+    }
+    void pause() override { paused = true; }
+    void resume() override
+    {
+        playing = true;
+        paused = false;
+    }
+    [[nodiscard]] bool isPlaying() override { return playing && !paused; }
+    [[nodiscard]] bool isFinished() override { return false; }
+
+private:
+    bool playing{false};
+    bool paused{false};
+};
+
 class FakeCommandTarget final : public lofibox::app::AppCommandTarget {
 public:
     FakeCommandTarget()
         : services(lofibox::app::withNullRuntimeServices({}))
     {
+        services.playback.audio_backend = std::make_shared<FakeAudioBackend>();
         controllers.bindServices(services);
         runtime_host = std::make_unique<lofibox::runtime::RuntimeHost>(
             lofibox::application::AppServiceRegistry{controllers, services});

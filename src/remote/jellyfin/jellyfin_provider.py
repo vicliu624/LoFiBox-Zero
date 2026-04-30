@@ -8,6 +8,9 @@ from remote.common import media_contract
 from remote.tooling.http_json import base_url, json_request
 
 
+VIDEO_ITEM_TYPES = {"movie", "episode", "series", "musicvideo", "trailer", "video"}
+
+
 def auth_header() -> str:
     return 'MediaBrowser Client="LoFiBox Zero", Device="LoFiBox Zero", DeviceId="lofibox-zero", Version="0.1.0"'
 
@@ -41,10 +44,41 @@ def probe(profile: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def is_audio_item(item: Dict[str, Any]) -> bool:
+    media_type = str(item.get("MediaType") or "").casefold()
+    if media_type:
+        return media_type == "audio"
+
+    item_type = str(item.get("Type") or "").casefold()
+    if item_type == "audio":
+        return True
+    if item_type in VIDEO_ITEM_TYPES:
+        return False
+
+    streams = item.get("MediaStreams") or []
+    if streams:
+        stream_types = {str(stream.get("Type") or "").casefold() for stream in streams}
+        if "video" in stream_types:
+            return False
+        return "audio" in stream_types
+
+    media_sources = item.get("MediaSources") or []
+    for source in media_sources:
+        stream_types = {str(stream.get("Type") or "").casefold() for stream in source.get("MediaStreams") or []}
+        if "video" in stream_types:
+            return False
+        if "audio" in stream_types:
+            return True
+
+    return True
+
+
 def parse_items(items: List[Dict[str, Any]], profile: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
     tracks = []
     active_profile = profile or {}
     for item in items:
+        if not is_audio_item(item):
+            continue
         item_id = item.get("Id", "")
         tracks.append(
             media_contract.track(
@@ -150,6 +184,8 @@ def parse_nodes(items: List[Dict[str, Any]], kind: str, playable: bool = False, 
     nodes: List[Dict[str, Any]] = []
     active_profile = profile or {}
     for item in items:
+        if playable and not is_audio_item(item):
+            continue
         title = item.get("Name") or item.get("Title") or item.get("Id", "")
         item_id = item.get("Id", "")
         artist = item_artist(item)

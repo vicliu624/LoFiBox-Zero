@@ -12,6 +12,7 @@ from remote.tooling.http_json import base_url
 
 
 AUDIO_EXTENSIONS = (".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav")
+VIDEO_EXTENSIONS = (".mp4", ".m4v", ".mkv", ".avi", ".mov", ".webm", ".wmv", ".flv", ".mpeg", ".mpg")
 
 
 def _auth_headers(profile: Dict[str, Any]) -> Dict[str, str]:
@@ -52,6 +53,11 @@ def _filename_title(url: str) -> str:
     return name
 
 
+def _looks_video_url(url: str) -> bool:
+    path = urllib.parse.urlparse(url).path.casefold()
+    return path.endswith(VIDEO_EXTENSIONS)
+
+
 def _track_from_url(profile: Dict[str, Any], url: str, title: str = "", duration_seconds: int = 0) -> Dict[str, Any]:
     title = title or _filename_title(url)
     return media_contract.track(profile, url, title, "", "", "", duration_seconds)
@@ -78,7 +84,7 @@ def _parse_m3u(profile: Dict[str, Any], text: str) -> List[Dict[str, Any]]:
         if line.startswith("#"):
             continue
         url = _resolve_url(manifest_url, line)
-        if url:
+        if url and not _looks_video_url(url):
             result.append(_track_from_url(profile, url, pending_title, pending_duration))
         pending_title = ""
         pending_duration = 0
@@ -104,7 +110,8 @@ def _parse_pls(profile: Dict[str, Any], text: str) -> List[Dict[str, Any]]:
             duration_seconds = max(0, int(length))
         except ValueError:
             duration_seconds = 0
-        result.append(_track_from_url(profile, url, title, duration_seconds))
+        if url and not _looks_video_url(url):
+            result.append(_track_from_url(profile, url, title, duration_seconds))
         index += 1
     return result
 
@@ -124,7 +131,7 @@ def _parse_xspf(profile: Dict[str, Any], text: str) -> List[Dict[str, Any]]:
         except ValueError:
             duration_seconds = 0
         url = _resolve_url(manifest_url, location)
-        if url:
+        if url and not _looks_video_url(url):
             result.append(_track_from_url(profile, url, title, duration_seconds))
     return result
 

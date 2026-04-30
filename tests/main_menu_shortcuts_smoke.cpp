@@ -3,13 +3,51 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <utility>
 
 #include "app/input_event.h"
 #include "app/lofibox_app.h"
+#include "app/runtime_services.h"
 
 namespace fs = std::filesystem;
 
 namespace {
+
+class FakeAudioBackend final : public lofibox::app::AudioPlaybackBackend {
+public:
+    [[nodiscard]] bool available() const override { return true; }
+    [[nodiscard]] std::string displayName() const override { return "FAKE"; }
+    bool playFile(const std::filesystem::path&, double) override
+    {
+        playing = true;
+        paused = false;
+        return true;
+    }
+    bool playUri(const std::string&, double) override
+    {
+        playing = true;
+        paused = false;
+        return true;
+    }
+    void stop() override
+    {
+        playing = false;
+        paused = false;
+    }
+    void pause() override { paused = true; }
+    void resume() override
+    {
+        playing = true;
+        paused = false;
+    }
+    [[nodiscard]] bool isPlaying() override { return playing && !paused; }
+    [[nodiscard]] bool isFinished() override { return false; }
+
+private:
+    bool playing{false};
+    bool paused{false};
+};
 
 void touchFile(const fs::path& path)
 {
@@ -28,7 +66,9 @@ int main()
     touchFile(root / "Artist" / "Album" / "alpha.mp3");
     touchFile(root / "Artist" / "Album" / "beta.mp3");
 
-    lofibox::app::LoFiBoxApp app{{root}};
+    auto services = lofibox::app::withNullRuntimeServices();
+    services.playback.audio_backend = std::make_shared<FakeAudioBackend>();
+    lofibox::app::LoFiBoxApp app{{root}, {}, std::move(services)};
     app.update();
     app.update();
 

@@ -211,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
             if '<ObjectID>dlna-song-1</ObjectID>' in body:
                 didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="dlna-song-1" parentID="folder1"><dc:title>DLNA Song</dc:title><upnp:artist>DLNA Artist</upnp:artist><upnp:album>DLNA Album</upnp:album><res protocolInfo="http-get:*:audio/mpeg:*">http://""" + self._host() + """/media/dlna-song.mp3</res></item></DIDL-Lite>"""
             elif '<ObjectID>folder1</ObjectID>' in body:
-                didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="dlna-song-1" parentID="folder1"><dc:title>DLNA Song</dc:title><upnp:artist>DLNA Artist</upnp:artist><upnp:album>DLNA Album</upnp:album><res protocolInfo="http-get:*:audio/mpeg:*">http://""" + self._host() + """/media/dlna-song.mp3</res></item></DIDL-Lite>"""
+                didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="dlna-song-1" parentID="folder1"><dc:title>DLNA Song</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><upnp:artist>DLNA Artist</upnp:artist><upnp:album>DLNA Album</upnp:album><res protocolInfo="http-get:*:audio/mpeg:*">http://""" + self._host() + """/media/dlna-song.mp3</res></item><item id="dlna-video-1" parentID="folder1"><dc:title>DLNA Video</dc:title><upnp:class>object.item.videoItem.movie</upnp:class><res protocolInfo="http-get:*:video/mp4:*">http://""" + self._host() + """/media/dlna-video.mp4</res></item></DIDL-Lite>"""
             else:
                 didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/"><container id="folder1" parentID="0" childCount="1"><dc:title>DLNA Folder</dc:title></container></DIDL-Lite>"""
             response = """<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"><Result>""" + html.escape(didl) + """</Result><NumberReturned>1</NumberReturned><TotalMatches>1</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse></s:Body></s:Envelope>"""
@@ -227,12 +227,20 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             include_types = query.get('IncludeItemTypes', [''])[0]
             parent_id = query.get('ParentId', [''])[0]
+            search_term = query.get('SearchTerm', [''])[0]
+            media_types = query.get('MediaTypes', [''])[0]
+            if search_term == 'Video Only':
+                if media_types == 'Video':
+                    self._write({'Items':[{'Id':'vid1','Name':'Video Only Match','Type':'Movie','MediaType':'Video','SeriesName':'Video Series','RunTimeTicks':1200000000,'MediaStreams':[{'Type':'Video','Codec':'h264'}]}]})
+                else:
+                    self._write({'Items':[]})
+                return
             if include_types == 'MusicArtist':
-                self._write({'Items':[{'Id':'artist-1','Name':'Artist A','Type':'MusicArtist','RecursiveItemCount':1,'ChildCount':0}]})
+                self._write({'Items':[{'Id':'artist-1','Name':'Artist A','Type':'MusicArtist','MediaType':'Unknown','RecursiveItemCount':1,'ChildCount':0}]})
             elif include_types == 'Audio' and parent_id == 'artist-1':
-                self._write({'Items':[{'Id':'trk1','Name':'Song A','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000}]})
+                self._write({'Items':[{'Id':'trk1','Name':'Song A','Type':'Audio','MediaType':'Audio','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000,'MediaStreams':[{'Type':'Audio','Codec':'flac'}]}]})
             else:
-                self._write({'Items':[{'Id':'trk1','Name':'Song A','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000}]})
+                self._write({'Items':[{'Id':'trk1','Name':'Song A','Type':'Audio','MediaType':'Audio','Album':'Album A','AlbumId':'alb1','Artists':['Artist A'],'RunTimeTicks':1200000000,'MediaStreams':[{'Type':'Audio','Codec':'flac'}]}]})
         elif parsed.path.endswith('/Users/user-1/Items/trk1'):
             self._write({'Id':'trk1','MediaSources':[{'Bitrate':1411000,'Container':'flac','MediaStreams':[{'Type':'Audio','Codec':'flac','SampleRate':44100,'Channels':2}]}]})
         elif parsed.path.endswith('/Users/user-1/Items/Latest'):
@@ -464,6 +472,11 @@ server.serve_forever()
         std::cerr << "Expected Emby search to return a track.\n";
         return 1;
     }
+    const auto emby_video_only = services.remote.remote_catalog_provider->searchTracks(emby_profile, emby_session, "Video Only", 5);
+    if (!emby_video_only.empty()) {
+        std::cerr << "Expected Emby video-only search results to be filtered before RemoteTrack projection.\n";
+        return 1;
+    }
     const auto emby_library = services.remote.remote_catalog_provider->libraryTracks(emby_profile, emby_session, 5);
     if (emby_library.empty() || emby_library.front().id != "trk1") {
         std::cerr << "Expected Emby library catalog to return a track.\n";
@@ -534,8 +547,8 @@ server.serve_forever()
         return 1;
     }
     const auto dlna_library = services.remote.remote_catalog_provider->libraryTracks(dlna_profile, dlna_session, 5);
-    if (dlna_library.empty() || dlna_library.front().title != "DLNA Song") {
-        std::cerr << "Expected DLNA provider to expose playable items as tracks.\n";
+    if (dlna_library.size() != 1U || dlna_library.front().title != "DLNA Song") {
+        std::cerr << "Expected DLNA provider to expose audio items as tracks and filter video items.\n";
         return 1;
     }
     const auto dlna_stream = services.remote.remote_stream_resolver->resolveTrack(dlna_profile, dlna_session, dlna_library.front());
