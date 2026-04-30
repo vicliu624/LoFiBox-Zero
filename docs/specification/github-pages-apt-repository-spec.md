@@ -123,6 +123,13 @@ development libraries such as `libx11-dev`, `libxkbcommon-dev`, and
 The source package rules must also select host-triplet compilers when
 `DEB_BUILD_GNU_TYPE` and `DEB_HOST_GNU_TYPE` differ, so cross-build publication
 does not silently compile native binaries into target architecture packages.
+GitHub-hosted cross-build jobs must not execute target architecture test
+binaries on the x86_64 runner. They may use `DEB_BUILD_OPTIONS=nocheck` while
+native package jobs and real-device deployment tests provide runtime validation.
+The Raspberry Pi CM0 `armhf` publisher must build ARMv6 hard-float binaries in
+ARM mode, for example with `-marm -mcpu=arm1176jzf-s -mfpu=vfp
+-mfloat-abi=hard`; plain `-march=armv6` is not sufficient because compiler
+probes may select Thumb-1, which cannot use the hard-float VFP ABI.
 
 The script-level repository generator accepts repeated `.changes` files so
 `amd64`, `arm64`, and `armhf` artifacts can be included in the same published

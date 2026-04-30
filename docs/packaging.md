@@ -147,7 +147,11 @@ build-machine tools and target libraries separate: build tools such as
 `pkgconf` are native build dependencies, while target development libraries are
 resolved for the selected host architecture. `debian/rules` must select
 host-triplet compilers whenever `DEB_BUILD_GNU_TYPE` differs from
-`DEB_HOST_GNU_TYPE`.
+`DEB_HOST_GNU_TYPE`. GitHub-hosted cross-build jobs may use
+`DEB_BUILD_OPTIONS=nocheck` because they cannot execute target architecture test
+binaries on the x86_64 runner. The Raspberry Pi CM0 `armhf` package is built in
+ARM mode with ARM1176JZF-S/VFP hard-float flags; do not use plain
+`-march=armv6` for that publisher.
 
 ## Autopkgtest
 
