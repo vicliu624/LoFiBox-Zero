@@ -99,4 +99,4 @@ jobs:
         run: lintian ../lofibox_0.1.0-1_amd64.changes
 
       - name: Run Autopkgtest Smoke
-        run: autopkgtest ../lofibox_0.1.0-1_amd64.changes -- null
+        run: sudo autopkgtest ../lofibox_0.1.0-1_amd64.changes -- null

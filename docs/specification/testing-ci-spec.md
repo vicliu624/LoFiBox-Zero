@@ -123,6 +123,14 @@ Packaging tests must include:
 
 `debian/tests/control` and `debian/tests/smoke` must exist for autopkgtest.
 
+When CI runs autopkgtest with the `null` testbed, the autopkgtest process must
+be launched with runner root privileges, for example through `sudo
+autopkgtest ... -- null`. The `null` testbed prepares a temporary local APT
+repository by writing `/etc/apt/sources.list.d`, `/etc/apt/preferences.d`, and
+APT cache state on the host runner. `Rules-Requires-Root: no` remains a package
+build invariant, but it does not make the host-side autopkgtest preparation
+permissionless.
+
 CI install-skeleton validation may configure Linux framebuffer and X11 presentation targets off for dependency isolation,
 but it must keep the terminal-native TUI enabled. The install-skeleton job must build `lofibox_zero_tui_bin` before
 `cmake --install` and assert the installed `lofibox-tui` executable alongside desktop, AppStream, icon, MIME,
