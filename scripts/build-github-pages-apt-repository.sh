@@ -19,6 +19,8 @@ Options:
   --origin <text>         Release Origin field. Default: LoFiBox
   --label <text>          Release Label field. Default: LoFiBox Preview
   --gpg-key <key-id>      GPG key id/fingerprint used to sign Release/InRelease.
+  --gpg-passphrase-file <path>
+                          Optional passphrase file for protected signing keys.
   --changes <path>        Debian .changes file to include. May be repeated.
   --help                  Show this help.
 EOF
@@ -32,6 +34,7 @@ repo_name=""
 origin="LoFiBox"
 label="LoFiBox Preview"
 gpg_key=""
+gpg_passphrase_file=""
 changes=()
 
 while [[ $# -gt 0 ]]; do
@@ -66,6 +69,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --gpg-key)
       gpg_key="${2:?missing value for --gpg-key}"
+      shift 2
+      ;;
+    --gpg-passphrase-file)
+      gpg_passphrase_file="${2:?missing value for --gpg-passphrase-file}"
       shift 2
       ;;
     --changes)
@@ -116,6 +123,11 @@ for changes_file in "${changes[@]}"; do
     exit 2
   fi
 done
+
+if [[ -n "$gpg_passphrase_file" && ! -f "$gpg_passphrase_file" ]]; then
+  echo "GPG passphrase file not found: $gpg_passphrase_file" >&2
+  exit 2
+fi
 
 repo_root="$(pwd)"
 aptly_root="${APTLY_ROOT_DIR:-${repo_root}/.tmp/aptly-publish}"
@@ -185,6 +197,10 @@ publish_args=(
   "-label=${label}"
   "-gpg-key=${gpg_key}"
 )
+
+if [[ -n "$gpg_passphrase_file" ]]; then
+  publish_args+=("-passphrase-file=${gpg_passphrase_file}")
+fi
 
 if [[ -n "$architectures" ]]; then
   publish_args+=("-architectures=${architectures}")
