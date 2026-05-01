@@ -126,6 +126,9 @@ does not silently compile native binaries into target architecture packages.
 GitHub-hosted cross-build jobs must not execute target architecture test
 binaries on the x86_64 runner. They may use `DEB_BUILD_OPTIONS=nocheck` while
 native package jobs and real-device deployment tests provide runtime validation.
+The cross-build job must install target runtime libraries needed by
+`dh_shlibdeps`, including target `libstdc++6`, so dependency extraction is based
+on target ELF binaries instead of host libraries.
 The Raspberry Pi CM0 `armhf` publisher must build ARMv6 hard-float binaries in
 ARM mode, for example with `-marm -mcpu=arm1176jzf-s -mfpu=vfp
 -mfloat-abi=hard`; plain `-march=armv6` is not sufficient because compiler
