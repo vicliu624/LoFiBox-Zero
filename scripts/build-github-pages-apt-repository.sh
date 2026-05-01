@@ -178,6 +178,7 @@ snapshot_name="${repo_name}-${snapshot_version}"
 publish_args=(
   publish
   snapshot
+  "-batch=true"
   "-distribution=${suite}"
   "-component=${component}"
   "-origin=${origin}"
