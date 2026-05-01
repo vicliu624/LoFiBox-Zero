@@ -119,25 +119,61 @@ done
 
 repo_root="$(pwd)"
 aptly_root="${APTLY_ROOT_DIR:-${repo_root}/.tmp/aptly-publish}"
+aptly_config="${aptly_root}/aptly.conf"
 
 rm -rf "$aptly_root" "$output"
 mkdir -p "$aptly_root"
-export APTLY_ROOT_DIR="$aptly_root"
+cat > "$aptly_config" <<EOF
+{
+  "rootDir": "$aptly_root",
+  "downloadConcurrency": 4,
+  "downloadSpeedLimit": 0,
+  "downloadRetries": 0,
+  "downloader": "default",
+  "databaseOpenAttempts": -1,
+  "architectures": [],
+  "dependencyFollowSuggests": false,
+  "dependencyFollowRecommends": false,
+  "dependencyFollowAllVariants": false,
+  "dependencyFollowSource": false,
+  "dependencyVerboseResolve": false,
+  "gpgDisableSign": false,
+  "gpgDisableVerify": false,
+  "gpgProvider": "gpg",
+  "downloadSourcePackages": false,
+  "skipLegacyPool": true,
+  "ppaDistributorID": "debian",
+  "ppaCodename": "",
+  "skipContentsPublishing": false,
+  "skipBz2Publishing": false,
+  "FileSystemPublishEndpoints": {},
+  "S3PublishEndpoints": {},
+  "SwiftPublishEndpoints": {},
+  "AzurePublishEndpoints": {},
+  "AsyncAPI": false,
+  "enableMetricsEndpoint": false
+}
+EOF
+aptly_cmd=(aptly -config="$aptly_config")
 
-aptly repo create \
+"${aptly_cmd[@]}" repo create \
   -distribution="$suite" \
   -component="$component" \
   "$repo_name"
 
 for changes_file in "${changes[@]}"; do
-  aptly repo include -ignore-signatures=true "$repo_name" "$changes_file"
+  "${aptly_cmd[@]}" repo include \
+    -repo="$repo_name" \
+    -ignore-signatures=true \
+    -accept-unsigned=true \
+    "$changes_file"
 done
 
 package_version="$(dpkg-parsechangelog -S Version)"
 snapshot_version="${package_version//[^A-Za-z0-9_.+~-]/_}"
 snapshot_name="${repo_name}-${snapshot_version}"
 
-aptly snapshot create "$snapshot_name" from repo "$repo_name"
+"${aptly_cmd[@]}" snapshot create "$snapshot_name" from repo "$repo_name"
 
 publish_args=(
   publish
@@ -154,7 +190,7 @@ if [[ -n "$architectures" ]]; then
 fi
 
 publish_args+=("$snapshot_name" debian)
-aptly "${publish_args[@]}"
+"${aptly_cmd[@]}" "${publish_args[@]}"
 
 mkdir -p "$output"
 cp -a "$aptly_root/public/." "$output/"
