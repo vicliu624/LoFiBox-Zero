@@ -37,6 +37,16 @@ option(LOFIBOX_BUILD_WEBUI "Build the WebUI remote-control HTTP/WebSocket server
 
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp
+    src/audio/groove/groove_mixer.cpp
+    src/audio/groove/groove_render_engine.cpp
+    src/audio/groove/offline_groove_renderer.cpp
+    src/audio/groove/punch_fx_processor.cpp
+    src/audio/groove/sample_buffer.cpp
+    src/audio/groove/sample_capture_service.cpp
+    src/audio/groove/sample_editor.cpp
+    src/audio/groove/sample_loader.cpp
+    src/audio/groove/sample_voice.cpp
+    src/audio/groove/wav_exporter.cpp
     src/cache/cache_manager.cpp
     src/audio/decoder/audio_decoder_contract.cpp
         src/audio/output/audio_output_contract.cpp
@@ -44,6 +54,7 @@ add_library(lofibox_zero_core STATIC
     src/audio/dsp/dsp_chain.cpp
     src/audio/dsp/realtime_dsp_engine.cpp
     src/app/input_actions.cpp
+    src/app/app_groove_bridge.cpp
     src/app/app_command_executor.cpp
     src/app/app_lifecycle.cpp
     src/app/app_input_router.cpp
@@ -81,6 +92,17 @@ add_library(lofibox_zero_core STATIC
     src/runtime/runtime_snapshot_assembler.cpp
     src/runtime/settings_runtime.cpp
     src/runtime/unix_socket_runtime_transport.cpp
+    src/groove/groove_commands.cpp
+    src/groove/groove_controller.cpp
+    src/groove/groove_project.cpp
+    src/groove/groove_project_repository.cpp
+    src/groove/groove_sequencer.cpp
+    src/groove/groove_sound_slot.cpp
+    src/groove/groove_transport.cpp
+    src/midi/midi_clock.cpp
+    src/midi/midi_input_router.cpp
+    src/midi/midi_mapping.cpp
+    src/midi/midi_output.cpp
     src/app/library_controller.cpp
     src/app/library_navigation_service.cpp
     src/app/library_repository.cpp
@@ -107,6 +129,16 @@ add_library(lofibox_zero_core STATIC
     src/ui/pages/lyrics_page.cpp
     src/ui/pages/main_menu_page.cpp
     src/ui/pages/now_playing_page.cpp
+    src/ui/pages/groove/capture_overlay.cpp
+    src/ui/pages/groove/chain_overlay.cpp
+    src/ui/pages/groove/export_overlay.cpp
+    src/ui/pages/groove/fx_overlay.cpp
+    src/ui/pages/groove/groove_ui_helpers.cpp
+    src/ui/pages/groove/midi_overlay.cpp
+    src/ui/pages/groove/pocket_groove_main_view.cpp
+    src/ui/pages/groove/project_overlay.cpp
+    src/ui/pages/groove/sample_edit_overlay.cpp
+    src/ui/pages/groove/slice_overlay.cpp
     src/ui/effects/lyrics_spectrum_effect.cpp
     src/ui/widgets/lyrics_layout.cpp
     src/playback/playback_controller.cpp
@@ -627,6 +659,26 @@ if(BUILD_TESTING)
     add_executable(lofibox_equalizer_smoke tests/equalizer_smoke.cpp)
     target_link_libraries(lofibox_equalizer_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_equalizer_smoke COMMAND lofibox_equalizer_smoke)
+
+    add_executable(lofibox_groove_project_smoke tests/groove_project_smoke.cpp)
+    target_link_libraries(lofibox_groove_project_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_groove_project_smoke COMMAND lofibox_groove_project_smoke)
+
+    add_executable(lofibox_groove_sequencer_smoke tests/groove_sequencer_smoke.cpp)
+    target_link_libraries(lofibox_groove_sequencer_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_groove_sequencer_smoke COMMAND lofibox_groove_sequencer_smoke)
+
+    add_executable(lofibox_groove_sample_audio_smoke tests/groove_sample_audio_smoke.cpp)
+    target_link_libraries(lofibox_groove_sample_audio_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_groove_sample_audio_smoke COMMAND lofibox_groove_sample_audio_smoke)
+
+    add_executable(lofibox_groove_midi_smoke tests/groove_midi_smoke.cpp)
+    target_link_libraries(lofibox_groove_midi_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_groove_midi_smoke COMMAND lofibox_groove_midi_smoke)
+
+    add_executable(lofibox_pocket_groove_ui_smoke tests/pocket_groove_ui_smoke.cpp)
+    target_link_libraries(lofibox_pocket_groove_ui_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_pocket_groove_ui_smoke COMMAND lofibox_pocket_groove_ui_smoke)
 
     add_executable(lofibox_dsp_chain_smoke tests/dsp_chain_smoke.cpp)
     target_link_libraries(lofibox_dsp_chain_smoke PRIVATE lofibox_zero_core)
