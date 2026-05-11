@@ -257,11 +257,13 @@ First shipping implementation note:
 - Groove samples are stored internally as WAV files under the XDG groove samples
   directory.
 - The capture boundary is `sourceUri + start + duration -> SampleBuffer`.
-- A first implementation may support WAV first, but unsupported current-track
-  formats must fail with a clear `CAPTURE FORMAT UNSUPPORTED` status instead of
-  silently pretending capture succeeded.
-- MP3, FLAC, OGG, and AAC capture must be added through the media decoder
-  boundary, not by teaching App/UI code about specific file formats.
+- The first shipping implementation must decode at least WAV, MP3, FLAC, OGG,
+  and AAC current-track sources through the media decoder boundary.
+- App/UI/application bridge code must not branch on `mp3`, `flac`, `ogg`, `aac`,
+  or `wav`; format knowledge belongs behind the media decoder.
+- If the media decoder is unavailable or a source truly cannot be decoded,
+  capture must fail visibly with a decoder error and must not pretend that
+  sampling succeeded.
 
 ## 6. Mode Relationship
 
@@ -323,6 +325,10 @@ src/audio/groove/
   punch_fx_processor.h/.cpp
   wav_exporter.h/.cpp
 
+src/audio/decoder/
+  audio_decoder_contract.h/.cpp
+  ffmpeg_segment_decoder.h/.cpp
+
 src/midi/
   midi_clock.h/.cpp
   midi_input_router.h/.cpp
@@ -356,6 +362,9 @@ Ownership rules:
   command semantics.
 - `src/audio/groove` owns sample buffers, sample editing, rendering, mixing,
   punch FX processing, capture services, and WAV writing.
+- `src/audio/decoder` owns media decoding adapters such as FFmpeg segment
+  extraction; Groove capture consumes decoded PCM and does not learn codec
+  details.
 - `src/midi` owns MIDI message interpretation and command mapping.
 - `src/application/groove_command_service.*` owns app-level orchestration of
   capture, sample rewrite, preview render playback, export, and project

@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <vector>
 
 #include "app/input_event.h"
 #include "app/lofibox_app.h"
@@ -15,6 +16,7 @@
 #include "audio/groove/wav_exporter.h"
 #include "core/canvas.h"
 #include "groove/groove_project.h"
+#include "media_fixture_utils.h"
 #include "ui/ui_theme.h"
 
 namespace fs = std::filesystem;
@@ -93,6 +95,34 @@ void writeTestWav(const fs::path& path)
     if (!result.ok) {
         throw std::runtime_error(result.errorMessage);
     }
+}
+
+std::optional<fs::path> resolveFfmpeg()
+{
+#if defined(_WIN32)
+    return test_media_fixture::resolveExecutablePath(L"FFMPEG_PATH", L"ffmpeg.exe");
+#elif defined(__linux__)
+    return test_media_fixture::resolveExecutablePath("FFMPEG_PATH", "ffmpeg");
+#else
+    return std::nullopt;
+#endif
+}
+
+bool transcodeToMp3(const fs::path& ffmpeg, const fs::path& source_wav, const fs::path& target_mp3)
+{
+    const std::vector<std::string> args{
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-i",
+        source_wav.string(),
+        "-c:a",
+        "libmp3lame",
+        "-y",
+        target_mp3.string(),
+    };
+    return test_media_fixture::runCommand(ffmpeg, args) && fs::exists(target_mp3);
 }
 
 void press(lofibox::app::LoFiBoxApp& app, lofibox::app::InputKey key, const char* label = "")
@@ -175,7 +205,18 @@ int main()
     setEnvPath("XDG_CACHE_HOME", root / "xdg-cache");
     setEnvPath("XDG_CONFIG_HOME", root / "xdg-config");
     setEnvPath("HOME", root / "home");
-    writeTestWav(root / "Artist" / "Album" / "alpha.wav");
+    if (const auto ffmpeg = resolveFfmpeg()) {
+        const auto source_wav = root / "capture-source.wav";
+        writeTestWav(source_wav);
+        if (!transcodeToMp3(*ffmpeg, source_wav, root / "Artist" / "Album" / "alpha.mp3")) {
+            std::cerr << "Expected ffmpeg to generate MP3 fixture for current-track Groove capture.\n";
+            return 1;
+        }
+        fs::remove(source_wav, ec);
+    } else {
+        std::cout << "ffmpeg not found; Pocket Groove runtime capture falls back to WAV fixture.\n";
+        writeTestWav(root / "Artist" / "Album" / "alpha.wav");
+    }
 
     auto backend = std::make_shared<FakeAudioBackend>();
     auto services = lofibox::app::withNullRuntimeServices();
@@ -188,7 +229,7 @@ int main()
         }
     }
     if (!app.snapshot().library_ready || app.snapshot().track_count != 1) {
-        std::cerr << "Expected one WAV track to be indexed for groove capture.\n";
+        std::cerr << "Expected one local track to be indexed for groove capture.\n";
         return 1;
     }
 

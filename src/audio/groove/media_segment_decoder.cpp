@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <utility>
 
+#include "audio/decoder/ffmpeg_segment_decoder.h"
 #include "audio/groove/sample_editor.h"
 #include "audio/groove/sample_loader.h"
 
@@ -30,6 +32,15 @@ namespace {
     return ext;
 }
 
+[[nodiscard]] bool canUseBuiltInWavFallback(std::string_view uri)
+{
+    constexpr std::string_view kFilePrefix{"file://"};
+    if (uri.find("://") != std::string_view::npos && !uri.starts_with(kFilePrefix)) {
+        return false;
+    }
+    return lowerExtension(pathFromUri(uri)) == ".wav";
+}
+
 } // namespace
 
 std::optional<SampleBuffer> MediaSegmentDecoder::decodeSegment(
@@ -38,13 +49,23 @@ std::optional<SampleBuffer> MediaSegmentDecoder::decodeSegment(
     double duration_seconds) const
 {
     lastError_.clear();
-    const auto path = pathFromUri(source_uri);
-    const auto ext = lowerExtension(path);
-    if (ext != ".wav") {
-        lastError_ = "CAPTURE FORMAT UNSUPPORTED";
+
+    lofibox::audio::decoder::FfmpegSegmentDecoder decoder{};
+    if (auto decoded = decoder.decodeSegment(source_uri, start_seconds, duration_seconds)) {
+        SampleBuffer buffer{};
+        buffer.sampleRate = decoded->sample_rate_hz;
+        buffer.channels = decoded->channels;
+        buffer.samples = std::move(decoded->interleaved_samples);
+        return buffer;
+    }
+
+    const auto decoder_error = decoder.lastErrorMessage();
+    if (!canUseBuiltInWavFallback(source_uri)) {
+        lastError_ = decoder_error.empty() ? "CAPTURE DECODE FAILED" : decoder_error;
         return std::nullopt;
     }
 
+    const auto path = pathFromUri(source_uri);
     SampleLoader loader{};
     const auto loaded = loader.loadWav(path);
     if (!loaded.ok) {

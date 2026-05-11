@@ -51,7 +51,8 @@ add_library(lofibox_zero_core STATIC
     src/audio/groove/wav_exporter.cpp
     src/cache/cache_manager.cpp
     src/audio/decoder/audio_decoder_contract.cpp
-        src/audio/output/audio_output_contract.cpp
+    src/audio/decoder/ffmpeg_segment_decoder.cpp
+    src/audio/output/audio_output_contract.cpp
     src/audio/dsp/audio_effect_registry.cpp
     src/audio/dsp/dsp_chain.cpp
     src/audio/dsp/realtime_dsp_engine.cpp
