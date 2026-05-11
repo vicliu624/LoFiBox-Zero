@@ -16,6 +16,7 @@ struct UiAssets {
     std::optional<core::Canvas> library_icon{};
     std::optional<core::Canvas> playlists_icon{};
     std::optional<core::Canvas> now_playing_icon{};
+    std::optional<core::Canvas> groove_icon{};
     std::optional<core::Canvas> equalizer_icon{};
     std::optional<core::Canvas> settings_icon{};
 };

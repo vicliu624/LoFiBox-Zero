@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "audio/groove/offline_groove_renderer.h"
+#include "audio/groove/groove_export_service.h"
 #include "audio/groove/sample_editor.h"
 #include "audio/groove/sample_loader.h"
 #include "audio/groove/wav_exporter.h"
@@ -73,6 +74,29 @@ int main()
     assert(loaded.buffer.sampleRate == 1000);
     assert(loaded.buffer.channels == 2);
     assert(loaded.buffer.frameCount() == rendered.frameCount());
+
+    const auto sample_wav = std::filesystem::temp_directory_path() / "lofibox-groove-export-sample.wav";
+    const auto sample_exported = exporter.writePcm16(sample_wav, trimmed.buffer, false);
+    assert(sample_exported.ok);
+    project.sounds[0].type = lofibox::groove::GrooveSoundType::UserSample;
+    project.sounds[0].sourceUri = sample_wav.string();
+    project.sounds[0].name = "KIK";
+    project.songChain.enabled = true;
+    project.songChain.items = {lofibox::groove::GrooveSongChainItem{0, 2, false, 0, "BEAT"}};
+    project.exportSettings.target = lofibox::groove::GrooveExportTarget::SongChain;
+    project.exportSettings.includeTail = true;
+    project.exportSettings.tailSeconds = 0.25;
+    lofibox::groove::GrooveStoragePaths paths{};
+    paths.exportsDir = std::filesystem::temp_directory_path() / "lofibox-groove-export-primary";
+    paths.fallbackExportsDir = std::filesystem::temp_directory_path() / "lofibox-groove-export-fallback";
+    lofibox::audio::groove::GrooveExportService export_service{};
+    const auto export_result = export_service.exportProject(project, paths);
+    assert(export_result.ok);
+    assert(std::filesystem::exists(export_result.path));
+    assert(std::filesystem::file_size(export_result.path) > 44U);
+    const auto exported_loaded = loader.loadWav(export_result.path);
+    assert(exported_loaded.ok);
+    assert(exported_loaded.buffer.durationSeconds() >= 4.0);
 
     return 0;
 }

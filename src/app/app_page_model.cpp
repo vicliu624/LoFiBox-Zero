@@ -26,6 +26,7 @@ std::string_view pageTitleDefault(AppPage page) noexcept
     case AppPage::Playlists: return "PLAYLISTS";
     case AppPage::PlaylistDetail: return "PLAYLIST";
     case AppPage::NowPlaying: return "NOW PLAYING";
+    case AppPage::PocketGroove: return "POCKET GROOVE";
     case AppPage::Lyrics: return "LYRICS";
     case AppPage::Equalizer: return "EQUALIZER";
     case AppPage::Settings: return "SETTINGS";

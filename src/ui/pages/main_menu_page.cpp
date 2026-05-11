@@ -110,7 +110,7 @@ void drawMenuLabelCentered(core::Canvas& canvas, std::string_view label, int cen
 
 void renderMainMenuPage(core::Canvas& canvas, const MainMenuView& view, const UiTheme& theme)
 {
-    constexpr std::array<std::string_view, 6> kItems{"MUSIC", "LIBRARY", "PLAYLISTS", "NOW", "EQ", "SETTINGS"};
+    constexpr std::array<std::string_view, 7> kItems{"MUSIC", "LIBRARY", "PLAYLISTS", "NOW", "GROOVE", "EQ", "SETTINGS"};
     constexpr int kLeftCenterX = 56;
     constexpr int kCenterCardX = 112;
     constexpr int kCenterCenterX = 160;
@@ -121,11 +121,12 @@ void renderMainMenuPage(core::Canvas& canvas, const MainMenuView& view, const Ui
     constexpr int kCenterSize = 96;
 
     const auto theme_for = [&](int index) {
-        const std::array<MenuCardTheme, 6> kThemes{
+        const std::array<MenuCardTheme, 7> kThemes{
             MenuCardTheme{rgba(87, 78, 255), rgba(80, 143, 255), rgba(64, 168, 255), rgba(32, 52, 198), rgba(191, 238, 255), theme.palette.text_primary, rgba(235, 245, 255), rgba(96, 174, 255), rgba(54, 69, 225)},
             MenuCardTheme{rgba(0, 214, 255), rgba(89, 216, 255), rgba(96, 229, 246), rgba(43, 124, 224), rgba(214, 255, 255), theme.palette.text_primary, rgba(80, 209, 228), rgba(64, 171, 223), rgba(90, 238, 255)},
             MenuCardTheme{rgba(255, 75, 126), rgba(255, 205, 80), rgba(255, 120, 155), rgba(97, 40, 222), rgba(255, 238, 165), theme.palette.text_primary, rgba(253, 118, 67), rgba(126, 77, 255), rgba(255, 82, 156)},
             MenuCardTheme{rgba(66, 220, 140), rgba(101, 230, 170), rgba(89, 226, 166), rgba(34, 117, 84), rgba(210, 255, 228), theme.palette.text_primary, rgba(112, 236, 178), rgba(44, 143, 96), rgba(126, 255, 213)},
+            MenuCardTheme{rgba(247, 87, 255), rgba(255, 151, 89), rgba(248, 98, 204), rgba(62, 48, 185), rgba(255, 232, 183), theme.palette.text_primary, rgba(248, 230, 255), rgba(255, 167, 80), rgba(72, 212, 255)},
             MenuCardTheme{rgba(255, 178, 87), rgba(255, 127, 42), rgba(255, 192, 92), rgba(177, 73, 33), rgba(255, 240, 196), theme.palette.text_primary, rgba(255, 178, 87), rgba(255, 127, 42), rgba(255, 222, 127)},
             MenuCardTheme{rgba(172, 124, 255), rgba(143, 101, 255), rgba(172, 124, 255), rgba(78, 55, 173), rgba(226, 215, 255), theme.palette.text_primary, rgba(172, 124, 255), rgba(94, 217, 255), rgba(255, 112, 196)},
         };
@@ -141,8 +142,9 @@ void renderMainMenuPage(core::Canvas& canvas, const MainMenuView& view, const Ui
         case 1: return view.assets->library_icon ? &*view.assets->library_icon : nullptr;
         case 2: return view.assets->playlists_icon ? &*view.assets->playlists_icon : nullptr;
         case 3: return view.assets->now_playing_icon ? &*view.assets->now_playing_icon : nullptr;
-        case 4: return view.assets->equalizer_icon ? &*view.assets->equalizer_icon : nullptr;
-        case 5: return view.assets->settings_icon ? &*view.assets->settings_icon : nullptr;
+        case 4: return view.assets->groove_icon ? &*view.assets->groove_icon : nullptr;
+        case 5: return view.assets->equalizer_icon ? &*view.assets->equalizer_icon : nullptr;
+        case 6: return view.assets->settings_icon ? &*view.assets->settings_icon : nullptr;
         default: return nullptr;
         }
     };

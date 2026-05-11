@@ -39,6 +39,12 @@ namespace {
     return ch && std::toupper(static_cast<unsigned char>(*ch)) == 'R';
 }
 
+[[nodiscard]] bool isGrooveCaptureShortcut(const InputEvent& event) noexcept
+{
+    const auto ch = singleAsciiText(event);
+    return ch && std::toupper(static_cast<unsigned char>(*ch)) == 'G';
+}
+
 [[nodiscard]] bool routeGlobalTransportShortcut(AppInputTarget& target, const InputEvent& event)
 {
     switch (event.key) {
@@ -114,6 +120,11 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
         return;
     }
 
+    if (page == AppPage::PocketGroove) {
+        target.handlePocketGrooveInput(event);
+        return;
+    }
+
     if (routeGlobalTransportShortcut(target, event)) {
         return;
     }
@@ -134,6 +145,8 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
             target.pushPage(AppPage::Lyrics);
         } else if (isQueueToggle(event)) {
             target.pushPage(AppPage::Queue);
+        } else if (isGrooveCaptureShortcut(event)) {
+            target.captureCurrentTrackToGroove();
         } else if (action == UserAction::Left) {
             target.stepTrack(-1);
         } else if (action == UserAction::Right || action == UserAction::NextTrack) {

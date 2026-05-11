@@ -536,7 +536,38 @@ void AppRuntimeContext::openSettingsPage()
 void AppRuntimeContext::showMainMenuPage()
 {
     closeHelp();
+    if (currentPage() == AppPage::PocketGroove) {
+        groove_.exit();
+    }
     showMainMenu();
+}
+
+void AppRuntimeContext::enterPocketGroove()
+{
+    closeHelp();
+    if (!groove_.active()) {
+        groove_.enter(*this);
+    }
+    if (currentPage() != AppPage::PocketGroove) {
+        commandPushPage(*this, AppPage::PocketGroove);
+    }
+}
+
+void AppRuntimeContext::captureCurrentTrackToGroove()
+{
+    enterPocketGroove();
+    groove_.openCaptureOverlay(currentGrooveCaptureSource());
+}
+
+void AppRuntimeContext::handlePocketGrooveInput(const InputEvent& event)
+{
+    if (!groove_.active()) {
+        groove_.enter(*this);
+    }
+    (void)groove_.handleInput(event);
+    if (!groove_.active() && currentPage() == AppPage::PocketGroove) {
+        commandPopPage(*this);
+    }
 }
 
 const ui::UiTheme& AppRuntimeContext::theme() const noexcept
@@ -1608,6 +1639,96 @@ void AppRuntimeContext::commitRemoteProfileEdit()
     (void)persistRemoteProfiles();
     state_.remote_profile_status = sourceProfileService().readiness(*profile);
     commandPopPage(*this);
+}
+
+void AppRuntimeContext::pauseCurrentPlaybackForGroove()
+{
+    pausePlayback();
+}
+
+bool AppRuntimeContext::playGrooveRenderFile(const std::filesystem::path& path)
+{
+    auto backend = appServices().runtimeServices().playback.audio_backend;
+    if (!backend || !backend->available()) {
+        return false;
+    }
+    return backend->playFile(path, 0.0);
+}
+
+void AppRuntimeContext::stopGroovePlayback()
+{
+    auto backend = appServices().runtimeServices().playback.audio_backend;
+    if (backend) {
+        backend->stop();
+    }
+}
+
+ui::pages::groove::PocketGrooveMainView AppRuntimeContext::pocketGrooveMainView() const
+{
+    return groove_.mainView();
+}
+
+groove::GrooveOverlay AppRuntimeContext::pocketGrooveOverlay() const noexcept
+{
+    return groove_.activeOverlay();
+}
+
+ui::pages::groove::CaptureOverlayView AppRuntimeContext::pocketGrooveCaptureOverlayView() const
+{
+    return groove_.captureOverlayView();
+}
+
+ui::pages::groove::SampleEditOverlayView AppRuntimeContext::pocketGrooveSampleEditOverlayView() const
+{
+    return groove_.sampleEditOverlayView();
+}
+
+ui::pages::groove::SliceOverlayView AppRuntimeContext::pocketGrooveSliceOverlayView() const
+{
+    return groove_.sliceOverlayView();
+}
+
+ui::pages::groove::ChainOverlayView AppRuntimeContext::pocketGrooveChainOverlayView() const
+{
+    return groove_.chainOverlayView();
+}
+
+ui::pages::groove::FxOverlayView AppRuntimeContext::pocketGrooveFxOverlayView() const
+{
+    return groove_.fxOverlayView();
+}
+
+ui::pages::groove::MidiOverlayView AppRuntimeContext::pocketGrooveMidiOverlayView() const
+{
+    return groove_.midiOverlayView();
+}
+
+ui::pages::groove::ExportOverlayView AppRuntimeContext::pocketGrooveExportOverlayView() const
+{
+    return groove_.exportOverlayView();
+}
+
+ui::pages::groove::ProjectOverlayView AppRuntimeContext::pocketGrooveProjectOverlayView() const
+{
+    return groove_.projectOverlayView();
+}
+
+GrooveCurrentPlaybackSource AppRuntimeContext::currentGrooveCaptureSource() const
+{
+    const auto& playback = playbackSession();
+    GrooveCurrentPlaybackSource source{};
+    source.positionSeconds = playback.elapsed_seconds;
+    if (playback.current_track_id) {
+        if (const auto* track = findTrack(*playback.current_track_id); track != nullptr && !track->remote) {
+            source.available = true;
+            source.sourceTrackId = std::to_string(track->id);
+            source.sourceUri = track->path.string();
+            source.displayName = track->title;
+            return source;
+        }
+    }
+    source.displayName = playback.current_stream_title;
+    return source;
 }
 
 } // namespace lofibox::app

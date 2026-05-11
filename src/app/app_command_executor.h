@@ -42,6 +42,7 @@ public:
     virtual bool handleRemoteBrowseConfirm(int selected) { (void)selected; return false; }
     virtual bool handleStreamDetailConfirm() { return false; }
     virtual bool handleSearchConfirm(int selected) { (void)selected; return false; }
+    virtual void enterPocketGroove() {}
 };
 
 void commandPushPage(AppCommandTarget& target, AppPage page);

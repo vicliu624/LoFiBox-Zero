@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "midi/midi_clock.h"
+#include "midi/midi_device_adapter.h"
 #include "midi/midi_input_router.h"
 #include "midi/midi_mapping.h"
 
@@ -35,6 +36,17 @@ int main()
     assert(clock.stepCount() == 2);
     clock.stop();
     assert(!clock.running());
+
+    lofibox::midi::MidiDeviceAdapter adapter{};
+    std::string error{};
+    const bool opened = adapter.open(&error);
+    const auto status = adapter.status();
+    assert(status.available == opened);
+    if (!opened) {
+        assert(!error.empty());
+    }
+    adapter.close();
+    assert(!adapter.available());
 
     return 0;
 }

@@ -9,11 +9,12 @@
 namespace lofibox::app {
 namespace {
 
-constexpr std::array<AppPage, 6> kMainMenuPages{
+constexpr std::array<AppPage, 7> kMainMenuPages{
     AppPage::Songs,
     AppPage::MusicIndex,
     AppPage::Playlists,
     AppPage::NowPlaying,
+    AppPage::PocketGroove,
     AppPage::Equalizer,
     AppPage::Settings,
 };
@@ -119,10 +120,15 @@ void commandConfirmMainMenu(AppCommandTarget& target)
     if (index < 0 || index >= static_cast<int>(kMainMenuPages.size())) {
         return;
     }
-    if (kMainMenuPages[static_cast<std::size_t>(index)] == AppPage::Songs) {
+    const auto page = kMainMenuPages[static_cast<std::size_t>(index)];
+    if (page == AppPage::Songs) {
         target.appServices().libraryMutations().setSongsContextAll();
     }
-    commandPushPage(target, kMainMenuPages[static_cast<std::size_t>(index)]);
+    if (page == AppPage::PocketGroove) {
+        target.enterPocketGroove();
+        return;
+    }
+    commandPushPage(target, page);
 }
 
 void commandToggleShuffle(AppCommandTarget& target)

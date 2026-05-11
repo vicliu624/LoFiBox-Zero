@@ -13,9 +13,19 @@
 #include "app/app_state.h"
 #include "app/library_model.h"
 #include "app/navigation_state.h"
+#include "groove/groove_controller.h"
 #include "playback/playback_state.h"
 #include "core/canvas.h"
 #include "runtime/runtime_snapshot.h"
+#include "ui/pages/groove/capture_overlay.h"
+#include "ui/pages/groove/chain_overlay.h"
+#include "ui/pages/groove/export_overlay.h"
+#include "ui/pages/groove/fx_overlay.h"
+#include "ui/pages/groove/midi_overlay.h"
+#include "ui/pages/groove/pocket_groove_main_view.h"
+#include "ui/pages/groove/project_overlay.h"
+#include "ui/pages/groove/sample_edit_overlay.h"
+#include "ui/pages/groove/slice_overlay.h"
 #include "ui/ui_models.h"
 #include "ui/ui_theme.h"
 
@@ -42,6 +52,16 @@ public:
     [[nodiscard]] virtual bool helpOpen() const noexcept = 0;
     [[nodiscard]] virtual AppPage helpPage() const noexcept = 0;
     [[nodiscard]] virtual const ui::UiTheme& theme() const noexcept = 0;
+    [[nodiscard]] virtual ui::pages::groove::PocketGrooveMainView pocketGrooveMainView() const { return {}; }
+    [[nodiscard]] virtual groove::GrooveOverlay pocketGrooveOverlay() const noexcept { return groove::GrooveOverlay::None; }
+    [[nodiscard]] virtual ui::pages::groove::CaptureOverlayView pocketGrooveCaptureOverlayView() const { return {}; }
+    [[nodiscard]] virtual ui::pages::groove::SampleEditOverlayView pocketGrooveSampleEditOverlayView() const { return {}; }
+    [[nodiscard]] virtual ui::pages::groove::SliceOverlayView pocketGrooveSliceOverlayView() const { return {}; }
+    [[nodiscard]] virtual ui::pages::groove::ChainOverlayView pocketGrooveChainOverlayView() const { return {}; }
+    [[nodiscard]] virtual ui::pages::groove::FxOverlayView pocketGrooveFxOverlayView() const { return {}; }
+    [[nodiscard]] virtual ui::pages::groove::MidiOverlayView pocketGrooveMidiOverlayView() const { return {}; }
+    [[nodiscard]] virtual ui::pages::groove::ExportOverlayView pocketGrooveExportOverlayView() const { return {}; }
+    [[nodiscard]] virtual ui::pages::groove::ProjectOverlayView pocketGrooveProjectOverlayView() const { return {}; }
 };
 
 void renderApp(core::Canvas& canvas, const AppRenderTarget& target);

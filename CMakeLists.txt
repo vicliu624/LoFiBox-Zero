@@ -38,6 +38,7 @@ option(LOFIBOX_BUILD_WEBUI "Build the WebUI remote-control HTTP/WebSocket server
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp
     src/audio/groove/groove_mixer.cpp
+    src/audio/groove/groove_export_service.cpp
     src/audio/groove/groove_render_engine.cpp
     src/audio/groove/offline_groove_renderer.cpp
     src/audio/groove/punch_fx_processor.cpp
@@ -100,6 +101,7 @@ add_library(lofibox_zero_core STATIC
     src/groove/groove_sound_slot.cpp
     src/groove/groove_transport.cpp
     src/midi/midi_clock.cpp
+    src/midi/midi_device_adapter.cpp
     src/midi/midi_input_router.cpp
     src/midi/midi_mapping.cpp
     src/midi/midi_output.cpp
@@ -679,6 +681,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_pocket_groove_ui_smoke tests/pocket_groove_ui_smoke.cpp)
     target_link_libraries(lofibox_pocket_groove_ui_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_pocket_groove_ui_smoke COMMAND lofibox_pocket_groove_ui_smoke)
+
+    add_executable(lofibox_pocket_groove_app_runtime_smoke tests/pocket_groove_app_runtime_smoke.cpp)
+    target_link_libraries(lofibox_pocket_groove_app_runtime_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_pocket_groove_app_runtime_smoke COMMAND lofibox_pocket_groove_app_runtime_smoke)
 
     add_executable(lofibox_dsp_chain_smoke tests/dsp_chain_smoke.cpp)
     target_link_libraries(lofibox_dsp_chain_smoke PRIVATE lofibox_zero_core)

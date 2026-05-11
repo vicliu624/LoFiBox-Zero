@@ -14,6 +14,7 @@ These are the small self-created PNG assets carried over from the author's legac
 - Current source set:
   - `About.png`
   - `Equalizer.png`
+  - `Groove.png`
   - `Library.png`
   - `logo.png` (generated from the formal app logo in `data/io.github.vicliu624.lofibox.svg`)
   - `Music.png`

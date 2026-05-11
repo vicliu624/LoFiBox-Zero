@@ -34,6 +34,9 @@ public:
     virtual void openQueuePage() = 0;
     virtual void openSettingsPage() = 0;
     virtual void showMainMenuPage() = 0;
+    virtual void enterPocketGroove() {}
+    virtual void captureCurrentTrackToGroove() {}
+    virtual void handlePocketGrooveInput(const InputEvent& event) { (void)event; }
     virtual void moveMainMenuSelection(int delta) = 0;
     virtual void resetMainMenuSelection() = 0;
     virtual void confirmMainMenu() = 0;

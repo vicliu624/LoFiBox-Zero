@@ -10,6 +10,15 @@
 #include "core/display_profile.h"
 #include "ui/pages/about_page.h"
 #include "ui/pages/equalizer_page.h"
+#include "ui/pages/groove/capture_overlay.h"
+#include "ui/pages/groove/chain_overlay.h"
+#include "ui/pages/groove/export_overlay.h"
+#include "ui/pages/groove/fx_overlay.h"
+#include "ui/pages/groove/midi_overlay.h"
+#include "ui/pages/groove/pocket_groove_main_view.h"
+#include "ui/pages/groove/project_overlay.h"
+#include "ui/pages/groove/sample_edit_overlay.h"
+#include "ui/pages/groove/slice_overlay.h"
 #include "ui/pages/list_page.h"
 #include "ui/pages/lyrics_page.h"
 #include "ui/pages/main_menu_page.h"
@@ -60,8 +69,20 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
             {"DOWN", "REPEAT"},
             {"L", "LYRICS"},
             {"Q", "QUEUE"},
+            {"G", "CAPTURE GROOVE"},
             {"F2-F8", "PLAYBACK"},
             {"R", "REMIX FX"},
+            {"HOME", "MENU"},
+        };
+    case AppPage::PocketGroove:
+        return {
+            {"ARROWS", "STEP / TRACK"},
+            {"OK", "TOGGLE / RUN"},
+            {"BACK", "OVERLAY / EXIT"},
+            {"F2/F3", "PLAY / STOP"},
+            {"F4-F10", "CAP EDIT CHN FX MIDI EXP PRJ"},
+            {"1-8", "PUNCH FX"},
+            {"PGUP/PGDN", "PATTERN"},
             {"HOME", "MENU"},
         };
     case AppPage::Lyrics:
@@ -328,6 +349,41 @@ void renderList(core::Canvas& canvas, const AppRenderTarget& target)
     renderHelpIfOpen(canvas, target);
 }
 
+void renderPocketGroove(core::Canvas& canvas, const AppRenderTarget& target)
+{
+    const auto& theme = target.theme();
+    ui_pages::groove::renderPocketGrooveMainView(canvas, target.pocketGrooveMainView(), theme);
+    switch (target.pocketGrooveOverlay()) {
+    case groove::GrooveOverlay::None:
+        break;
+    case groove::GrooveOverlay::Capture:
+        ui_pages::groove::renderCaptureOverlay(canvas, target.pocketGrooveCaptureOverlayView(), theme);
+        break;
+    case groove::GrooveOverlay::SampleEdit:
+        ui_pages::groove::renderSampleEditOverlay(canvas, target.pocketGrooveSampleEditOverlayView(), theme);
+        break;
+    case groove::GrooveOverlay::Slice:
+        ui_pages::groove::renderSliceOverlay(canvas, target.pocketGrooveSliceOverlayView(), theme);
+        break;
+    case groove::GrooveOverlay::Chain:
+        ui_pages::groove::renderChainOverlay(canvas, target.pocketGrooveChainOverlayView(), theme);
+        break;
+    case groove::GrooveOverlay::Fx:
+        ui_pages::groove::renderFxOverlay(canvas, target.pocketGrooveFxOverlayView(), theme);
+        break;
+    case groove::GrooveOverlay::Midi:
+        ui_pages::groove::renderMidiOverlay(canvas, target.pocketGrooveMidiOverlayView(), theme);
+        break;
+    case groove::GrooveOverlay::Export:
+        ui_pages::groove::renderExportOverlay(canvas, target.pocketGrooveExportOverlayView(), theme);
+        break;
+    case groove::GrooveOverlay::Project:
+        ui_pages::groove::renderProjectOverlay(canvas, target.pocketGrooveProjectOverlayView(), theme);
+        break;
+    }
+    renderHelpIfOpen(canvas, target);
+}
+
 } // namespace
 
 void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
@@ -344,6 +400,9 @@ void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
         return;
     case AppPage::NowPlaying:
         renderNowPlaying(canvas, target);
+        return;
+    case AppPage::PocketGroove:
+        renderPocketGroove(canvas, target);
         return;
     case AppPage::Lyrics:
         renderLyrics(canvas, target);

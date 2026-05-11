@@ -11,6 +11,7 @@
 
 #include "app/app_command_executor.h"
 #include "app/app_debug_snapshot.h"
+#include "app/app_groove_bridge.h"
 #include "app/app_input_router.h"
 #include "app/app_lifecycle.h"
 #include "app/app_renderer.h"
@@ -31,7 +32,8 @@ namespace lofibox::app {
 class AppRuntimeContext final : public AppInputTarget,
                                 public AppRenderTarget,
                                 public AppLifecycleTarget,
-                                public AppCommandTarget {
+                                public AppCommandTarget,
+                                public GroovePlaybackControl {
 public:
     explicit AppRuntimeContext(std::vector<std::filesystem::path> media_roots,
                                ui::UiAssets assets,
@@ -91,6 +93,9 @@ public:
     void openQueuePage() override;
     void openSettingsPage() override;
     void showMainMenuPage() override;
+    void enterPocketGroove() override;
+    void captureCurrentTrackToGroove() override;
+    void handlePocketGrooveInput(const InputEvent& event) override;
     [[nodiscard]] AppPageModel pageModel() const override;
     [[nodiscard]] const ui::UiTheme& theme() const noexcept override;
     void moveMainMenuSelection(int delta) override;
@@ -123,6 +128,19 @@ public:
     void appendRemoteProfileEditText(std::string_view text) override;
     void backspaceRemoteProfileEdit() override;
     void commitRemoteProfileEdit() override;
+    void pauseCurrentPlaybackForGroove() override;
+    bool playGrooveRenderFile(const std::filesystem::path& path) override;
+    void stopGroovePlayback() override;
+    [[nodiscard]] ui::pages::groove::PocketGrooveMainView pocketGrooveMainView() const override;
+    [[nodiscard]] groove::GrooveOverlay pocketGrooveOverlay() const noexcept override;
+    [[nodiscard]] ui::pages::groove::CaptureOverlayView pocketGrooveCaptureOverlayView() const override;
+    [[nodiscard]] ui::pages::groove::SampleEditOverlayView pocketGrooveSampleEditOverlayView() const override;
+    [[nodiscard]] ui::pages::groove::SliceOverlayView pocketGrooveSliceOverlayView() const override;
+    [[nodiscard]] ui::pages::groove::ChainOverlayView pocketGrooveChainOverlayView() const override;
+    [[nodiscard]] ui::pages::groove::FxOverlayView pocketGrooveFxOverlayView() const override;
+    [[nodiscard]] ui::pages::groove::MidiOverlayView pocketGrooveMidiOverlayView() const override;
+    [[nodiscard]] ui::pages::groove::ExportOverlayView pocketGrooveExportOverlayView() const override;
+    [[nodiscard]] ui::pages::groove::ProjectOverlayView pocketGrooveProjectOverlayView() const override;
 
 private:
     using clock = std::chrono::steady_clock;
@@ -146,6 +164,7 @@ private:
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> remoteFieldEditorRows() const;
     [[nodiscard]] std::optional<RemoteServerProfile> selectedRemoteProfile() const;
     [[nodiscard]] RemoteServerProfile* selectedMutableRemoteProfile() noexcept;
+    [[nodiscard]] GrooveCurrentPlaybackSource currentGrooveCaptureSource() const;
     [[nodiscard]] RemoteTrack remoteTrackFromLibraryTrack(const RemoteServerProfile& profile, const TrackRecord& track) const;
     [[nodiscard]] ::lofibox::runtime::RuntimeCommandPayload remoteLibraryTrackPayload(const TrackRecord& track);
     [[nodiscard]] ::lofibox::runtime::RuntimeCommandPayload selectedRemoteStreamPayload() const;
@@ -166,6 +185,7 @@ private:
     void beginRemoteProfileFieldEdit(int field);
 
     AppRuntimeState state_{};
+    AppGrooveBridge groove_{};
     ui::UiTheme theme_{};
     ::lofibox::application::AppServiceHost& app_host_;
     ::lofibox::runtime::RuntimeCommandClient& runtime_client_;

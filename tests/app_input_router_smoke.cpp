@@ -31,6 +31,8 @@ public:
     void openQueuePage() override { ++open_queue_calls; page = lofibox::app::AppPage::Queue; }
     void openSettingsPage() override { ++open_settings_calls; page = lofibox::app::AppPage::Settings; }
     void showMainMenuPage() override { ++show_main_menu_calls; page = lofibox::app::AppPage::MainMenu; }
+    void captureCurrentTrackToGroove() override { ++capture_to_groove_calls; page = lofibox::app::AppPage::PocketGroove; }
+    void handlePocketGrooveInput(const lofibox::app::InputEvent&) override { ++pocket_groove_input_calls; }
     void moveMainMenuSelection(int delta) override { main_menu_delta += delta; }
     void resetMainMenuSelection() override { ++reset_main_menu_calls; }
     void confirmMainMenu() override { ++confirm_main_menu_calls; }
@@ -71,6 +73,8 @@ public:
     int open_queue_calls{0};
     int open_settings_calls{0};
     int show_main_menu_calls{0};
+    int capture_to_groove_calls{0};
+    int pocket_groove_input_calls{0};
     int main_menu_delta{0};
     int reset_main_menu_calls{0};
     int confirm_main_menu_calls{0};
@@ -145,9 +149,24 @@ int main()
     }
 
     target.page = lofibox::app::AppPage::NowPlaying;
+    lofibox::app::routeInput(target, character('G'));
+    if (target.capture_to_groove_calls != 1 || target.page != lofibox::app::AppPage::PocketGroove) {
+        std::cerr << "Expected Now Playing G to enter Pocket Groove capture.\n";
+        return 1;
+    }
+
+    target.page = lofibox::app::AppPage::NowPlaying;
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Down));
     if (target.cycle_repeat_calls != 1) {
         std::cerr << "Expected Now Playing repeat control to route.\n";
+        return 1;
+    }
+
+    target.page = lofibox::app::AppPage::PocketGroove;
+    const int play_calls_before_groove = target.play_from_menu_calls;
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::F2));
+    if (target.pocket_groove_input_calls != 1 || target.play_from_menu_calls != play_calls_before_groove) {
+        std::cerr << "Expected Pocket Groove to own transport keys before global shortcuts.\n";
         return 1;
     }
 

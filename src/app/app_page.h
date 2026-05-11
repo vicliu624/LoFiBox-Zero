@@ -17,6 +17,7 @@ enum class AppPage {
     Playlists,
     PlaylistDetail,
     NowPlaying,
+    PocketGroove,
     Lyrics,
     Equalizer,
     Settings,

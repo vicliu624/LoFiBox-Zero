@@ -81,6 +81,7 @@ ui::UiAssets loadLegacyAssets()
     assets.library_icon = loadPngCanvas(base / "Library.png");
     assets.playlists_icon = loadPngCanvas(base / "Playlists.png");
     assets.now_playing_icon = loadPngCanvas(base / "NowPlaying.png");
+    assets.groove_icon = loadPngCanvas(base / "Groove.png");
     assets.equalizer_icon = loadPngCanvas(base / "Equalizer.png");
     assets.settings_icon = loadPngCanvas(base / "Settings.png");
 

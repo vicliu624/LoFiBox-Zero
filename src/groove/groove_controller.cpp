@@ -138,11 +138,44 @@ std::vector<GrooveEvent> GrooveController::dispatch(const PocketGrooveCommand& c
         project_.sounds[selectedSoundSlot_].normalized = true;
         changed();
         break;
-    case PocketGrooveCommandType::ReverseSample:
     case PocketGrooveCommandType::TrimSampleStart:
+        project_.sounds[selectedSoundSlot_].startSeconds = std::max(0.0, command.doubleValue);
+        if (project_.sounds[selectedSoundSlot_].endSeconds > 0.0) {
+            project_.sounds[selectedSoundSlot_].startSeconds = std::min(
+                project_.sounds[selectedSoundSlot_].startSeconds,
+                std::max(0.0, project_.sounds[selectedSoundSlot_].endSeconds - 0.001));
+        }
+        changed();
+        break;
     case PocketGrooveCommandType::TrimSampleEnd:
+        project_.sounds[selectedSoundSlot_].endSeconds = std::max(project_.sounds[selectedSoundSlot_].startSeconds + 0.001, command.doubleValue);
+        changed();
+        break;
+    case PocketGrooveCommandType::ReverseSample:
+        changed();
+        break;
     case PocketGrooveCommandType::AutoSliceSample:
+        {
+            auto& slot = project_.sounds[selectedSoundSlot_];
+            const auto count = static_cast<std::uint8_t>(std::clamp(command.intValue <= 0 ? 8 : command.intValue, 1, 16));
+            const double start = std::max(0.0, slot.startSeconds);
+            const double end = slot.endSeconds > start ? slot.endSeconds : start + 1.0;
+            const double width = (end - start) / static_cast<double>(count);
+            slot.slices.clear();
+            for (std::uint8_t index = 0; index < count; ++index) {
+                SampleSlice slice{};
+                slice.id = "slice-" + std::to_string(static_cast<int>(index) + 1);
+                slice.name = "S" + (index + 1U < 10U ? std::string{"0"} : std::string{}) + std::to_string(static_cast<int>(index) + 1);
+                slice.startSeconds = start + (static_cast<double>(index) * width);
+                slice.endSeconds = index + 1U == count ? end : slice.startSeconds + width;
+                slot.slices.push_back(std::move(slice));
+            }
+            slot.mode = GroovePlaybackMode::Slice;
+        }
+        changed();
+        break;
     case PocketGrooveCommandType::AssignSliceToStep:
+        selectedStep().sliceIndex = command.sliceIndex;
         changed();
         break;
     case PocketGrooveCommandType::TriggerPunchFx:

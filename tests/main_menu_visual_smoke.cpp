@@ -187,6 +187,7 @@ int main()
     } steps[] = {
         {lofibox::app::InputKey::Right, "RIGHT", "Playlists"},
         {lofibox::app::InputKey::Right, "RIGHT", "Now Playing"},
+        {lofibox::app::InputKey::Right, "RIGHT", "Pocket Groove"},
         {lofibox::app::InputKey::Right, "RIGHT", "Equalizer"},
         {lofibox::app::InputKey::Right, "RIGHT", "Settings"},
     };
