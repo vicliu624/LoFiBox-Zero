@@ -148,6 +148,7 @@ private:
     void refreshNetworkStatus();
     void refreshMetadataServiceState();
     void refreshRuntimeStatus(bool force);
+    void updatePocketGrooveMidi();
     void refreshRemoteLibraryTracks();
     void handlePendingOpenRequests();
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> currentPageRows() const;

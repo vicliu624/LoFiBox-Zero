@@ -12,6 +12,10 @@
 #include "application/groove_command_service.h"
 #include "app/input_event.h"
 #include "groove/groove_controller.h"
+#include "midi/midi_clock.h"
+#include "midi/midi_input_router.h"
+#include "midi/midi_mapping.h"
+#include "midi/midi_port.h"
 #include "ui/pages/groove/capture_overlay.h"
 #include "ui/pages/groove/chain_overlay.h"
 #include "ui/pages/groove/export_overlay.h"
@@ -46,6 +50,7 @@ public:
 
     [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> dispatch(const lofibox::groove::PocketGrooveCommand& command);
     [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> handleInput(const InputEvent& event, bool fn_held = false);
+    void updateMidi(lofibox::midi::MidiPort& port);
 
     [[nodiscard]] const lofibox::groove::GrooveController& controller() const noexcept;
     [[nodiscard]] lofibox::ui::pages::groove::PocketGrooveMainView mainView() const;
@@ -77,6 +82,11 @@ private:
     [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> rewriteSelectedSample(bool reverse);
     [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> autoSliceSelectedSample();
     void applyOperationResult(const ::lofibox::application::GrooveOperationResult& result);
+    void ensureMidiPortOpen(lofibox::midi::MidiPort& port);
+    void handleMidiMessage(const lofibox::midi::MidiMessage& message);
+    void updateMidiClockOut(lofibox::midi::MidiPort& port, clock::time_point now);
+    [[nodiscard]] std::string midiDeviceLabel() const;
+    [[nodiscard]] std::string midiSyncLabel() const;
     void markDirty();
     void autoSave();
     void playRenderedProject();
@@ -84,7 +94,11 @@ private:
 
     lofibox::groove::GrooveController controller_{};
     ::lofibox::application::GrooveCommandService operations_{};
+    lofibox::midi::MidiInputRouter midiRouter_{};
+    lofibox::midi::GrooveMidiMapping midiMapping_{lofibox::midi::defaultGrooveMidiMapping()};
+    lofibox::midi::MidiClock midiClock_{};
     GroovePlaybackControl* playback_{nullptr};
+    lofibox::midi::MidiPort* midiPort_{nullptr};
     std::optional<GrooveCurrentPlaybackSource> captureSource_{};
     std::uint8_t captureLengthIndex_{1};
     std::uint8_t captureTargetSlot_{3};
@@ -95,8 +109,16 @@ private:
     int projectAction_{0};
     std::string lastStatus_{"READY"};
     std::string lastExportFile_{};
+    std::string midiDeviceStatus_{"NO MIDI"};
     bool dirty_{false};
+    bool midiPortAvailable_{false};
+    bool midiWasPlaying_{false};
+    std::uint64_t incomingMidiPulses_{0};
+    double externalMidiBpm_{0.0};
     clock::time_point playStarted_{};
+    clock::time_point lastMidiOpenAttempt_{};
+    clock::time_point lastMidiClockIn_{};
+    clock::time_point lastMidiClockOut_{};
     bool active_{false};
 };
 

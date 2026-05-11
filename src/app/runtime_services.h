@@ -15,6 +15,7 @@
 #include "app/remote_media_services.h"
 #include "cache/cache_manager.h"
 #include "core/canvas.h"
+#include "midi/midi_port.h"
 #include "ui/ui_theme.h"
 
 namespace lofibox::audio::dsp {
@@ -230,6 +231,10 @@ struct PluginServices {
     std::string selected_skin_id{};
 };
 
+struct MidiServices {
+    std::shared_ptr<::lofibox::midi::MidiPort> port{};
+};
+
 struct RuntimeServiceRegistry {
     ConnectivityServices connectivity{};
     MetadataServices metadata{};
@@ -238,6 +243,7 @@ struct RuntimeServiceRegistry {
     CacheServices cache{};
     UiServices ui{};
     PluginServices plugins{};
+    MidiServices midi{};
 };
 
 using RuntimeServices = RuntimeServiceRegistry;

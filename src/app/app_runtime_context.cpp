@@ -129,6 +129,7 @@ void AppRuntimeContext::update()
 {
     updateAppLifecycle(*this);
     handlePendingOpenRequests();
+    updatePocketGrooveMidi();
 }
 
 void AppRuntimeContext::handleInput(const InputEvent& event)
@@ -207,6 +208,18 @@ void AppRuntimeContext::refreshRuntimeStatus(bool force)
 void AppRuntimeContext::refreshRuntimeStatusIfDue()
 {
     refreshRuntimeStatus(false);
+}
+
+void AppRuntimeContext::updatePocketGrooveMidi()
+{
+    if (currentPage() != AppPage::PocketGroove || !groove_.active()) {
+        return;
+    }
+    auto midi_port = appServices().runtimeServices().midi.port;
+    if (!midi_port) {
+        return;
+    }
+    groove_.updateMidi(*midi_port);
 }
 
 void AppRuntimeContext::handlePendingOpenRequests()

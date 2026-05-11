@@ -96,6 +96,40 @@ constexpr std::array<std::string_view, 5> kCaptureLengths{"1 BEAT", "1 BAR", "2 
     return lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::ProjectChanged, 0, 0, 0, 0, std::move(message)};
 }
 
+[[nodiscard]] std::chrono::steady_clock::duration midiPulseInterval(std::uint16_t bpm)
+{
+    const double safe_bpm = static_cast<double>(std::max<std::uint16_t>(1, bpm));
+    return std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(60.0 / (safe_bpm * 24.0)));
+}
+
+[[nodiscard]] std::string shortMidiStatus(std::string status)
+{
+    if (status.empty()) {
+        return "NO DEV";
+    }
+    std::string upper = status;
+    std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) {
+        return static_cast<char>(std::toupper(c));
+    });
+    if (upper.find("OPEN") != std::string::npos) {
+        return "OPEN";
+    }
+    if (upper.find("OUTPUT") != std::string::npos && (upper.find("UNAVAILABLE") != std::string::npos || upper.find("FAILED") != std::string::npos)) {
+        return "OUT ERR";
+    }
+    if (upper.find("INPUT") != std::string::npos && (upper.find("UNAVAILABLE") != std::string::npos || upper.find("FAILED") != std::string::npos)) {
+        return "IN ERR";
+    }
+    if (upper.find("UNAVAILABLE") != std::string::npos || upper.find("NO ") != std::string::npos) {
+        return "NO DEV";
+    }
+    if (upper.find("FAILED") != std::string::npos || upper.find("ERROR") != std::string::npos || upper.find("COULD NOT") != std::string::npos) {
+        return "ERROR";
+    }
+    return upper;
+}
+
 } // namespace
 
 AppGrooveBridge::AppGrooveBridge() = default;
@@ -121,6 +155,12 @@ void AppGrooveBridge::enter(GroovePlaybackControl& playback)
 
 void AppGrooveBridge::exit()
 {
+    if (midiPort_ != nullptr && midiPortAvailable_ && midiWasPlaying_
+        && controller_.project().midi.clockOutputEnabled
+        && controller_.project().midi.clockMode == lofibox::groove::MidiClockMode::Send) {
+        (void)midiPort_->send(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Stop});
+        midiWasPlaying_ = false;
+    }
     if (playback_ != nullptr) {
         playback_->stopGroovePlayback();
     }
@@ -147,6 +187,12 @@ std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::dispatch(const lofibo
         if (controller_.projection().playing) {
             playRenderedProject();
         } else if (playback_ != nullptr) {
+            playStarted_ = {};
+            playback_->stopGroovePlayback();
+        }
+    } else if (command.type == lofibox::groove::PocketGrooveCommandType::Stop) {
+        playStarted_ = {};
+        if (playback_ != nullptr) {
             playback_->stopGroovePlayback();
         }
     }
@@ -156,6 +202,29 @@ std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::dispatch(const lofibo
         }
     }
     return events;
+}
+
+void AppGrooveBridge::updateMidi(lofibox::midi::MidiPort& port)
+{
+    midiPort_ = &port;
+    if (!active_) {
+        return;
+    }
+
+    ensureMidiPortOpen(port);
+    const auto status = port.status();
+    midiPortAvailable_ = status.available;
+    if (!status.message.empty()) {
+        midiDeviceStatus_ = status.message;
+    }
+    if (!midiPortAvailable_) {
+        return;
+    }
+
+    for (const auto& message : port.poll(64)) {
+        handleMidiMessage(message);
+    }
+    updateMidiClockOut(port, clock::now());
 }
 
 std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::handleInput(const InputEvent& event, bool fn_held)
@@ -305,7 +374,8 @@ groove_ui::MidiOverlayView AppGrooveBridge::midiOverlayView() const
     view.clock = toString(midi.clockMode);
     view.input = "CH " + std::to_string(static_cast<int>(midi.inputChannel));
     view.output = midi.clockOutputEnabled ? ("CH " + std::to_string(static_cast<int>(midi.outputChannel))) : "OFF";
-    view.sync = midi.clockMode == lofibox::groove::MidiClockMode::External ? "WAIT" : "---";
+    view.sync = midiSyncLabel();
+    view.device = midiDeviceLabel();
     view.selectedRow = midiRow_;
     return view;
 }
@@ -812,6 +882,172 @@ void AppGrooveBridge::applyOperationResult(const ::lofibox::application::GrooveO
     }
 }
 
+void AppGrooveBridge::ensureMidiPortOpen(lofibox::midi::MidiPort& port)
+{
+    if (port.available()) {
+        midiPortAvailable_ = true;
+        return;
+    }
+
+    const auto now = clock::now();
+    if (lastMidiOpenAttempt_ != clock::time_point{} && now - lastMidiOpenAttempt_ < std::chrono::seconds{2}) {
+        return;
+    }
+    lastMidiOpenAttempt_ = now;
+
+    std::string error{};
+    midiPortAvailable_ = port.open(&error);
+    const auto status = port.status();
+    if (!status.message.empty()) {
+        midiDeviceStatus_ = status.message;
+    } else if (!error.empty()) {
+        midiDeviceStatus_ = error;
+    } else {
+        midiDeviceStatus_ = midiPortAvailable_ ? "raw MIDI device open" : "MIDI device unavailable";
+    }
+}
+
+void AppGrooveBridge::handleMidiMessage(const lofibox::midi::MidiMessage& message)
+{
+    auto& midi = controller_.project().midi;
+    const bool clock_input = midi.clockMode == lofibox::groove::MidiClockMode::External || midi.clockInputEnabled;
+    const auto now = clock::now();
+
+    if (message.type == lofibox::midi::MidiMessageType::Clock) {
+        if (!clock_input) {
+            return;
+        }
+        if (lastMidiClockIn_ != clock::time_point{}) {
+            const double interval_seconds = std::chrono::duration<double>(now - lastMidiClockIn_).count();
+            if (interval_seconds > 0.0) {
+                externalMidiBpm_ = 60.0 / (interval_seconds * 24.0);
+            }
+        }
+        lastMidiClockIn_ = now;
+        ++incomingMidiPulses_;
+        midiClock_.tick();
+        if (incomingMidiPulses_ >= 2U) {
+            lastStatus_ = "MIDI CLOCK LOCK";
+        }
+        return;
+    }
+
+    if (message.type == lofibox::midi::MidiMessageType::Start) {
+        if (!clock_input) {
+            return;
+        }
+        incomingMidiPulses_ = 0;
+        externalMidiBpm_ = 0.0;
+        midiClock_.start();
+        if (!controller_.projection().playing) {
+            (void)dispatch(lofibox::groove::makeGrooveCommand(lofibox::groove::PocketGrooveCommandType::PlayPause));
+        }
+        lastStatus_ = "MIDI START";
+        return;
+    }
+
+    if (message.type == lofibox::midi::MidiMessageType::Continue) {
+        if (!clock_input) {
+            return;
+        }
+        midiClock_.cont();
+        if (!controller_.projection().playing) {
+            (void)dispatch(lofibox::groove::makeGrooveCommand(lofibox::groove::PocketGrooveCommandType::PlayPause));
+        }
+        lastStatus_ = "MIDI CONTINUE";
+        return;
+    }
+
+    if (message.type == lofibox::midi::MidiMessageType::Stop) {
+        if (!clock_input) {
+            return;
+        }
+        midiClock_.stop();
+        if (controller_.projection().playing) {
+            (void)dispatch(lofibox::groove::makeGrooveCommand(lofibox::groove::PocketGrooveCommandType::Stop));
+        }
+        lastStatus_ = "MIDI STOP";
+        return;
+    }
+
+    auto commands = midiRouter_.route(message, midi, midiMapping_);
+    for (const auto& command : commands) {
+        (void)dispatch(command);
+    }
+    if (message.type == lofibox::midi::MidiMessageType::NoteOn && !commands.empty()) {
+        const auto slot = std::max(0, lofibox::midi::slotForNote(midiMapping_, message.data1));
+        lastStatus_ = "MIDI NOTE S" + twoDigit(slot + 1);
+    } else if (message.type == lofibox::midi::MidiMessageType::ControlChange && !commands.empty()) {
+        lastStatus_ = "MIDI CC";
+    }
+}
+
+void AppGrooveBridge::updateMidiClockOut(lofibox::midi::MidiPort& port, clock::time_point now)
+{
+    const auto& midi = controller_.project().midi;
+    const bool send_clock = midi.clockMode == lofibox::groove::MidiClockMode::Send && midi.clockOutputEnabled;
+    const bool playing = controller_.projection().playing;
+    if (!send_clock) {
+        if (midiWasPlaying_) {
+            (void)port.send(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Stop});
+        }
+        midiWasPlaying_ = false;
+        lastMidiClockOut_ = {};
+        return;
+    }
+
+    const auto pulse_interval = midiPulseInterval(controller_.project().bpm);
+    if (playing && !midiWasPlaying_) {
+        (void)port.send(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Start});
+        lastMidiClockOut_ = now - pulse_interval;
+    } else if (!playing && midiWasPlaying_) {
+        (void)port.send(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Stop});
+        lastMidiClockOut_ = {};
+        midiWasPlaying_ = false;
+        return;
+    }
+
+    if (playing) {
+        int sent = 0;
+        while ((lastMidiClockOut_ == clock::time_point{} || now - lastMidiClockOut_ >= pulse_interval) && sent < 96) {
+            (void)port.send(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Clock});
+            lastMidiClockOut_ = lastMidiClockOut_ == clock::time_point{} ? now : lastMidiClockOut_ + pulse_interval;
+            ++sent;
+        }
+    }
+    midiWasPlaying_ = playing;
+}
+
+std::string AppGrooveBridge::midiDeviceLabel() const
+{
+    const auto status = shortMidiStatus(midiDeviceStatus_);
+    if (midiPortAvailable_ && status != "ERROR" && status != "OUT ERR" && status != "IN ERR" && status != "NO DEV") {
+        return "OPEN";
+    }
+    return status;
+}
+
+std::string AppGrooveBridge::midiSyncLabel() const
+{
+    const auto& midi = controller_.project().midi;
+    if (!midiPortAvailable_) {
+        return "NO DEV";
+    }
+    if (midi.clockMode == lofibox::groove::MidiClockMode::External || midi.clockInputEnabled) {
+        if (lastMidiClockIn_ != clock::time_point{} && clock::now() - lastMidiClockIn_ < std::chrono::milliseconds{700}) {
+            if (externalMidiBpm_ > 1.0) {
+                return "LOCK " + std::to_string(static_cast<int>(std::lround(externalMidiBpm_))) + "BPM";
+            }
+            return "LOCKED";
+        }
+        return "WAIT";
+    }
+    if (midi.clockMode == lofibox::groove::MidiClockMode::Send && midi.clockOutputEnabled) {
+        return controller_.projection().playing ? "SEND" : "READY";
+    }
+    return "OPEN";
+}
+
 void AppGrooveBridge::markDirty()
 {
     dirty_ = true;
@@ -851,6 +1087,11 @@ void AppGrooveBridge::playRenderedProject()
 
 std::uint8_t AppGrooveBridge::currentPlayheadStep() const noexcept
 {
+    if (controller_.projection().playing
+        && controller_.project().midi.clockMode == lofibox::groove::MidiClockMode::External
+        && midiClock_.running()) {
+        return static_cast<std::uint8_t>(midiClock_.stepCount() % 16U);
+    }
     if (!controller_.projection().playing || playStarted_ == clock::time_point{}) {
         return controller_.projection().selectedStep;
     }

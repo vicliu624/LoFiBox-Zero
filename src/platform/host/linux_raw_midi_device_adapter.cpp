@@ -85,6 +85,7 @@ LinuxRawMidiDeviceAdapter::~LinuxRawMidiDeviceAdapter()
 bool LinuxRawMidiDeviceAdapter::open(std::string* error)
 {
     close();
+    lastMessage_.clear();
 #if defined(__linux__)
     if (inputPath_.empty()) {
         inputPath_ = defaultRawMidiPath();
@@ -106,13 +107,17 @@ bool LinuxRawMidiDeviceAdapter::open(std::string* error)
     }
     if (!outputPath_.empty()) {
         outputFd_ = ::open(outputPath_.c_str(), O_WRONLY | O_NONBLOCK);
-        if (outputFd_ < 0 && inputFd_ < 0) {
+        if (outputFd_ < 0 && inputFd_ >= 0) {
+            lastMessage_ = std::string{"MIDI output unavailable: "} + std::strerror(errno);
+        } else if (outputFd_ < 0 && inputFd_ < 0) {
             lastMessage_ = std::string{"could not open MIDI output: "} + std::strerror(errno);
             if (error != nullptr) *error = lastMessage_;
             return false;
         }
     }
-    lastMessage_ = available() ? "raw MIDI device open" : lastMessage_;
+    if (available() && lastMessage_.empty()) {
+        lastMessage_ = "raw MIDI device open";
+    }
     return available();
 #else
     lastMessage_ = "Linux raw MIDI adapter is unavailable on this platform";
@@ -142,9 +147,9 @@ bool LinuxRawMidiDeviceAdapter::available() const noexcept
     return inputFd_ >= 0 || outputFd_ >= 0;
 }
 
-MidiDeviceStatus LinuxRawMidiDeviceAdapter::status() const
+lofibox::midi::MidiPortStatus LinuxRawMidiDeviceAdapter::status() const
 {
-    return MidiDeviceStatus{available(), inputPath_, outputPath_, lastMessage_};
+    return lofibox::midi::MidiPortStatus{available(), inputPath_.string(), outputPath_.string(), lastMessage_};
 }
 
 std::vector<lofibox::midi::MidiMessage> LinuxRawMidiDeviceAdapter::poll(std::size_t max_messages)
@@ -181,6 +186,7 @@ bool LinuxRawMidiDeviceAdapter::send(const lofibox::midi::MidiMessage& message)
 {
 #if defined(__linux__)
     if (outputFd_ < 0) {
+        lastMessage_ = "MIDI output unavailable";
         return false;
     }
     std::array<std::uint8_t, 3> bytes{};

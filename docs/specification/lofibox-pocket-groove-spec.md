@@ -247,6 +247,47 @@ other device-specific polling and file descriptor code belongs under
 `src/platform/...` and may only emit platform-neutral `MidiMessage` values into
 the MIDI router.
 
+Runtime MIDI integration is not satisfied by parser and adapter tests alone.
+While Pocket Groove is active, the app runtime must own a periodic MIDI service
+tick:
+
+```text
+AppRuntimeContext::update()
+  -> platform-neutral MidiPort::poll()
+  -> midi::MidiInputRouter
+  -> PocketGrooveCommand
+  -> AppGrooveBridge/GrooveController
+  -> UI projection status
+```
+
+The host/device composition root may provide a Linux raw MIDI port, ALSA port,
+or another platform adapter through the runtime service registry, but shared app
+code must only see the platform-neutral `MidiPort` contract.
+
+MIDI input behavior:
+
+- `Clock` is consumed only when Groove MIDI clock mode is `external`.
+- `Start` starts Pocket Groove preview playback if it is not already playing.
+- `Continue` resumes/starts Pocket Groove preview playback if it is not already
+  playing.
+- `Stop` stops Pocket Groove preview playback.
+- `NoteOn` on the configured input channel maps to the configured/default sound
+  slot note map and emits both slot selection and slot trigger commands.
+- `ControlChange` maps only to existing Groove commands; it must not bypass the
+  command boundary.
+
+MIDI output behavior:
+
+- `send` mode must emit `Start` when Pocket Groove playback begins.
+- `send` mode must emit 24 PPQN `Clock` messages while Pocket Groove playback is
+  active.
+- `send` mode must emit `Stop` when Pocket Groove playback stops or exits.
+
+The MIDI overlay must show the configured mode/channel values plus real runtime
+device state such as `OPEN`, `NO DEV`, or `ERROR`, and sync state such as
+`WAIT`, `LOCKED`, or `SEND`. It must not show a healthy sync state when the raw
+MIDI adapter is unavailable.
+
 ### 5.6 Capture Boundary
 
 Capture from current track must decode the source media segment. It must not

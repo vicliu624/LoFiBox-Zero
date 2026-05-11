@@ -9,18 +9,11 @@
 #include <string>
 #include <vector>
 
-#include "midi/midi_input_router.h"
+#include "midi/midi_port.h"
 
 namespace lofibox::platform::host {
 
-struct MidiDeviceStatus {
-    bool available{false};
-    std::filesystem::path inputPath{};
-    std::filesystem::path outputPath{};
-    std::string message{};
-};
-
-class LinuxRawMidiDeviceAdapter {
+class LinuxRawMidiDeviceAdapter final : public lofibox::midi::MidiPort {
 public:
     LinuxRawMidiDeviceAdapter() = default;
     LinuxRawMidiDeviceAdapter(std::filesystem::path input_path, std::filesystem::path output_path);
@@ -31,13 +24,13 @@ public:
     LinuxRawMidiDeviceAdapter(LinuxRawMidiDeviceAdapter&&) = delete;
     LinuxRawMidiDeviceAdapter& operator=(LinuxRawMidiDeviceAdapter&&) = delete;
 
-    [[nodiscard]] bool open(std::string* error = nullptr);
-    void close() noexcept;
-    [[nodiscard]] bool available() const noexcept;
-    [[nodiscard]] MidiDeviceStatus status() const;
+    [[nodiscard]] bool open(std::string* error = nullptr) override;
+    void close() noexcept override;
+    [[nodiscard]] bool available() const noexcept override;
+    [[nodiscard]] lofibox::midi::MidiPortStatus status() const override;
 
-    [[nodiscard]] std::vector<lofibox::midi::MidiMessage> poll(std::size_t max_messages = 64);
-    [[nodiscard]] bool send(const lofibox::midi::MidiMessage& message);
+    [[nodiscard]] std::vector<lofibox::midi::MidiMessage> poll(std::size_t max_messages = 64) override;
+    [[nodiscard]] bool send(const lofibox::midi::MidiMessage& message) override;
 
 private:
     [[nodiscard]] std::vector<lofibox::midi::MidiMessage> parseByte(std::uint8_t byte);

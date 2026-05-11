@@ -14,6 +14,7 @@ struct MidiOverlayView {
     std::string input{"CH 10"};
     std::string output{"OFF"};
     std::string sync{"---"};
+    std::string device{"NO DEV"};
     int selectedRow{0};
 };
 

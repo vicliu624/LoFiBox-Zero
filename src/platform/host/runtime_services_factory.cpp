@@ -16,6 +16,7 @@
 #include "platform/host/runtime_host_internal.h"
 #include "platform/host/runtime_paths.h"
 #include "platform/host/host_runtime_service_providers.h"
+#include "platform/host/linux_raw_midi_device_adapter.h"
 #include "plugins/plugin_manifest.h"
 #include "plugins/skin_plugin_adapter.h"
 
@@ -120,6 +121,7 @@ app::RuntimeServices createHostRuntimeServices()
     services.cache = createHostCacheServices(context);
     services.ui.theme = loadHostTheme();
     services.plugins = loadHostPluginServices(*services.ui.theme);
+    services.midi.port = std::make_shared<LinuxRawMidiDeviceAdapter>();
     return app::withNullRuntimeServices(std::move(services));
 }
 

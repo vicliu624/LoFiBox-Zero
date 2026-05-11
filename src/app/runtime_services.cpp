@@ -61,6 +61,28 @@ public:
     [[nodiscard]] std::string displayName() const override { return "SYSTEM"; }
 };
 
+class NullMidiPort final : public ::lofibox::midi::MidiPort {
+public:
+    [[nodiscard]] bool open(std::string* error = nullptr) override
+    {
+        if (error != nullptr) {
+            *error = "MIDI device unavailable";
+        }
+        return false;
+    }
+
+    void close() noexcept override {}
+    [[nodiscard]] bool available() const noexcept override { return false; }
+
+    [[nodiscard]] ::lofibox::midi::MidiPortStatus status() const override
+    {
+        return ::lofibox::midi::MidiPortStatus{false, {}, {}, "MIDI device unavailable"};
+    }
+
+    [[nodiscard]] std::vector<::lofibox::midi::MidiMessage> poll(std::size_t = 64) override { return {}; }
+    [[nodiscard]] bool send(const ::lofibox::midi::MidiMessage&) override { return false; }
+};
+
 class NullRemoteSourceProvider final : public RemoteSourceProvider {
 public:
     [[nodiscard]] bool available() const override { return false; }
@@ -138,6 +160,9 @@ RuntimeServices withNullRuntimeServices(RuntimeServices services)
     }
     if (!services.ui.theme) {
         services.ui.theme = std::make_shared<ui::UiTheme>(ui::defaultTheme());
+    }
+    if (!services.midi.port) {
+        services.midi.port = makeNullShared<NullMidiPort>();
     }
     return services;
 }

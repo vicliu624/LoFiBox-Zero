@@ -4,7 +4,7 @@
 
 #include <vector>
 
-#include "midi/midi_input_router.h"
+#include "midi/midi_message.h"
 
 namespace lofibox::midi {
 

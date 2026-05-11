@@ -13,6 +13,7 @@ void renderMidiOverlay(core::Canvas& canvas, const MidiOverlayView& view, const 
     drawGrooveValueRow(canvas, theme, 64, "IN", view.input, view.selectedRow == 1);
     drawGrooveValueRow(canvas, theme, 84, "OUT", view.output, view.selectedRow == 2);
     drawGrooveValueRow(canvas, theme, 104, "SYNC", view.sync, view.selectedRow == 3);
+    drawGrooveValueRow(canvas, theme, 124, "DEVICE", view.device, false);
     drawGrooveFooter(canvas, theme, "OK EDIT   LEFT/RIGHT VALUE   BACK");
 }
 

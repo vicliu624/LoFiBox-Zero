@@ -704,6 +704,10 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_pocket_groove_app_runtime_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_pocket_groove_app_runtime_smoke COMMAND lofibox_pocket_groove_app_runtime_smoke)
 
+    add_executable(lofibox_pocket_groove_midi_runtime_smoke tests/pocket_groove_midi_runtime_smoke.cpp)
+    target_link_libraries(lofibox_pocket_groove_midi_runtime_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_pocket_groove_midi_runtime_smoke COMMAND lofibox_pocket_groove_midi_runtime_smoke)
+
     add_executable(lofibox_dsp_chain_smoke tests/dsp_chain_smoke.cpp)
     target_link_libraries(lofibox_dsp_chain_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_dsp_chain_smoke COMMAND lofibox_dsp_chain_smoke)
