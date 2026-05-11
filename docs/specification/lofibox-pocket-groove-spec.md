@@ -180,9 +180,9 @@ UI page
   -> write JSON directly
 ```
 
-### 5.3 Audio And Export
+### 5.3 Audio Playback And Export
 
-Real-time playback and offline export must share `GrooveRenderEngine`. They may
+Device playback and offline export must share `GrooveRenderEngine`. They may
 have different schedulers and output sinks, but they must not have separate
 sound algorithms.
 
@@ -195,7 +195,24 @@ sound heard on device ~= sound exported to WAV
 Differences caused by device output hardware are acceptable. Differences caused
 by two divergent render engines are not.
 
-First shipping implementation note:
+#### Current Playback Model: Preview Render Playback
+
+Pocket Groove first release uses Preview Render Playback.
+
+```text
+GrooveProject / Pattern / Song Chain
+  -> OfflineGrooveRenderer
+  -> GrooveRenderEngine
+  -> cache/preview.wav
+  -> existing playback backend
+```
+
+This is an explicit first-release integration strategy, not a real-time
+groovebox audio engine. It keeps device entry, project editing, capture, export,
+and existing playback backend integration stable while the realtime block
+renderer remains a future replacement.
+
+Current playback rules:
 
 - `Preview Render Playback` is allowed as an explicit interim device playback
   strategy: render the current pattern or Song Chain with `GrooveRenderEngine`
@@ -204,6 +221,8 @@ First shipping implementation note:
   and must not claim low-latency real-time groove playback.
 - Step edits, sample edits, and FX locks must cause the next Play action to
   render a fresh preview.
+- Punch FX in this model are recorded FX locks or UI preview/toggle state for
+  the next render; they are not audio-callback-level hold effects.
 - Punch FX UI must not say "hold to play" unless the platform input path has
   key-release events and the audio path applies FX to live audio blocks.
 - The long-term target remains a real-time `GrooveSequencer -> SampleVoicePool
@@ -511,9 +530,9 @@ The main view does not explain every feature. It answers:
 
 Allowed life/status animation:
 
-- small tape reel motion while playing
+- small tape reel motion while preview playback is running
 - waveform flicker while capturing
-- short FX shake while a punch FX is held
+- short FX shake while a punch FX is armed/toggled
 - MIDI plug/sync indicator while externally synced
 - tape-write/progress motion while exporting
 
@@ -689,15 +708,19 @@ Operations:
 
 - in the real-time input path, hold 1-8 triggers effect while held
 - in preview-render implementations without key release, 1-8 toggles/arms the
-  effect preview state instead of promising hold behavior
+  effect preview state instead of promising hold behavior; audible changes are
+  heard after the next preview render unless the effect is recorded as a step
+  lock and rendered
 - release key releases effect only when the platform reports key release
 - Fn+1-8 records effect lock to current step
 
 Rules:
 
-- effect hold is performance state, not project mutation
+- effect hold is performance state only in a real-time input/audio path
+- preview-render effect toggle is UI/performance feedback, not a claim of
+  audio-callback-level processing
 - Fn+effect writes `hasFxLock`, `fxType`, and `fxAmount` to the current step
-- overlay can appear only while FX keys are held, or from a function menu
+- overlay can appear while FX is armed/toggled, or from a function menu
 
 ### 11.6 MIDI Overlay
 
@@ -1519,13 +1542,15 @@ Swing:
 
 - applies to off steps by delaying them
 - valid range is 0 to 75
-- timing must be shared by live sequencing and offline rendering
+- timing must be shared by preview rendering, offline export, and any future
+  live sequencing path
 
 Micro timing:
 
 - stored on the step
 - offsets the trigger time within a musically bounded range
-- must be included in live and offline event collection
+- must be included in preview/offline event collection and any future live event
+  collection
 
 Song Chain playback:
 
@@ -1555,6 +1580,11 @@ Required first-version FX:
 Operation:
 
 ```text
+Preview-render first release:
+1-8       toggle/arm FX preview state
+Fn+1-8    record FX lock to current step
+
+Future realtime block renderer:
 1-8       hold to trigger
 release   restore dry/current state
 Fn+1-8    record FX lock to current step
@@ -1562,11 +1592,15 @@ Fn+1-8    record FX lock to current step
 
 Rules:
 
-- FX hold is temporary performance state
+- FX toggle in the preview-render first release is UI/performance feedback and
+  does not imply live audio callback processing
+- FX hold is temporary performance state only after realtime input release
+  events and live audio-block FX processing exist
 - FX record is project mutation through command
 - FX must be represented separately from EQ presets
 - exported WAV must include recorded FX locks when `includeMasterFx` is true
-- live and offline processing share the same effect definitions
+- future live processing and offline processing must share the same effect
+  definitions
 
 ## 22. MIDI
 
@@ -1618,7 +1652,7 @@ Forbidden mapping:
 
 ## 23. Audio Render And Export
 
-Real-time path:
+Future real-time target path:
 
 ```text
 GrooveSequencer
@@ -1655,6 +1689,10 @@ Rules:
 - `GrooveRenderEngine` is shared
 - preview render playback is an interim playback sink, not a real-time
   groovebox audio engine
+- first-release device playback must say preview/render playback in UI/status
+  text
+- realtime punch-in FX must not be claimed until audio is rendered in live
+  blocks with key-release-aware input
 - export must render offline
 - export must produce playable WAV
 - export supports current pattern and Song Chain
@@ -1961,8 +1999,10 @@ Pocket Groove is accepted only when all of the following are true:
 10. User can save, load, rename, delete, and auto-save projects.
 11. User can arrange Song Chain.
 12. User can play Song Chain.
-13. User can trigger punch-in FX live.
-14. User can record punch-in FX to steps.
+13. User can toggle/arm punch FX preview state in the first-release
+    preview-render playback model.
+14. User can record punch-in FX locks to steps and hear them in the next preview
+    render/export.
 15. MIDI clock in/out works.
 16. MIDI Start, Stop, and Continue work.
 17. MIDI note input triggers sound slots.
@@ -1987,7 +2027,8 @@ When implementing Pocket Groove:
 - return to this spec before adding a new object, service, adapter, or shortcut
 - keep UI as projection
 - keep domain independent from UI and platform
-- keep audio rendering shared between live and export
+- keep audio rendering shared between preview playback, future live playback,
+  and export
 - keep MIDI behind commands
 - keep extension points data-only
 - keep runtime paths XDG-compliant

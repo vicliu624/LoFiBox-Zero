@@ -46,7 +46,7 @@ void drawTrackRow(core::Canvas& canvas, const UiTheme& theme, const PocketGroove
 void renderPocketGrooveMainView(core::Canvas& canvas, const PocketGrooveMainView& view, const UiTheme& theme)
 {
     canvas.clear(theme.palette.background);
-    const auto title = "GROOVE " + ::lofibox::ui::fitUpper(view.patternName, 3) + " " + std::to_string(view.bpm) + "BPM " + (view.playing ? ">" : "||") + (view.chainEnabled ? " CHAIN" : "");
+    const auto title = "GROOVE " + ::lofibox::ui::fitUpper(view.patternName, 3) + " " + std::to_string(view.bpm) + "BPM " + (view.playing ? "PREVIEW" : "STOP") + (view.chainEnabled ? " CHAIN" : "");
     ::lofibox::ui::drawTopBar(canvas, theme, title, true);
 
     canvas.fillRect(6, 24, 308, 140, theme.palette.panel1);
@@ -60,9 +60,9 @@ void renderPocketGrooveMainView(core::Canvas& canvas, const PocketGrooveMainView
         drawTrackRow(canvas, theme, view.visibleTracks[static_cast<std::size_t>(row)], 74 + (row * 17));
     }
 
-    if (view.heldFx != 0U) {
+    if (view.armedFx != 0U) {
         canvas.fillRect(248, 54, 54, 11, theme.palette.warn);
-        ::lofibox::ui::drawText(canvas, "FX" + std::to_string(static_cast<int>(view.heldFx)), 262, 56, theme.palette.background, 1);
+        ::lofibox::ui::drawText(canvas, "FX" + std::to_string(static_cast<int>(view.armedFx)), 262, 56, theme.palette.background, 1);
     }
 
     canvas.fillRect(6, 148, 308, 16, theme.palette.panel2);

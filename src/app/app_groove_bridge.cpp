@@ -212,7 +212,7 @@ lofibox::ui::pages::groove::PocketGrooveMainView AppGrooveBridge::mainView() con
     if (!lastStatus_.empty() && lastStatus_ != "READY") {
         view.footer = lastStatus_;
     }
-    view.heldFx = projection.heldFx;
+    view.armedFx = projection.heldFx;
     for (std::size_t slot = 0; slot < project.sounds.size(); ++slot) {
         view.filledSlots[slot] = project.sounds[slot].type != lofibox::groove::GrooveSoundType::Empty;
     }

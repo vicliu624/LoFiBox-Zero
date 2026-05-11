@@ -10,7 +10,7 @@
 namespace lofibox::ui::pages::groove {
 
 struct FxOverlayView {
-    std::uint8_t heldFx{0};
+    std::uint8_t armedFx{0};
 };
 
 void renderFxOverlay(core::Canvas& canvas, const FxOverlayView& view, const UiTheme& theme);

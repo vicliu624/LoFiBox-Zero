@@ -18,10 +18,10 @@ void renderFxOverlay(core::Canvas& canvas, const FxOverlayView& view, const UiTh
         const int col = index % 4;
         const int x = 22 + (col * 72);
         const int y = 48 + (row * 24);
-        const bool held = view.heldFx == static_cast<std::uint8_t>(index + 1);
-        canvas.fillRect(x - 4, y - 4, 62, 17, held ? theme.palette.warn : theme.palette.panel2);
-        canvas.strokeRect(x - 4, y - 4, 62, 17, held ? theme.palette.focus_edge : theme.palette.divider, 1);
-        ::lofibox::ui::drawText(canvas, std::to_string(index + 1) + " " + labels[static_cast<std::size_t>(index)], x, y, held ? theme.palette.background : theme.palette.text_primary, 1);
+        const bool armed = view.armedFx == static_cast<std::uint8_t>(index + 1);
+        canvas.fillRect(x - 4, y - 4, 62, 17, armed ? theme.palette.warn : theme.palette.panel2);
+        canvas.strokeRect(x - 4, y - 4, 62, 17, armed ? theme.palette.focus_edge : theme.palette.divider, 1);
+        ::lofibox::ui::drawText(canvas, std::to_string(index + 1) + " " + labels[static_cast<std::size_t>(index)], x, y, armed ? theme.palette.background : theme.palette.text_primary, 1);
     }
     drawGrooveFooter(canvas, theme, "1-8 FX TOGGLE  FN+KEY RECORD");
 }

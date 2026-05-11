@@ -79,9 +79,10 @@ std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPa
             {"ARROWS", "STEP / TRACK"},
             {"OK", "TOGGLE / RUN"},
             {"BACK", "OVERLAY / EXIT"},
-            {"F2/F3", "PLAY / STOP"},
+            {"F2/F3", "PREVIEW / STOP"},
             {"F4-F10", "CAP EDIT CHN FX MIDI EXP PRJ"},
-            {"1-8", "PUNCH FX"},
+            {"1-8", "FX TOGGLE"},
+            {"FN+1-8", "FX LOCK"},
             {"PGUP/PGDN", "PATTERN"},
             {"HOME", "MENU"},
         };

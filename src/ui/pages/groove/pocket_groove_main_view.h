@@ -34,7 +34,7 @@ struct PocketGrooveMainView {
     std::uint8_t selectedTrack{0};
     std::array<PocketGrooveTrackRow, 4> visibleTracks{};
     std::string footer{"S01 EMPTY  STEP01  VEL100"};
-    std::uint8_t heldFx{0};
+    std::uint8_t armedFx{0};
 };
 
 void renderPocketGrooveMainView(core::Canvas& canvas, const PocketGrooveMainView& view, const UiTheme& theme);
