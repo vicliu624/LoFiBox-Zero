@@ -165,6 +165,11 @@ autopkgtest lofibox_0.2.0-1_amd64.changes -- null
 
 The local Docker-based package-build image excludes `/usr/share/man/*` through dpkg path-exclude rules, so autopkgtest must not assert manpage installation from the testbed filesystem. Manpage presence is validated through package contents and `lintian`.
 
+Pocket Groove capture depends on the distribution `ffmpeg` executable for media
+segment decoding. The `lofibox` binary package therefore keeps `ffmpeg` in
+runtime `Depends`, and autopkgtest checks that the installed testbed can resolve
+the command.
+
 ## Validation Commands
 
 Packaging work should support:

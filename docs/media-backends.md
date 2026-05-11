@@ -21,6 +21,13 @@ Format support should be provided through distribution-packaged media backends s
 
 The application must not implement format support as scattered `if mp3`, `if flac`, `if m4a` UI logic.
 
+Pocket Groove capture currently uses the distribution `ffmpeg` executable as
+the media-segment decoder for WAV, MP3, FLAC, OGG, and AAC sources. Because
+current-track capture is a core device feature, Debian/Ubuntu packages must
+declare `ffmpeg` as a runtime dependency. If `ffmpeg` is unavailable at runtime,
+capture must report `CAPTURE DECODER UNAVAILABLE` on the device rather than
+falling back to a misleading success state.
+
 Metadata writeback is currently mediated by the packaged `tag_writer.py` helper, using system Python and Debian's `python3-mutagen` package. This is a runtime host-adapter detail: UI and playback code must depend on the `TagWriter` service boundary, not on Python, Mutagen, or helper script paths.
 
 Remote media helper execution is mediated by the packaged `remote_media_tool.py` helper. Its current implementation uses Python standard-library networking and JSON modules only; any future non-stdlib dependency must be admitted through the dependency policy and represented in Debian packaging.

@@ -803,7 +803,9 @@ std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::autoSliceSelectedSamp
 
 void AppGrooveBridge::applyOperationResult(const ::lofibox::application::GrooveOperationResult& result)
 {
-    if (!result.status.empty()) {
+    if (!result.ok && !result.errorMessage.empty()) {
+        lastStatus_ = result.errorMessage;
+    } else if (!result.status.empty()) {
         lastStatus_ = result.status;
     } else if (!result.errorMessage.empty()) {
         lastStatus_ = result.errorMessage;

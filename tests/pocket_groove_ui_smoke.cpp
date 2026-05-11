@@ -13,6 +13,8 @@
 #include "ui/ui_theme.h"
 
 #include <cassert>
+#include <cstdlib>
+#include <string>
 
 namespace {
 
@@ -31,6 +33,24 @@ public:
         }
     }
     return count;
+}
+
+void setEnvValue(const char* name, const std::string& value)
+{
+#if defined(_WIN32)
+    _putenv_s(name, value.c_str());
+#else
+    setenv(name, value.c_str(), 1);
+#endif
+}
+
+void clearEnvValue(const char* name)
+{
+#if defined(_WIN32)
+    _putenv_s(name, "");
+#else
+    unsetenv(name);
+#endif
 }
 
 } // namespace
@@ -72,6 +92,23 @@ int main()
     assert(litPixels(canvas) > 1000);
     lofibox::ui::pages::groove::renderProjectOverlay(canvas, {}, theme);
     assert(litPixels(canvas) > 1000);
+
+    const char* previous_ffmpeg_path = std::getenv("FFMPEG_PATH");
+    const std::string previous_ffmpeg_path_value = previous_ffmpeg_path == nullptr ? std::string{} : std::string{previous_ffmpeg_path};
+    setEnvValue("FFMPEG_PATH", "__lofibox_missing_ffmpeg_for_capture_test__");
+    bridge.openCaptureOverlay(lofibox::app::GrooveCurrentPlaybackSource{
+        true,
+        "missing-decoder-track",
+        "missing-decoder-track.mp3",
+        "Missing Decoder",
+        0.0});
+    (void)bridge.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
+    assert(bridge.mainView().footer.find("CAPTURE DECODER UNAVAILABLE") != std::string::npos);
+    if (previous_ffmpeg_path == nullptr) {
+        clearEnvValue("FFMPEG_PATH");
+    } else {
+        setEnvValue("FFMPEG_PATH", previous_ffmpeg_path_value);
+    }
 
     bridge.exit();
     assert(!bridge.active());

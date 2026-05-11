@@ -278,11 +278,14 @@ First shipping implementation note:
 - The capture boundary is `sourceUri + start + duration -> SampleBuffer`.
 - The first shipping implementation must decode at least WAV, MP3, FLAC, OGG,
   and AAC current-track sources through the media decoder boundary.
+- The first shipping implementation uses the distribution `ffmpeg` executable
+  as that media decoder boundary; Debian/Ubuntu packaging must declare `ffmpeg`
+  as a runtime dependency while this is a core Pocket Groove capture path.
 - App/UI/application bridge code must not branch on `mp3`, `flac`, `ogg`, `aac`,
   or `wav`; format knowledge belongs behind the media decoder.
 - If the media decoder is unavailable or a source truly cannot be decoded,
-  capture must fail visibly with a decoder error and must not pretend that
-  sampling succeeded.
+  capture must fail visibly with a decoder error such as
+  `CAPTURE DECODER UNAVAILABLE` and must not pretend that sampling succeeded.
 
 ## 6. Mode Relationship
 

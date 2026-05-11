@@ -81,8 +81,9 @@ std::atomic_uint64_t g_decode_counter{0};
 
 [[nodiscard]] std::optional<fs::path> resolveFfmpegExecutable()
 {
-    if (const auto env_path = readEnvWide(L"FFMPEG_PATH"); !env_path.empty() && fs::exists(env_path)) {
-        return fs::path(env_path);
+    if (const auto env_path = readEnvWide(L"FFMPEG_PATH"); !env_path.empty()) {
+        const fs::path configured{env_path};
+        return fs::exists(configured) ? std::make_optional(configured) : std::nullopt;
     }
 
     wchar_t resolved[MAX_PATH]{};
@@ -191,8 +192,9 @@ std::atomic_uint64_t g_decode_counter{0};
 #elif defined(__linux__)
 [[nodiscard]] std::optional<fs::path> resolveFfmpegExecutable()
 {
-    if (const char* env_path = std::getenv("FFMPEG_PATH"); env_path != nullptr && *env_path != '\0' && fs::exists(env_path)) {
-        return fs::path(env_path);
+    if (const char* env_path = std::getenv("FFMPEG_PATH"); env_path != nullptr && *env_path != '\0') {
+        fs::path configured{env_path};
+        return fs::exists(configured) ? std::make_optional(configured) : std::nullopt;
     }
 
     const char* path_env = std::getenv("PATH");

@@ -28,6 +28,9 @@ Python helper scripts are packaged runtime resources, not build-time dependency 
 
 - `scripts/tag_writer.py` requires the system packages `python3` and `python3-mutagen`.
 - `scripts/remote_media_tool.py` may use only the Python standard library unless a new dependency is admitted through this policy.
+- Pocket Groove capture uses the distribution `ffmpeg` executable for media
+  segment decoding; as long as capture is a core device feature, `ffmpeg` must
+  remain in the binary package runtime `Depends`.
 - Python helper dependencies must be represented in `debian/control`; they must not be installed through `pip` or downloaded during configure, build, install, tests, or first run.
 - Runtime code may check helper availability and produce diagnostics, but it must not silently fetch, vendor, or install missing Python modules.
 
