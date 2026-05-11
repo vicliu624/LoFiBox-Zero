@@ -195,6 +195,21 @@ sound heard on device ~= sound exported to WAV
 Differences caused by device output hardware are acceptable. Differences caused
 by two divergent render engines are not.
 
+First shipping implementation note:
+
+- `Preview Render Playback` is allowed as an explicit interim device playback
+  strategy: render the current pattern or Song Chain with `GrooveRenderEngine`
+  into a cache WAV, then ask the existing audio backend to play that file.
+- When this strategy is used, UI/status text must say preview/render playback
+  and must not claim low-latency real-time groove playback.
+- Step edits, sample edits, and FX locks must cause the next Play action to
+  render a fresh preview.
+- Punch FX UI must not say "hold to play" unless the platform input path has
+  key-release events and the audio path applies FX to live audio blocks.
+- The long-term target remains a real-time `GrooveSequencer -> SampleVoicePool
+  -> GrooveMixer -> PunchFxProcessor -> AudioOutput` path sharing the same
+  render semantics.
+
 ### 5.4 Effects And EQ
 
 Punch-in FX are creative performance effects. They are not EQ presets and must
@@ -208,6 +223,11 @@ processors.
 MIDI input emits `PocketGrooveCommand` values. MIDI mapping must not call domain
 objects, UI pages, project repositories, or audio engines directly.
 
+Platform MIDI adapters are not part of `src/midi`. Linux raw MIDI, ALSA, or any
+other device-specific polling and file descriptor code belongs under
+`src/platform/...` and may only emit platform-neutral `MidiMessage` values into
+the MIDI router.
+
 ### 5.6 Capture Boundary
 
 Capture from current track must decode the source media segment. It must not
@@ -218,7 +238,7 @@ Valid capture path:
 ```text
 current playback fact
   -> track/source URI
-  -> decoder extracts requested PCM segment
+  -> media segment decoder extracts requested PCM segment
   -> SampleEditor applies fade/normalize
   -> WAV is saved under groove samples
   -> sound slot is updated through command/controller
@@ -231,6 +251,17 @@ audio output tap
   -> record whatever is currently being played
   -> save unstable mixed output
 ```
+
+First shipping implementation note:
+
+- Groove samples are stored internally as WAV files under the XDG groove samples
+  directory.
+- The capture boundary is `sourceUri + start + duration -> SampleBuffer`.
+- A first implementation may support WAV first, but unsupported current-track
+  formats must fail with a clear `CAPTURE FORMAT UNSUPPORTED` status instead of
+  silently pretending capture succeeded.
+- MP3, FLAC, OGG, and AAC capture must be added through the media decoder
+  boundary, not by teaching App/UI code about specific file formats.
 
 ## 6. Mode Relationship
 
@@ -311,6 +342,12 @@ src/ui/pages/groove/
 
 src/app/
   app_groove_bridge.h/.cpp
+
+src/application/
+  groove_command_service.h/.cpp
+
+src/platform/host/
+  linux_raw_midi_device_adapter.h/.cpp
 ```
 
 Ownership rules:
@@ -320,9 +357,16 @@ Ownership rules:
 - `src/audio/groove` owns sample buffers, sample editing, rendering, mixing,
   punch FX processing, capture services, and WAV writing.
 - `src/midi` owns MIDI message interpretation and command mapping.
+- `src/application/groove_command_service.*` owns app-level orchestration of
+  capture, sample rewrite, preview render playback, export, and project
+  persistence.
+- `src/platform/host` owns Linux raw MIDI device discovery and file descriptor
+  polling/writing.
 - `src/ui/pages/groove` owns rendering of projection structs only.
 - `src/app/app_groove_bridge.*` owns mode transition, command dispatch,
-  projection assembly, and integration with existing app/player behavior.
+  projection assembly, and integration with existing app/player behavior. It
+  calls `GrooveCommandService` for operations that cross audio/repository
+  boundaries.
 
 ## 8. Architecture Rules
 
@@ -337,6 +381,8 @@ app_groove_bridge
   owns mode switching, command dispatch, and projection assembly
   may depend on groove domain and app input concepts
   must not call platform/device adapters directly
+  must not directly include sample loader, sample editor, capture service, or
+  WAV exporter internals
 
 groove domain
   owns project/pattern/step/chain/command
@@ -349,10 +395,20 @@ audio/groove
 midi
   maps MIDI input to GrooveCommand
   does not mutate project directly
+  does not scan `/dev`, open ALSA/raw MIDI files, or include Linux system
+  headers
+
+application/groove_command_service
+  composes groove domain, audio/groove operations, and project repository
+  returns operation results for AppGrooveBridge projection/status
 
 platform/device
   translates Linux evdev/framebuffer facts into app-facing input/output
   does not define Groove product objects
+
+platform/host MIDI adapters
+  translate device bytes to platform-neutral MIDI messages
+  do not mutate GrooveProject or call UI pages
 ```
 
 Forbidden implementations:
@@ -616,14 +672,16 @@ Reference layout:
 | 1 FILT  2 STUT  3 CRSH  4 STOP |
 | 5 DLY   6 FRZ   7 REV   8 BRK  |
 |                              |
-| HOLD TO PLAY   FN+KEY RECORD |
+| 1-8 FX TOGGLE  FN+KEY RECORD |
 +------------------------------+
 ```
 
 Operations:
 
-- hold 1-8 triggers effect while held
-- release key releases effect
+- in the real-time input path, hold 1-8 triggers effect while held
+- in preview-render implementations without key release, 1-8 toggles/arms the
+  effect preview state instead of promising hold behavior
+- release key releases effect only when the platform reports key release
 - Fn+1-8 records effect lock to current step
 
 Rules:
@@ -1563,6 +1621,16 @@ GrooveSequencer
   -> AudioOutput
 ```
 
+Preview render playback path:
+
+```text
+GrooveProject
+  -> OfflineGrooveRenderer
+  -> GrooveRenderEngine
+  -> cache/preview.wav
+  -> existing audio backend playFile
+```
+
 Offline export path:
 
 ```text
@@ -1576,6 +1644,8 @@ GrooveProject
 Rules:
 
 - `GrooveRenderEngine` is shared
+- preview render playback is an interim playback sink, not a real-time
+  groovebox audio engine
 - export must render offline
 - export must produce playable WAV
 - export supports current pattern and Song Chain

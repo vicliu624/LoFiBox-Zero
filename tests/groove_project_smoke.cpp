@@ -37,6 +37,17 @@ int main()
     assert(parsed.name == project.name);
     assert(parsed.bpm == 92);
     assert(parsed.swing == 12);
+    assert(parsed.sounds[3].type == lofibox::groove::GrooveSoundType::CapturedFromTrack);
+    assert(parsed.sounds[3].name == "CHOP_04");
+    assert(parsed.sounds[3].sourceUri == "lofibox-sample://groove-20260511-001/chop-04.wav");
+    assert(parsed.patterns[0].tracks[0].steps[0].trigger);
+    assert(parsed.patterns[0].tracks[0].steps[0].velocity == 110);
+    assert(parsed.patterns[0].tracks[0].steps[0].hasGainLock);
+    assert(parsed.patterns[0].tracks[0].steps[0].gain == 0.75f);
+    assert(parsed.songChain.enabled);
+    assert(parsed.songChain.items.size() == 2);
+    assert(parsed.songChain.items[0].label == "INTRO");
+    assert(parsed.songChain.items[1].repeats == 8);
     assert(parsed.midi.inputChannel == 10);
     assert(parsed.exportSettings.sampleRate == 48000);
 
@@ -55,6 +66,9 @@ int main()
     assert(repo.save(project, &error));
     const auto loaded = repo.load(project.id, &error);
     assert(loaded.id == project.id);
+    assert(loaded.sounds[3].sourceUri == project.sounds[3].sourceUri);
+    assert(loaded.patterns[0].tracks[0].steps[0].trigger);
+    assert(loaded.songChain.items.size() == 2);
     assert(!repo.listProjectFiles().empty());
 
     return 0;

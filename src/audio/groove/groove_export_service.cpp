@@ -2,13 +2,16 @@
 
 #include "audio/groove/groove_export_service.h"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <sstream>
+#include <vector>
 
 #include "audio/groove/offline_groove_renderer.h"
 #include "audio/groove/sample_loader.h"
 #include "audio/groove/wav_exporter.h"
+#include "groove/groove_sequencer.h"
 
 namespace lofibox::audio::groove {
 namespace {
@@ -45,6 +48,36 @@ namespace {
     return dir / (lofibox::groove::sanitizeProjectFileName(name) + "-" + timestampSuffix() + ".wav");
 }
 
+[[nodiscard]] std::string twoDigitSlot(std::uint8_t slot)
+{
+    const auto number = static_cast<int>(slot) + 1;
+    return (number < 10 ? "0" : "") + std::to_string(number);
+}
+
+[[nodiscard]] std::string missingSampleWarning(
+    const lofibox::groove::GrooveProject& project,
+    const GrooveSampleBank& bank)
+{
+    std::vector<lofibox::groove::GrooveTriggerEvent> events{};
+    if (project.exportSettings.target == lofibox::groove::GrooveExportTarget::CurrentPattern) {
+        const auto pattern_index = std::min<std::uint8_t>(project.activePattern, static_cast<std::uint8_t>(project.patterns.size() - 1U));
+        events = lofibox::groove::collectPatternTriggers(
+            project.patterns[pattern_index],
+            pattern_index,
+            project.bpm,
+            project.swing);
+    } else {
+        events = lofibox::groove::collectSongChainTriggers(project);
+    }
+    for (const auto& event : events) {
+        const auto slot = std::min<std::size_t>(event.soundSlot, bank.slots.size() - 1U);
+        if (!bank.slots[slot].has_value()) {
+            return "MISSING SAMPLE: SLOT " + twoDigitSlot(static_cast<std::uint8_t>(slot));
+        }
+    }
+    return {};
+}
+
 } // namespace
 
 GrooveSampleBank GrooveExportService::buildSampleBank(const lofibox::groove::GrooveProject& project) const
@@ -69,6 +102,7 @@ GrooveExportServiceResult GrooveExportService::exportProject(
     const lofibox::groove::GrooveStoragePaths& paths) const
 {
     const auto bank = buildSampleBank(project);
+    const auto warning = missingSampleWarning(project, bank);
     OfflineGrooveRenderer renderer{};
     const auto buffer = renderer.render(project, bank);
 
@@ -80,9 +114,9 @@ GrooveExportServiceResult GrooveExportService::exportProject(
         result = exporter.writePcm16(fallback_path, buffer, project.exportSettings.normalize);
     }
     if (!result.ok) {
-        return {false, result.path, 0, buffer.durationSeconds(), result.errorMessage};
+        return {false, result.path, 0, buffer.durationSeconds(), result.errorMessage, warning};
     }
-    return {true, result.path, 100, buffer.durationSeconds(), {}};
+    return {true, result.path, 100, buffer.durationSeconds(), {}, warning};
 }
 
 } // namespace lofibox::audio::groove

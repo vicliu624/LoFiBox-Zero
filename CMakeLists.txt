@@ -40,6 +40,7 @@ add_library(lofibox_zero_core STATIC
     src/audio/groove/groove_mixer.cpp
     src/audio/groove/groove_export_service.cpp
     src/audio/groove/groove_render_engine.cpp
+    src/audio/groove/media_segment_decoder.cpp
     src/audio/groove/offline_groove_renderer.cpp
     src/audio/groove/punch_fx_processor.cpp
     src/audio/groove/sample_buffer.cpp
@@ -66,6 +67,7 @@ add_library(lofibox_zero_core STATIC
     src/application/app_service_registry.cpp
     src/application/cache_command_service.cpp
     src/application/credential_command_service.cpp
+    src/application/groove_command_service.cpp
     src/application/library_mutation_service.cpp
     src/application/library_open_action_service.cpp
     src/application/library_query_service.cpp
@@ -101,7 +103,6 @@ add_library(lofibox_zero_core STATIC
     src/groove/groove_sound_slot.cpp
     src/groove/groove_transport.cpp
     src/midi/midi_clock.cpp
-    src/midi/midi_device_adapter.cpp
     src/midi/midi_input_router.cpp
     src/midi/midi_mapping.cpp
     src/midi/midi_output.cpp
@@ -205,6 +206,18 @@ else()
     target_compile_options(lofibox_zero_host_lock PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(lofibox_zero_host_midi STATIC
+    src/platform/host/linux_raw_midi_device_adapter.cpp
+)
+target_include_directories(lofibox_zero_host_midi PUBLIC "${PROJECT_SOURCE_DIR}/src")
+target_compile_features(lofibox_zero_host_midi PUBLIC cxx_std_20)
+target_link_libraries(lofibox_zero_host_midi PUBLIC lofibox_zero_core)
+if(MSVC)
+    target_compile_options(lofibox_zero_host_midi PRIVATE /W4 /permissive- /FS)
+else()
+    target_compile_options(lofibox_zero_host_midi PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_library(lofibox_zero_host_runtime STATIC
     src/platform/host/acoustid_client.cpp
     src/audio/output/host_audio_playback_backend.cpp
@@ -237,7 +250,7 @@ add_library(lofibox_zero_host_runtime STATIC
 )
 target_include_directories(lofibox_zero_host_runtime PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(lofibox_zero_host_runtime PUBLIC cxx_std_20)
-target_link_libraries(lofibox_zero_host_runtime PUBLIC lofibox_zero_host_lock lofibox_zero_core Threads::Threads)
+target_link_libraries(lofibox_zero_host_runtime PUBLIC lofibox_zero_host_lock lofibox_zero_host_midi lofibox_zero_core Threads::Threads)
 target_compile_definitions(lofibox_zero_host_runtime PRIVATE
     LOFIBOX_PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     LOFIBOX_INSTALLED_HELPER_DIR="${CMAKE_INSTALL_PREFIX}/${LOFIBOX_PRIVATE_LIBDIR}"
@@ -677,6 +690,10 @@ if(BUILD_TESTING)
     add_executable(lofibox_groove_midi_smoke tests/groove_midi_smoke.cpp)
     target_link_libraries(lofibox_groove_midi_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_groove_midi_smoke COMMAND lofibox_groove_midi_smoke)
+
+    add_executable(lofibox_linux_raw_midi_device_adapter_smoke tests/linux_raw_midi_device_adapter_smoke.cpp)
+    target_link_libraries(lofibox_linux_raw_midi_device_adapter_smoke PRIVATE lofibox_zero_host_midi)
+    add_test(NAME lofibox_linux_raw_midi_device_adapter_smoke COMMAND lofibox_linux_raw_midi_device_adapter_smoke)
 
     add_executable(lofibox_pocket_groove_ui_smoke tests/pocket_groove_ui_smoke.cpp)
     target_link_libraries(lofibox_pocket_groove_ui_smoke PRIVATE lofibox_zero_core)

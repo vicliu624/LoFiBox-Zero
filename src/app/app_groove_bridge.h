@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
+#include "application/groove_command_service.h"
 #include "app/input_event.h"
 #include "groove/groove_controller.h"
-#include "groove/groove_project_repository.h"
 #include "ui/pages/groove/capture_overlay.h"
 #include "ui/pages/groove/chain_overlay.h"
 #include "ui/pages/groove/export_overlay.h"
@@ -32,13 +32,7 @@ public:
     virtual void stopGroovePlayback() {}
 };
 
-struct GrooveCurrentPlaybackSource {
-    bool available{false};
-    std::string sourceTrackId{};
-    std::string sourceUri{};
-    std::string displayName{};
-    double positionSeconds{0.0};
-};
+using GrooveCurrentPlaybackSource = ::lofibox::application::GrooveCaptureSource;
 
 class AppGrooveBridge {
 public:
@@ -81,13 +75,15 @@ private:
     [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> executeExport();
     [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> executeProjectAction();
     [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> rewriteSelectedSample(bool reverse);
+    [[nodiscard]] std::vector<lofibox::groove::GrooveEvent> autoSliceSelectedSample();
+    void applyOperationResult(const ::lofibox::application::GrooveOperationResult& result);
     void markDirty();
     void autoSave();
     void playRenderedProject();
     [[nodiscard]] std::uint8_t currentPlayheadStep() const noexcept;
 
     lofibox::groove::GrooveController controller_{};
-    lofibox::groove::GrooveProjectRepository repository_{};
+    ::lofibox::application::GrooveCommandService operations_{};
     GroovePlaybackControl* playback_{nullptr};
     std::optional<GrooveCurrentPlaybackSource> captureSource_{};
     std::uint8_t captureLengthIndex_{1};

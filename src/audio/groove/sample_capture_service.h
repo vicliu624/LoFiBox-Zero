@@ -43,6 +43,7 @@ public:
         std::string_view source_uri,
         double start_seconds,
         double duration_seconds) const = 0;
+    [[nodiscard]] virtual std::string lastErrorMessage() const { return {}; }
 };
 
 class SampleCaptureService {

@@ -6,7 +6,9 @@
 #include <cctype>
 #include <iomanip>
 #include <sstream>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace lofibox::groove {
 namespace {
@@ -91,6 +93,41 @@ namespace {
     }
 }
 
+[[nodiscard]] double extractDouble(std::string_view json, std::string_view key, double fallback)
+{
+    const std::string needle = "\"" + std::string(key) + "\"";
+    const std::size_t key_pos = json.find(needle);
+    if (key_pos == std::string_view::npos) {
+        return fallback;
+    }
+    const std::size_t colon = json.find(':', key_pos + needle.size());
+    if (colon == std::string_view::npos) {
+        return fallback;
+    }
+    std::size_t first = colon + 1;
+    while (first < json.size() && std::isspace(static_cast<unsigned char>(json[first])) != 0) {
+        ++first;
+    }
+    std::size_t last = first;
+    while (last < json.size()) {
+        const char ch = json[last];
+        const bool numeric = std::isdigit(static_cast<unsigned char>(ch)) != 0 ||
+            ch == '-' || ch == '+' || ch == '.' || ch == 'e' || ch == 'E';
+        if (!numeric) {
+            break;
+        }
+        ++last;
+    }
+    if (last == first) {
+        return fallback;
+    }
+    try {
+        return std::stod(std::string{json.substr(first, last - first)});
+    } catch (...) {
+        return fallback;
+    }
+}
+
 [[nodiscard]] bool extractBool(std::string_view json, std::string_view key, bool fallback)
 {
     const std::string needle = "\"" + std::string(key) + "\"";
@@ -115,6 +152,100 @@ namespace {
     return fallback;
 }
 
+[[nodiscard]] std::size_t findMatchingClose(std::string_view json, std::size_t open_pos, char open_char, char close_char)
+{
+    bool in_string = false;
+    bool escaped = false;
+    int depth = 0;
+    for (std::size_t index = open_pos; index < json.size(); ++index) {
+        const char ch = json[index];
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+            continue;
+        }
+        if (ch == open_char) {
+            ++depth;
+        } else if (ch == close_char) {
+            --depth;
+            if (depth == 0) {
+                return index;
+            }
+        }
+    }
+    return std::string_view::npos;
+}
+
+[[nodiscard]] std::string_view extractBlock(std::string_view json, std::string_view key, char open_char, char close_char)
+{
+    const std::string needle = "\"" + std::string(key) + "\"";
+    const std::size_t key_pos = json.find(needle);
+    if (key_pos == std::string_view::npos) {
+        return {};
+    }
+    const std::size_t colon = json.find(':', key_pos + needle.size());
+    if (colon == std::string_view::npos) {
+        return {};
+    }
+    const std::size_t open_pos = json.find(open_char, colon + 1);
+    if (open_pos == std::string_view::npos) {
+        return {};
+    }
+    const std::size_t close_pos = findMatchingClose(json, open_pos, open_char, close_char);
+    if (close_pos == std::string_view::npos || close_pos < open_pos) {
+        return {};
+    }
+    return json.substr(open_pos, close_pos - open_pos + 1U);
+}
+
+[[nodiscard]] std::vector<std::string_view> splitTopLevelObjects(std::string_view array_json)
+{
+    std::vector<std::string_view> objects{};
+    bool in_string = false;
+    bool escaped = false;
+    int depth = 0;
+    std::size_t object_start = std::string_view::npos;
+    for (std::size_t index = 0; index < array_json.size(); ++index) {
+        const char ch = array_json[index];
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+            continue;
+        }
+        if (ch == '{') {
+            if (depth == 0) {
+                object_start = index;
+            }
+            ++depth;
+        } else if (ch == '}') {
+            --depth;
+            if (depth == 0 && object_start != std::string_view::npos) {
+                objects.push_back(array_json.substr(object_start, index - object_start + 1U));
+                object_start = std::string_view::npos;
+            }
+        }
+    }
+    return objects;
+}
+
 void appendStepJson(std::ostringstream& out, const GrooveStep& step)
 {
     out << "{\"trigger\":" << (step.trigger ? "true" : "false")
@@ -136,6 +267,122 @@ void appendStepJson(std::ostringstream& out, const GrooveStep& step)
             << ",\"fx_amount\":" << step.fxAmount;
     }
     out << '}';
+}
+
+void parseSounds(std::string_view json, GrooveProject& project)
+{
+    const auto sounds_json = extractBlock(json, "sounds", '[', ']');
+    if (sounds_json.empty()) {
+        return;
+    }
+    for (const auto object : splitTopLevelObjects(sounds_json)) {
+        const auto slot = static_cast<std::size_t>(std::clamp(extractInt(object, "slot", -1), 0, 15));
+        auto& sound = project.sounds[slot];
+        sound.type = grooveSoundTypeFromString(extractString(object, "type", toString(sound.type)));
+        sound.id = extractString(object, "id", sound.id);
+        sound.name = extractString(object, "name", sound.name);
+        sound.sourceUri = extractString(object, "source_uri", sound.sourceUri);
+        sound.mode = groovePlaybackModeFromString(extractString(object, "mode", toString(sound.mode)));
+        sound.gain = static_cast<float>(extractDouble(object, "gain", sound.gain));
+        sound.pitchSemitone = static_cast<float>(extractDouble(object, "pitch", sound.pitchSemitone));
+        sound.pan = static_cast<float>(extractDouble(object, "pan", sound.pan));
+        sound.startSeconds = extractDouble(object, "start", sound.startSeconds);
+        sound.endSeconds = extractDouble(object, "end", sound.endSeconds);
+        sound.fadeInMs = extractDouble(object, "fade_in_ms", sound.fadeInMs);
+        sound.fadeOutMs = extractDouble(object, "fade_out_ms", sound.fadeOutMs);
+        sound.normalized = extractBool(object, "normalized", sound.normalized);
+        sound.chokeGroup = static_cast<std::uint8_t>(std::clamp(extractInt(object, "choke_group", sound.chokeGroup), 0, 16));
+
+        const auto slices_json = extractBlock(object, "slices", '[', ']');
+        sound.slices.clear();
+        for (const auto slice_json : splitTopLevelObjects(slices_json)) {
+            SampleSlice slice{};
+            slice.id = extractString(slice_json, "id", {});
+            slice.name = extractString(slice_json, "name", {});
+            slice.startSeconds = extractDouble(slice_json, "start", 0.0);
+            slice.endSeconds = extractDouble(slice_json, "end", 0.0);
+            slice.pitchSemitone = static_cast<std::int8_t>(std::clamp(extractInt(slice_json, "pitch", 0), -24, 24));
+            slice.gain = static_cast<float>(extractDouble(slice_json, "gain", 1.0));
+            sound.slices.push_back(std::move(slice));
+        }
+    }
+}
+
+void parsePatterns(std::string_view json, GrooveProject& project)
+{
+    const auto patterns_json = extractBlock(json, "patterns", '[', ']');
+    if (patterns_json.empty()) {
+        return;
+    }
+    const auto pattern_objects = splitTopLevelObjects(patterns_json);
+    for (std::size_t pattern_index = 0; pattern_index < pattern_objects.size() && pattern_index < project.patterns.size(); ++pattern_index) {
+        const auto pattern_json = pattern_objects[pattern_index];
+        auto& pattern = project.patterns[pattern_index];
+        pattern.name = extractString(pattern_json, "name", pattern.name);
+        pattern.length = static_cast<std::uint8_t>(std::clamp(extractInt(pattern_json, "length", pattern.length), 1, 16));
+
+        const auto tracks_json = extractBlock(pattern_json, "tracks", '[', ']');
+        const auto track_objects = splitTopLevelObjects(tracks_json);
+        for (std::size_t track_index = 0; track_index < track_objects.size() && track_index < pattern.tracks.size(); ++track_index) {
+            const auto track_json = track_objects[track_index];
+            auto& track = pattern.tracks[track_index];
+            track.soundSlot = static_cast<std::uint8_t>(std::clamp(extractInt(track_json, "sound_slot", track.soundSlot), 0, 15));
+            track.gain = static_cast<float>(extractDouble(track_json, "gain", track.gain));
+            track.pan = static_cast<float>(extractDouble(track_json, "pan", track.pan));
+            track.mute = extractBool(track_json, "mute", track.mute);
+            track.solo = extractBool(track_json, "solo", track.solo);
+
+            const auto steps_json = extractBlock(track_json, "steps", '[', ']');
+            const auto step_objects = splitTopLevelObjects(steps_json);
+            for (std::size_t step_index = 0; step_index < step_objects.size() && step_index < track.steps.size(); ++step_index) {
+                const auto step_json = step_objects[step_index];
+                auto& step = track.steps[step_index];
+                step.trigger = extractBool(step_json, "trigger", step.trigger);
+                step.velocity = static_cast<std::uint8_t>(std::clamp(extractInt(step_json, "velocity", step.velocity), 0, 127));
+                step.pitchSemitone = static_cast<std::int8_t>(std::clamp(extractInt(step_json, "pitch", step.pitchSemitone), -24, 24));
+                step.microTiming = static_cast<std::int8_t>(std::clamp(extractInt(step_json, "micro_timing", step.microTiming), -96, 96));
+                step.sliceIndex = static_cast<std::uint8_t>(std::clamp(extractInt(step_json, "slice", step.sliceIndex), 0, 15));
+                if (step_json.find("\"gain\"") != std::string_view::npos) {
+                    step.hasGainLock = true;
+                    step.gain = static_cast<float>(extractDouble(step_json, "gain", step.gain));
+                }
+                if (step_json.find("\"pan\"") != std::string_view::npos) {
+                    step.hasPanLock = true;
+                    step.pan = static_cast<float>(extractDouble(step_json, "pan", step.pan));
+                }
+                if (step_json.find("\"filter_cutoff\"") != std::string_view::npos) {
+                    step.hasFilterLock = true;
+                    step.filterCutoff = static_cast<float>(extractDouble(step_json, "filter_cutoff", step.filterCutoff));
+                }
+                if (step_json.find("\"fx_type\"") != std::string_view::npos) {
+                    step.hasFxLock = true;
+                    step.fxType = static_cast<std::uint8_t>(std::clamp(extractInt(step_json, "fx_type", step.fxType), 0, 8));
+                    step.fxAmount = static_cast<float>(extractDouble(step_json, "fx_amount", step.fxAmount));
+                }
+            }
+        }
+    }
+}
+
+void parseSongChain(std::string_view json, GrooveProject& project)
+{
+    const auto chain_json = extractBlock(json, "song_chain", '{', '}');
+    if (chain_json.empty()) {
+        return;
+    }
+    project.songChain.enabled = extractBool(chain_json, "enabled", project.songChain.enabled);
+    project.songChain.items.clear();
+    const auto items_json = extractBlock(chain_json, "items", '[', ']');
+    for (const auto item_json : splitTopLevelObjects(items_json)) {
+        GrooveSongChainItem item{};
+        item.patternIndex = static_cast<std::uint8_t>(std::clamp(extractInt(item_json, "pattern", 0), 0, 15));
+        item.repeats = static_cast<std::uint8_t>(std::clamp(extractInt(item_json, "repeats", 1), 1, 99));
+        item.label = extractString(item_json, "label", {});
+        project.songChain.items.push_back(std::move(item));
+    }
+    if (project.songChain.items.empty()) {
+        project.songChain.enabled = false;
+    }
 }
 
 } // namespace
@@ -318,6 +565,10 @@ GrooveProject grooveProjectFromJson(std::string_view json)
     project.exportSettings.normalize = extractBool(json, "normalize", project.exportSettings.normalize);
     project.exportSettings.includeMasterFx = extractBool(json, "include_master_fx", project.exportSettings.includeMasterFx);
     project.exportSettings.includeTail = extractBool(json, "include_tail", project.exportSettings.includeTail);
+    project.exportSettings.tailSeconds = extractDouble(json, "tail_seconds", project.exportSettings.tailSeconds);
+    parseSounds(json, project);
+    parsePatterns(json, project);
+    parseSongChain(json, project);
     return project;
 }
 

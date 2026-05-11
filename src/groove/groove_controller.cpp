@@ -26,7 +26,7 @@ GrooveProject& GrooveController::project() noexcept
     return project_;
 }
 
-void GrooveController::setProject(GrooveProject project)
+void GrooveController::setProject(GrooveProject&& project)
 {
     project_ = std::move(project);
     selectedPattern_ = static_cast<std::uint8_t>(std::clamp<int>(project_.activePattern, 0, 15));

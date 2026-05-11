@@ -5,6 +5,8 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <sstream>
 
 #include "app/input_event.h"
 #include "app/lofibox_app.h"
@@ -12,6 +14,7 @@
 #include "audio/groove/sample_buffer.h"
 #include "audio/groove/wav_exporter.h"
 #include "core/canvas.h"
+#include "groove/groove_project.h"
 #include "ui/ui_theme.h"
 
 namespace fs = std::filesystem;
@@ -114,6 +117,49 @@ int nonBackgroundPixels(const lofibox::core::Canvas& canvas)
     return count;
 }
 
+std::optional<fs::path> findFirstFileWithExtension(const fs::path& dir, const std::string& extension)
+{
+    std::error_code ec{};
+    if (!fs::exists(dir, ec)) {
+        return std::nullopt;
+    }
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        if (!ec && entry.is_regular_file() && entry.path().extension() == extension) {
+            return entry.path();
+        }
+    }
+    return std::nullopt;
+}
+
+std::string readText(const fs::path& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+bool hasPlayableWavHeader(const fs::path& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        return false;
+    }
+    std::string header(44, '\0');
+    file.read(header.data(), static_cast<std::streamsize>(header.size()));
+    if (file.gcount() != 44) {
+        return false;
+    }
+    const auto data_size =
+        static_cast<unsigned int>(static_cast<unsigned char>(header[40])) |
+        (static_cast<unsigned int>(static_cast<unsigned char>(header[41])) << 8U) |
+        (static_cast<unsigned int>(static_cast<unsigned char>(header[42])) << 16U) |
+        (static_cast<unsigned int>(static_cast<unsigned char>(header[43])) << 24U);
+    return header.substr(0, 4) == "RIFF" && header.substr(8, 4) == "WAVE" &&
+        header.substr(12, 4) == "fmt " && header.substr(36, 4) == "data" &&
+        data_size > 0U && fs::file_size(path) > 44U;
+}
+
 } // namespace
 
 int main()
@@ -205,6 +251,57 @@ int main()
     }
     if (!found_sample) {
         std::cerr << "Expected capture overlay OK to save a sample WAV into the XDG groove sample directory.\n";
+        return 1;
+    }
+
+    press(app, lofibox::app::InputKey::Enter, "OK");
+    press(app, lofibox::app::InputKey::F5, "F5");
+    press(app, lofibox::app::InputKey::Right, "RIGHT");
+    press(app, lofibox::app::InputKey::Down, "DOWN");
+    press(app, lofibox::app::InputKey::Down, "DOWN");
+    press(app, lofibox::app::InputKey::Right, "RIGHT");
+    press(app, lofibox::app::InputKey::Backspace, "BACK");
+
+    press(app, lofibox::app::InputKey::F6, "F6");
+    press(app, lofibox::app::InputKey::Enter, "OK");
+    press(app, lofibox::app::InputKey::Backspace, "BACK");
+
+    press(app, lofibox::app::InputKey::F9, "F9");
+    press(app, lofibox::app::InputKey::Enter, "OK");
+    const auto export_dir = root / "home" / "Music" / "LoFiBox" / "Exports";
+    const auto exported = findFirstFileWithExtension(export_dir, ".wav");
+    if (!exported || !hasPlayableWavHeader(*exported)) {
+        std::cerr << "Expected Export overlay OK to create a playable WAV in the XDG export target.\n";
+        return 1;
+    }
+    press(app, lofibox::app::InputKey::Backspace, "BACK");
+    if (app.snapshot().current_page != lofibox::app::AppPage::PocketGroove) {
+        std::cerr << "Expected Back from Export overlay to stay on Pocket Groove.\n";
+        return 1;
+    }
+
+    press(app, lofibox::app::InputKey::F10, "F10");
+    if (app.snapshot().current_page != lofibox::app::AppPage::PocketGroove) {
+        std::cerr << "Expected Project overlay shortcut to stay on Pocket Groove.\n";
+        return 1;
+    }
+    press(app, lofibox::app::InputKey::Enter, "OK");
+    press(app, lofibox::app::InputKey::Right, "RIGHT");
+    press(app, lofibox::app::InputKey::Enter, "OK");
+
+    const auto project_dir = root / "xdg-data" / "lofibox" / "groove" / "projects";
+    const auto project_file = findFirstFileWithExtension(project_dir, ".json");
+    if (!project_file) {
+        std::cerr << "Expected Project overlay Save to write a Groove project JSON file.\n";
+        return 1;
+    }
+    const auto project = lofibox::groove::grooveProjectFromJson(readText(*project_file));
+    if (project.sounds[0].sourceUri.empty() || project.sounds[0].startSeconds <= 0.0 || project.sounds[0].gain <= 1.0f) {
+        std::cerr << "Expected saved project to preserve captured slot and sample edit parameters.\n";
+        return 1;
+    }
+    if (!project.patterns[project.activePattern].tracks[0].steps[0].trigger || project.songChain.items.empty()) {
+        std::cerr << "Expected saved project to preserve step edit and song chain item.\n";
         return 1;
     }
 

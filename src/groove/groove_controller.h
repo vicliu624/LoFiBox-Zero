@@ -42,7 +42,7 @@ public:
 
     [[nodiscard]] const GrooveProject& project() const noexcept;
     [[nodiscard]] GrooveProject& project() noexcept;
-    void setProject(GrooveProject project);
+    void setProject(GrooveProject&& project);
 
     [[nodiscard]] GrooveControllerProjection projection() const noexcept;
     [[nodiscard]] std::vector<GrooveEvent> dispatch(const PocketGrooveCommand& command);

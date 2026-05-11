@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "midi/midi_device_adapter.h"
+#include "platform/host/linux_raw_midi_device_adapter.h"
 
 #include <algorithm>
+#include <utility>
 
 #if defined(__linux__)
 #include <cerrno>
@@ -11,7 +12,7 @@
 #include <unistd.h>
 #endif
 
-namespace lofibox::midi {
+namespace lofibox::platform::host {
 namespace {
 
 #if defined(__linux__)
@@ -71,17 +72,17 @@ namespace {
 
 } // namespace
 
-MidiDeviceAdapter::MidiDeviceAdapter(std::filesystem::path input_path, std::filesystem::path output_path)
+LinuxRawMidiDeviceAdapter::LinuxRawMidiDeviceAdapter(std::filesystem::path input_path, std::filesystem::path output_path)
     : inputPath_(std::move(input_path))
     , outputPath_(std::move(output_path))
 {}
 
-MidiDeviceAdapter::~MidiDeviceAdapter()
+LinuxRawMidiDeviceAdapter::~LinuxRawMidiDeviceAdapter()
 {
     close();
 }
 
-bool MidiDeviceAdapter::open(std::string* error)
+bool LinuxRawMidiDeviceAdapter::open(std::string* error)
 {
     close();
 #if defined(__linux__)
@@ -120,7 +121,7 @@ bool MidiDeviceAdapter::open(std::string* error)
 #endif
 }
 
-void MidiDeviceAdapter::close() noexcept
+void LinuxRawMidiDeviceAdapter::close() noexcept
 {
 #if defined(__linux__)
     if (inputFd_ >= 0) {
@@ -136,19 +137,19 @@ void MidiDeviceAdapter::close() noexcept
     pendingCount_ = 0;
 }
 
-bool MidiDeviceAdapter::available() const noexcept
+bool LinuxRawMidiDeviceAdapter::available() const noexcept
 {
     return inputFd_ >= 0 || outputFd_ >= 0;
 }
 
-MidiDeviceStatus MidiDeviceAdapter::status() const
+MidiDeviceStatus LinuxRawMidiDeviceAdapter::status() const
 {
     return MidiDeviceStatus{available(), inputPath_, outputPath_, lastMessage_};
 }
 
-std::vector<MidiMessage> MidiDeviceAdapter::poll(std::size_t max_messages)
+std::vector<lofibox::midi::MidiMessage> LinuxRawMidiDeviceAdapter::poll(std::size_t max_messages)
 {
-    std::vector<MidiMessage> messages{};
+    std::vector<lofibox::midi::MidiMessage> messages{};
 #if defined(__linux__)
     if (inputFd_ < 0 || max_messages == 0U) {
         return messages;
@@ -176,7 +177,7 @@ std::vector<MidiMessage> MidiDeviceAdapter::poll(std::size_t max_messages)
     return messages;
 }
 
-bool MidiDeviceAdapter::send(const MidiMessage& message)
+bool LinuxRawMidiDeviceAdapter::send(const lofibox::midi::MidiMessage& message)
 {
 #if defined(__linux__)
     if (outputFd_ < 0) {
@@ -185,31 +186,31 @@ bool MidiDeviceAdapter::send(const MidiMessage& message)
     std::array<std::uint8_t, 3> bytes{};
     std::size_t count = 0;
     switch (message.type) {
-    case MidiMessageType::Clock:
+    case lofibox::midi::MidiMessageType::Clock:
         bytes[0] = 0xF8U;
         count = 1;
         break;
-    case MidiMessageType::Start:
+    case lofibox::midi::MidiMessageType::Start:
         bytes[0] = 0xFAU;
         count = 1;
         break;
-    case MidiMessageType::Continue:
+    case lofibox::midi::MidiMessageType::Continue:
         bytes[0] = 0xFBU;
         count = 1;
         break;
-    case MidiMessageType::Stop:
+    case lofibox::midi::MidiMessageType::Stop:
         bytes[0] = 0xFCU;
         count = 1;
         break;
-    case MidiMessageType::NoteOn:
+    case lofibox::midi::MidiMessageType::NoteOn:
         bytes = {channelStatus(0x90U, message.channel), message.data1, message.data2};
         count = 3;
         break;
-    case MidiMessageType::NoteOff:
+    case lofibox::midi::MidiMessageType::NoteOff:
         bytes = {channelStatus(0x80U, message.channel), message.data1, message.data2};
         count = 3;
         break;
-    case MidiMessageType::ControlChange:
+    case lofibox::midi::MidiMessageType::ControlChange:
         bytes = {channelStatus(0xB0U, message.channel), message.data1, message.data2};
         count = 3;
         break;
@@ -225,21 +226,21 @@ bool MidiDeviceAdapter::send(const MidiMessage& message)
 #endif
 }
 
-std::vector<MidiMessage> MidiDeviceAdapter::parseByte(std::uint8_t byte)
+std::vector<lofibox::midi::MidiMessage> LinuxRawMidiDeviceAdapter::parseByte(std::uint8_t byte)
 {
-    std::vector<MidiMessage> messages{};
+    std::vector<lofibox::midi::MidiMessage> messages{};
     switch (byte) {
     case 0xF8U:
-        messages.push_back(MidiMessage{MidiMessageType::Clock});
+        messages.push_back(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Clock});
         return messages;
     case 0xFAU:
-        messages.push_back(MidiMessage{MidiMessageType::Start});
+        messages.push_back(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Start});
         return messages;
     case 0xFBU:
-        messages.push_back(MidiMessage{MidiMessageType::Continue});
+        messages.push_back(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Continue});
         return messages;
     case 0xFCU:
-        messages.push_back(MidiMessage{MidiMessageType::Stop});
+        messages.push_back(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::Stop});
         return messages;
     default:
         break;
@@ -264,14 +265,14 @@ std::vector<MidiMessage> MidiDeviceAdapter::parseByte(std::uint8_t byte)
     const auto type_nibble = runningStatus_ & 0xF0U;
     const auto channel = static_cast<std::uint8_t>((runningStatus_ & 0x0FU) + 1U);
     if (type_nibble == 0x90U) {
-        messages.push_back(MidiMessage{pendingData_[1] == 0U ? MidiMessageType::NoteOff : MidiMessageType::NoteOn, channel, pendingData_[0], pendingData_[1]});
+        messages.push_back(lofibox::midi::MidiMessage{pendingData_[1] == 0U ? lofibox::midi::MidiMessageType::NoteOff : lofibox::midi::MidiMessageType::NoteOn, channel, pendingData_[0], pendingData_[1]});
     } else if (type_nibble == 0x80U) {
-        messages.push_back(MidiMessage{MidiMessageType::NoteOff, channel, pendingData_[0], pendingData_[1]});
+        messages.push_back(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::NoteOff, channel, pendingData_[0], pendingData_[1]});
     } else if (type_nibble == 0xB0U) {
-        messages.push_back(MidiMessage{MidiMessageType::ControlChange, channel, pendingData_[0], pendingData_[1]});
+        messages.push_back(lofibox::midi::MidiMessage{lofibox::midi::MidiMessageType::ControlChange, channel, pendingData_[0], pendingData_[1]});
     }
     pendingCount_ = 0;
     return messages;
 }
 
-} // namespace lofibox::midi
+} // namespace lofibox::platform::host

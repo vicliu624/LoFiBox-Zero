@@ -23,7 +23,7 @@ void renderFxOverlay(core::Canvas& canvas, const FxOverlayView& view, const UiTh
         canvas.strokeRect(x - 4, y - 4, 62, 17, held ? theme.palette.focus_edge : theme.palette.divider, 1);
         ::lofibox::ui::drawText(canvas, std::to_string(index + 1) + " " + labels[static_cast<std::size_t>(index)], x, y, held ? theme.palette.background : theme.palette.text_primary, 1);
     }
-    drawGrooveFooter(canvas, theme, "HOLD TO PLAY   FN+KEY RECORD");
+    drawGrooveFooter(canvas, theme, "1-8 FX TOGGLE  FN+KEY RECORD");
 }
 
 } // namespace lofibox::ui::pages::groove

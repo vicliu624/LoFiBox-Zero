@@ -8,22 +8,17 @@
 #include <cmath>
 #include <filesystem>
 #include <iomanip>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <utility>
 
 #include "app/input_actions.h"
-#include "audio/groove/groove_export_service.h"
-#include "audio/groove/offline_groove_renderer.h"
-#include "audio/groove/sample_capture_service.h"
-#include "audio/groove/sample_editor.h"
-#include "audio/groove/sample_loader.h"
-#include "audio/groove/wav_exporter.h"
 #include "groove/groove_project.h"
 
 namespace lofibox::app {
 namespace {
 
-namespace audio_groove = lofibox::audio::groove;
 namespace groove_ui = lofibox::ui::pages::groove;
 
 constexpr std::array<std::string_view, 5> kCaptureLengths{"1 BEAT", "1 BAR", "2 BARS", "4 BARS", "MANUAL"};
@@ -47,15 +42,6 @@ constexpr std::array<std::string_view, 5> kCaptureLengths{"1 BEAT", "1 BAR", "2 
     std::ostringstream out;
     out << std::fixed << std::setprecision(3) << std::max(0.0, seconds);
     return out.str();
-}
-
-[[nodiscard]] std::filesystem::path samplePathFromUri(std::string_view uri)
-{
-    constexpr std::string_view kFilePrefix{"file://"};
-    if (uri.starts_with(kFilePrefix)) {
-        return std::filesystem::path{std::string{uri.substr(kFilePrefix.size())}};
-    }
-    return std::filesystem::path{std::string{uri}};
 }
 
 [[nodiscard]] std::string slotLabel(const lofibox::groove::GrooveProject& project, std::uint8_t slot)
@@ -104,34 +90,6 @@ constexpr std::array<std::string_view, 5> kCaptureLengths{"1 BEAT", "1 BAR", "2 
     }
     return static_cast<char>(std::toupper(static_cast<unsigned char>(*ch)));
 }
-
-class WavSegmentDecoder final : public audio_groove::SampleSegmentDecoder {
-public:
-    [[nodiscard]] std::optional<audio_groove::SampleBuffer> decodeSegment(
-        std::string_view source_uri,
-        double start_seconds,
-        double duration_seconds) const override
-    {
-        auto path = std::filesystem::path{std::string{source_uri}};
-        constexpr std::string_view kFilePrefix{"file://"};
-        if (source_uri.starts_with(kFilePrefix)) {
-            path = std::filesystem::path{std::string{source_uri.substr(kFilePrefix.size())}};
-        }
-        const auto loaded = loader_.loadWav(path);
-        if (!loaded.ok) {
-            return std::nullopt;
-        }
-        const auto trimmed = editor_.trim(loaded.buffer, start_seconds, start_seconds + duration_seconds);
-        if (!trimmed.ok) {
-            return std::nullopt;
-        }
-        return trimmed.buffer;
-    }
-
-private:
-    audio_groove::SampleLoader loader_{};
-    audio_groove::SampleEditor editor_{};
-};
 
 [[nodiscard]] lofibox::groove::GrooveEvent statusEvent(std::string message)
 {
@@ -595,16 +553,7 @@ std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::handleSampleEditInput
         return rewriteSelectedSample(true);
     }
     if (event.key == InputKey::F6 || (commandKey(event) && *commandKey(event) == 'S')) {
-        audio_groove::SampleLoader loader{};
-        audio_groove::SampleEditor editor{};
-        const auto loaded = loader.loadWav(samplePathFromUri(slot.sourceUri));
-        if (loaded.ok) {
-            slot.slices = editor.autoSlice(loaded.buffer, 16);
-            slot.mode = lofibox::groove::GroovePlaybackMode::Slice;
-            markDirty();
-            return {statusEvent("SLICED")};
-        }
-        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, 0, "SLICE FAILED"}};
+        return autoSliceSelectedSample();
     }
     return {};
 }
@@ -746,40 +695,24 @@ std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::handleProjectInput(co
 
 std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::executeCapture()
 {
-    if (!captureSource_ || !captureSource_->available || captureSource_->sourceUri.empty()) {
+    if (!captureSource_) {
         lastStatus_ = "CAPTURE ERR NO TRACK";
         return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, captureTargetSlot_, lastStatus_}};
     }
     const auto& project = controller_.project();
-    audio_groove::SampleCaptureRequest request{};
-    request.sourceTrackId = captureSource_->sourceTrackId;
-    request.sourceUri = captureSource_->sourceUri;
-    request.startSeconds = captureSource_->positionSeconds;
-    request.durationSeconds = captureDurationSeconds(captureLengthIndex_, project.bpm);
-    request.targetSoundSlot = captureTargetSlot_;
-    request.normalize = true;
-    request.fadeInMs = 2.0;
-    request.fadeOutMs = 4.0;
-
-    WavSegmentDecoder decoder{};
-    audio_groove::SampleCaptureService service{};
-    const auto result = service.capture(request, decoder, repository_.paths().samplesDir);
+    const auto result = operations_.captureToSlot(
+        controller_.project(),
+        ::lofibox::application::GrooveCaptureOperation{
+            *captureSource_,
+            captureTargetSlot_,
+            captureDurationSeconds(captureLengthIndex_, project.bpm),
+            true,
+            2.0,
+            4.0});
     if (!result.ok) {
-        lastStatus_ = "CAPTURE ERR";
+        applyOperationResult(result);
         return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, captureTargetSlot_, result.errorMessage}};
     }
-
-    auto& slot = controller_.project().sounds[captureTargetSlot_];
-    slot.type = lofibox::groove::GrooveSoundType::CapturedFromTrack;
-    slot.id = result.sampleId;
-    slot.name = result.displayName;
-    slot.sourceUri = result.sampleUri;
-    slot.mode = lofibox::groove::GroovePlaybackMode::OneShot;
-    slot.startSeconds = 0.0;
-    slot.endSeconds = result.durationSeconds;
-    slot.fadeInMs = request.fadeInMs;
-    slot.fadeOutMs = request.fadeOutMs;
-    slot.normalized = request.normalize;
 
     auto command = lofibox::groove::makeGrooveCommand(lofibox::groove::PocketGrooveCommandType::SelectSoundSlot);
     command.soundSlot = captureTargetSlot_;
@@ -787,111 +720,94 @@ std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::executeCapture()
     markDirty();
     autoSave();
     controller_.closeOverlay();
-    lastStatus_ = "CAPTURE OK " + slotLabel(controller_.project(), captureTargetSlot_);
+    lastStatus_ = result.status + " " + slotLabel(controller_.project(), captureTargetSlot_);
     return {statusEvent(lastStatus_)};
 }
 
 std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::executeExport()
 {
     exportProgress_ = 5;
-    audio_groove::GrooveExportService service{};
-    const auto result = service.exportProject(controller_.project(), repository_.paths());
+    lastStatus_ = "EXPORTING";
+    const auto result = operations_.exportProject(controller_.project());
     if (!result.ok) {
         exportProgress_ = 0;
-        lastStatus_ = "EXPORT ERR";
+        applyOperationResult(result);
         return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, 0, result.errorMessage}};
     }
     exportProgress_ = result.progressPercent;
     lastExportFile_ = result.path.string();
-    lastStatus_ = "EXPORT OK";
+    applyOperationResult(result);
     return {statusEvent(lastStatus_)};
 }
 
 std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::executeProjectAction()
 {
-    std::string error{};
+    ::lofibox::application::GrooveOperationResult result{};
     if (projectAction_ == 0) {
-        if (repository_.save(controller_.project(), &error)) {
+        result = operations_.saveProject(controller_.project());
+        if (result.ok) {
             dirty_ = false;
-            lastStatus_ = "SAVED";
-            return {statusEvent(lastStatus_)};
         }
-        lastStatus_ = "SAVE ERR";
-        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, 0, error}};
-    }
-    if (projectAction_ == 1) {
-        const auto files = repository_.listProjectFiles();
-        if (!files.empty()) {
-            const auto id = files.front().stem().string();
-            controller_.setProject(repository_.load(id, &error));
+    } else if (projectAction_ == 1) {
+        auto project = std::make_unique<lofibox::groove::GrooveProject>(controller_.project());
+        result = operations_.loadFirstProject(*project);
+        if (result.ok) {
+            controller_.setProject(std::move(*project));
             dirty_ = false;
-            lastStatus_ = error.empty() ? "LOADED" : "LOAD ERR";
-            return {statusEvent(lastStatus_)};
         }
-        lastStatus_ = "NO PROJECTS";
-        return {statusEvent(lastStatus_)};
-    }
-    if (projectAction_ == 2) {
-        controller_.setProject(lofibox::groove::makeDefaultGrooveProject());
+    } else if (projectAction_ == 2) {
+        auto project = std::make_unique<lofibox::groove::GrooveProject>();
+        result = operations_.newProject(*project);
+        controller_.setProject(std::move(*project));
         dirty_ = true;
-        lastStatus_ = "NEW PROJECT";
-        return {statusEvent(lastStatus_)};
+    } else {
+        auto project = std::make_unique<lofibox::groove::GrooveProject>(controller_.project());
+        result = operations_.deleteProject(*project);
+        if (result.ok) {
+            controller_.setProject(std::move(*project));
+            dirty_ = false;
+        }
     }
-    if (repository_.remove(controller_.project().id, &error)) {
-        controller_.setProject(lofibox::groove::makeDefaultGrooveProject());
-        dirty_ = false;
-        lastStatus_ = "DELETED";
-        return {statusEvent(lastStatus_)};
+    applyOperationResult(result);
+    if (!result.ok && !result.errorMessage.empty()) {
+        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, 0, result.errorMessage}};
     }
-    lastStatus_ = "DELETE ERR";
-    return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, 0, error}};
+    return {statusEvent(lastStatus_)};
 }
 
 std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::rewriteSelectedSample(bool reverse)
 {
     const auto projection = controller_.projection();
-    auto& slot = controller_.project().sounds[projection.selectedSoundSlot];
-    if (slot.sourceUri.empty()) {
-        lastStatus_ = "NO SAMPLE";
-        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, projection.selectedSoundSlot, lastStatus_}};
-    }
-
-    audio_groove::SampleLoader loader{};
-    audio_groove::SampleEditor editor{};
-    const auto loaded = loader.loadWav(samplePathFromUri(slot.sourceUri));
-    if (!loaded.ok) {
-        lastStatus_ = reverse ? "REVERSE ERR" : "NORM ERR";
-        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, projection.selectedSoundSlot, loaded.errorMessage}};
-    }
-
-    const auto edited = reverse ? editor.reverse(loaded.buffer) : editor.normalize(loaded.buffer);
-    if (!edited.ok) {
-        lastStatus_ = reverse ? "REVERSE ERR" : "NORM ERR";
-        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, projection.selectedSoundSlot, edited.errorMessage}};
-    }
-
-    const auto suffix = reverse ? "-reverse.wav" : "-norm.wav";
-    const auto base = slot.id.empty() ? ("slot-" + std::to_string(static_cast<int>(projection.selectedSoundSlot) + 1)) : slot.id;
-    const auto path = repository_.paths().samplesDir / (lofibox::groove::sanitizeProjectFileName(base) + suffix);
-    audio_groove::WavExporter exporter{};
-    const auto written = exporter.writePcm16(path, edited.buffer, false);
-    if (!written.ok) {
-        lastStatus_ = reverse ? "REVERSE ERR" : "NORM ERR";
-        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, projection.selectedSoundSlot, written.errorMessage}};
-    }
-
-    slot.sourceUri = written.path.string();
-    slot.id = written.path.stem().string();
-    slot.endSeconds = edited.buffer.durationSeconds();
-    if (reverse) {
-        slot.slices.clear();
-    } else {
-        slot.normalized = true;
+    const auto result = operations_.rewriteSample(controller_.project(), projection.selectedSoundSlot, reverse);
+    applyOperationResult(result);
+    if (!result.ok) {
+        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, projection.selectedSoundSlot, result.errorMessage}};
     }
     markDirty();
     autoSave();
-    lastStatus_ = reverse ? "REVERSED" : "NORMALIZED";
     return {statusEvent(lastStatus_)};
+}
+
+std::vector<lofibox::groove::GrooveEvent> AppGrooveBridge::autoSliceSelectedSample()
+{
+    const auto projection = controller_.projection();
+    const auto result = operations_.autoSlice(controller_.project(), projection.selectedSoundSlot, 16);
+    applyOperationResult(result);
+    if (!result.ok) {
+        return {lofibox::groove::GrooveEvent{lofibox::groove::GrooveEventType::Error, 0, 0, 0, projection.selectedSoundSlot, result.errorMessage}};
+    }
+    markDirty();
+    autoSave();
+    return {statusEvent(lastStatus_)};
+}
+
+void AppGrooveBridge::applyOperationResult(const ::lofibox::application::GrooveOperationResult& result)
+{
+    if (!result.status.empty()) {
+        lastStatus_ = result.status;
+    } else if (!result.errorMessage.empty()) {
+        lastStatus_ = result.errorMessage;
+    }
 }
 
 void AppGrooveBridge::markDirty()
@@ -904,12 +820,12 @@ void AppGrooveBridge::autoSave()
     if (!dirty_) {
         return;
     }
-    std::string error{};
-    if (repository_.save(controller_.project(), &error)) {
+    const auto result = operations_.saveProject(controller_.project());
+    if (result.ok) {
         dirty_ = false;
         lastStatus_ = "AUTO SAVED";
-    } else if (!error.empty()) {
-        lastStatus_ = "SAVE ERR";
+    } else if (!result.errorMessage.empty()) {
+        lastStatus_ = result.status.empty() ? "SAVE ERR" : result.status;
     }
 }
 
@@ -918,20 +834,14 @@ void AppGrooveBridge::playRenderedProject()
     if (playback_ == nullptr) {
         return;
     }
-    audio_groove::GrooveExportService service{};
-    const auto bank = service.buildSampleBank(controller_.project());
-    audio_groove::OfflineGrooveRenderer renderer{};
-    const auto buffer = renderer.render(controller_.project(), bank);
-    const auto preview_path = repository_.paths().cacheDir / "preview.wav";
-    audio_groove::WavExporter exporter{};
-    const auto result = exporter.writePcm16(preview_path, buffer, false);
+    const auto result = operations_.renderPreview(controller_.project());
     if (!result.ok) {
-        lastStatus_ = "PLAY RENDER ERR";
+        applyOperationResult(result);
         return;
     }
     if (playback_->playGrooveRenderFile(result.path)) {
         playStarted_ = clock::now();
-        lastStatus_ = "PLAYING";
+        lastStatus_ = "PREVIEW PLAY";
     } else {
         lastStatus_ = "PLAYBACK ERR";
     }

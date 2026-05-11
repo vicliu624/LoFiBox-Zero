@@ -24,7 +24,8 @@ SampleCaptureResult SampleCaptureService::capture(
     }
     auto decoded = decoder.decodeSegment(request.sourceUri, request.startSeconds, request.durationSeconds);
     if (!decoded.has_value()) {
-        return {false, {}, {}, {}, 0.0, "decoder could not extract segment"};
+        const auto detail = decoder.lastErrorMessage();
+        return {false, {}, {}, {}, 0.0, detail.empty() ? "decoder could not extract segment" : detail};
     }
 
     SampleEditor editor{};

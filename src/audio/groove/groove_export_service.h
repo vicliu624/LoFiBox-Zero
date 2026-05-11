@@ -17,6 +17,7 @@ struct GrooveExportServiceResult {
     int progressPercent{0};
     double durationSeconds{0.0};
     std::string errorMessage{};
+    std::string warningMessage{};
 };
 
 class GrooveExportService {
