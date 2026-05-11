@@ -762,6 +762,11 @@ if(BUILD_TESTING)
     target_compile_definitions(lofibox_logo_asset_transparency_smoke PRIVATE LOFIBOX_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets")
     add_test(NAME lofibox_logo_asset_transparency_smoke COMMAND lofibox_logo_asset_transparency_smoke)
 
+    add_executable(lofibox_legacy_icon_dimensions_smoke tests/legacy_icon_dimensions_smoke.cpp)
+    target_link_libraries(lofibox_legacy_icon_dimensions_smoke PRIVATE lofibox_zero_host_runtime)
+    target_compile_definitions(lofibox_legacy_icon_dimensions_smoke PRIVATE LOFIBOX_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets")
+    add_test(NAME lofibox_legacy_icon_dimensions_smoke COMMAND lofibox_legacy_icon_dimensions_smoke)
+
     add_executable(lofibox_main_menu_shortcuts_smoke tests/main_menu_shortcuts_smoke.cpp)
     target_link_libraries(lofibox_main_menu_shortcuts_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_main_menu_shortcuts_smoke COMMAND lofibox_main_menu_shortcuts_smoke)
