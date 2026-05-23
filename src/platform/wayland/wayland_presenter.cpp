@@ -470,8 +470,6 @@ const xdg_surface_listener WaylandPresenter::Impl::kSurfaceListener{
 const xdg_toplevel_listener WaylandPresenter::Impl::kToplevelListener{
     WaylandPresenter::Impl::toplevelConfigure,
     WaylandPresenter::Impl::toplevelClose,
-    nullptr,
-    nullptr,
 };
 
 const wl_seat_listener WaylandPresenter::Impl::kSeatListener{
