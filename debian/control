@@ -1,7 +1,7 @@
 Source: lofibox
 Section: sound
 Priority: optional
-Maintainer: LoFiBox contributors <maintainers@example.invalid>
+Maintainer: Vic Liu <vicliu@outlook.com>
 Build-Depends:
  cmake,
  debhelper-compat (= 13),
