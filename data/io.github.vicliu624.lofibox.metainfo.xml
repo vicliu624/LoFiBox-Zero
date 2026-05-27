@@ -21,6 +21,11 @@
   </categories>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.8" date="2026-05-27">
+      <description>
+        <p>Updates Debian package maintainer metadata for community package validation and retires armhf preview APT package publication so the preview repository targets amd64 and arm64.</p>
+      </description>
+    </release>
     <release version="0.2.7" date="2026-05-23">
       <description>
         <p>Adds a native Wayland runtime for compositor-managed Cardputer Zero sessions, keeps framebuffer compatibility for legacy APPLaunch launches, enables the appliance WebUI by default from the Cardputer wrapper, and shows the started WebUI address in Settings even when the host connectivity probe is offline.</p>

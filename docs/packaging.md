@@ -133,27 +133,23 @@ Local repository generation from existing `.changes` files uses:
 scripts/build-github-pages-apt-repository.sh \
   --suite trixie \
   --component main \
-  --architectures amd64,arm64,armhf \
+  --architectures amd64,arm64 \
   --output public \
   --gpg-key "$LOFIBOX_APT_GPG_KEY_ID" \
   --changes ../lofibox_<preview-version>_amd64.changes \
-  --changes ../lofibox_<preview-version>_arm64.changes \
-  --changes ../lofibox_<preview-version>_armhf.changes
+  --changes ../lofibox_<preview-version>_arm64.changes
 ```
 
-The GitHub-hosted preview workflow builds `amd64`, cross-builds `arm64`, and
-cross-builds Raspberry Pi ARMv6 hard-float `armhf`. Packaging must keep
-build-machine tools and target libraries separate: build tools such as
-`pkgconf` are native build dependencies, while target development libraries are
-resolved for the selected host architecture. `debian/rules` must select
-host-triplet compilers whenever `DEB_BUILD_GNU_TYPE` differs from
+The GitHub-hosted preview workflow builds `amd64` and cross-builds `arm64`.
+Packaging must keep build-machine tools and target libraries separate: build
+tools such as `pkgconf` are native build dependencies, while target development
+libraries are resolved for the selected host architecture. `debian/rules` must
+select host-triplet compilers whenever `DEB_BUILD_GNU_TYPE` differs from
 `DEB_HOST_GNU_TYPE`. GitHub-hosted cross-build jobs may use
 `DEB_BUILD_OPTIONS=nocheck` because they cannot execute target architecture test
 binaries on the x86_64 runner. The cross-build environment must also install
 target runtime libraries needed by `dh_shlibdeps`, including target
-`libstdc++6`. The Raspberry Pi CM0 `armhf` package is built in ARM mode with
-ARM1176JZF-S/VFP hard-float flags; do not use plain `-march=armv6` for that
-publisher.
+`libstdc++6`.
 
 ## Autopkgtest
 

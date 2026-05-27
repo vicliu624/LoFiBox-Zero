@@ -111,14 +111,13 @@ forky
 Do not publish an ambiguous `stable` suite.
 
 The repository must support multiple architectures as package artifacts become
-available. The current preview repository must publish `amd64`, `arm64`, and
-`armhf` package indexes when those package artifacts are available.
+available. The current preview repository publishes `amd64` and `arm64` package
+indexes.
 
 The architecture meanings are:
 
 - `amd64`: desktop and x86_64 Linux validation hosts
 - `arm64`: Raspberry Pi Compute Module 4/5 class 64-bit systems
-- `armhf`: Raspberry Pi Compute Module 0 / ARMv6 hard-float systems
 
 Cross-built package artifacts must keep build-machine tools and target libraries
 separate. Build tools such as `pkgconf` belong to the build architecture and must
@@ -134,14 +133,8 @@ native package jobs and real-device deployment tests provide runtime validation.
 The cross-build job must install target runtime libraries needed by
 `dh_shlibdeps`, including target `libstdc++6`, so dependency extraction is based
 on target ELF binaries instead of host libraries.
-The Raspberry Pi CM0 `armhf` publisher must build ARMv6 hard-float binaries in
-ARM mode, for example with `-marm -mcpu=arm1176jzf-s -mfpu=vfp
--mfloat-abi=hard`; plain `-march=armv6` is not sufficient because compiler
-probes may select Thumb-1, which cannot use the hard-float VFP ABI.
-
 The script-level repository generator accepts repeated `.changes` files so
-`amd64`, `arm64`, and `armhf` artifacts can be included in the same published
-snapshot.
+`amd64` and `arm64` artifacts can be included in the same published snapshot.
 
 ## 7. Tooling
 

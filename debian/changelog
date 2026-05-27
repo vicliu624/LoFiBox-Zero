@@ -1,3 +1,14 @@
+lofibox (0.2.8-1) UNRELEASED; urgency=medium
+
+  * New upstream release 0.2.8.
+  * Use the verified package owner as the Debian package maintainer so
+    community package validation can match the .deb metadata to the PR
+    author.
+  * Stop building and publishing armhf preview APT packages; the preview
+    repository now targets amd64 and arm64.
+
+ -- Vic Liu <vicliu@outlook.com>  Wed, 27 May 2026 00:00:00 +0800
+
 lofibox (0.2.7-1) UNRELEASED; urgency=medium
 
   * New upstream release 0.2.7.

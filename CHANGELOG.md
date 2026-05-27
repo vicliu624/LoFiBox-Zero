@@ -7,6 +7,12 @@ All notable changes to LoFiBox Zero will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8] - 2026-05-27
+
+### Changed
+- Updated Debian package maintainer metadata to use the verified package owner identity required by the community package validation workflow.
+- Stopped building and publishing `armhf` preview APT packages; the preview repository now targets `amd64` and `arm64`.
+
 ## [0.2.7] - 2026-05-23
 
 ### Added
