@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: CC0-1.0
+
+[Desktop Entry]
+Type=Application
+Name=LoFiBox
+GenericName=Music Player Widget
+Comment=TDVP Wayland desktop widget music player
+Exec=lofibox-widget %U
+Icon=io.github.vicliu624.lofibox
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+MimeType=audio/mpeg;audio/mp4;audio/x-m4a;audio/flac;audio/ogg;audio/x-wav;audio/aac;audio/x-mpegurl;audio/x-scpls;application/xspf+xml;
+Keywords=music;audio;player;lofi;widget;
+StartupNotify=false
+X-Zero-AppId=io.github.vicliu624.lofibox
+X-Zero-Display=wayland-layer-shell

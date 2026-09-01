@@ -221,6 +221,13 @@ struct CacheServices {
     std::shared_ptr<::lofibox::cache::CacheManager> cache_manager{};
 };
 
+// The local-library index is durable product state, rather than an evictable
+// cache. Host targets provide its path; shared and test-only runtimes may
+// leave it empty to keep their state entirely in memory.
+struct LibraryServices {
+    std::filesystem::path index_store_path{};
+};
+
 struct UiServices {
     std::shared_ptr<ui::UiTheme> theme{};
     std::string webui_url{};
@@ -238,6 +245,7 @@ struct RuntimeServiceRegistry {
     PlaybackServices playback{};
     RemoteMediaServices remote{};
     CacheServices cache{};
+    LibraryServices library{};
     UiServices ui{};
     PluginServices plugins{};
 };

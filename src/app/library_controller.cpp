@@ -58,6 +58,14 @@ LibraryModel& LibraryController::mutableModel() noexcept
     return repository_.mutableModel();
 }
 
+void LibraryController::configureIndexStorePath(std::filesystem::path store_path)
+{
+    repository_.configureIndexStorePath(std::move(store_path));
+    if (!repository_.model().tracks.empty()) {
+        setSongsContextAll();
+    }
+}
+
 void LibraryController::startLoading() noexcept
 {
     repository_.markLoading();

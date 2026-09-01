@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -72,8 +73,10 @@ private:
     DspChainProfile profile_{};
     std::vector<ChannelState> channels_{};
     double sample_rate_hz_{0.0};
-    std::vector<double> smoothed_graphic_gains_{};
+    std::array<double, 10> smoothed_graphic_gains_{};
     std::vector<double> smoothed_parametric_gains_{};
+    std::array<BiquadCoefficients, 10> graphic_coefficients_{};
+    std::vector<BiquadCoefficients> parametric_coefficients_{};
     double smoothed_preamp_db_{0.0};
     double smoothed_loudness_db_{0.0};
     double smoothed_replay_gain_db_{0.0};

@@ -14,9 +14,9 @@ struct AppControllerSet {
 
     void bindServices(const RuntimeServices& services)
     {
+        library.configureIndexStorePath(services.library.index_store_path);
         playback.setServices(services);
     }
 };
 
 } // namespace lofibox::app
-

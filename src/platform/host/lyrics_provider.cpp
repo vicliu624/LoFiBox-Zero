@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "platform/host/lyrics_pipeline_components.h"
+#include "platform/host/media_runtime_capabilities.h"
 #include "platform/host/runtime_enrichment_clients.h"
 #include "platform/host/runtime_logger.h"
 
@@ -203,10 +204,10 @@ public:
     EmbeddedLyricsReader()
     {
 #if defined(_WIN32)
-        executable_path_ = resolveExecutablePath(L"FFPROBE_PATH", L"ffprobe.exe");
+        executable_path_ = mediaRuntimeCapabilities().ffprobe;
         python_path_ = resolveExecutablePath(L"PYTHON_EXECUTABLE", L"python.exe");
 #elif defined(__linux__)
-        executable_path_ = resolveExecutablePath("FFPROBE_PATH", "ffprobe");
+        executable_path_ = mediaRuntimeCapabilities().ffprobe;
         python_path_ = resolveExecutablePath("PYTHON_EXECUTABLE", "python3");
 #endif
     }

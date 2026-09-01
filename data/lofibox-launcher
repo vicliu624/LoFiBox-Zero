@@ -14,6 +14,14 @@ run_wayland()
     return 1
 }
 
+run_widget()
+{
+    if command -v lofibox-widget >/dev/null 2>&1; then
+        exec lofibox-widget "$@"
+    fi
+    return 1
+}
+
 run_x11()
 {
     if command -v lofibox-x11 >/dev/null 2>&1; then
@@ -31,6 +39,12 @@ run_fbdev()
 }
 
 case "$backend" in
+    widget|layer-shell|tdvp-widget)
+        run_widget "$@" || {
+            echo "lofibox: native Wayland layer-shell widget runtime is not installed" >&2
+            exit 127
+        }
+        ;;
     wayland|labwc)
         run_wayland "$@" || {
             echo "lofibox: native Wayland runtime is not installed" >&2

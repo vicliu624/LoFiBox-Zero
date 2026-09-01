@@ -118,6 +118,7 @@ app::RuntimeServices createHostRuntimeServices()
     services.playback = createHostPlaybackServices(context);
     services.remote = createHostRemoteMediaServices(context);
     services.cache = createHostCacheServices(context);
+    services.library.index_store_path = runtime_paths::appStateDir() / "library-index.tsv";
     services.ui.theme = loadHostTheme();
     services.plugins = loadHostPluginServices(*services.ui.theme);
     return app::withNullRuntimeServices(std::move(services));

@@ -3,6 +3,7 @@
 #include "platform/host/runtime_enrichment_clients.h"
 #include "platform/host/runtime_enrichment_client_helpers.h"
 #include "platform/host/runtime_logger.h"
+#include "platform/host/media_runtime_capabilities.h"
 #include "platform/host/png_canvas_loader.h"
 
 #include <algorithm>
@@ -18,11 +19,7 @@ namespace fs = std::filesystem;
 namespace lofibox::platform::host::runtime_detail {
 FfmpegArtworkExtractor::FfmpegArtworkExtractor()
 {
-#if defined(_WIN32)
-    executable_path_ = resolveExecutablePath(L"FFMPEG_PATH", L"ffmpeg.exe");
-#elif defined(__linux__)
-    executable_path_ = resolveExecutablePath("FFMPEG_PATH", "ffmpeg");
-#endif
+    executable_path_ = mediaRuntimeCapabilities().ffmpeg;
 }
 
 bool FfmpegArtworkExtractor::available() const
@@ -109,4 +106,3 @@ bool CoverArtArchiveClient::fetchReleaseGroupFrontCover(std::string_view release
 }
 
 } // namespace lofibox::platform::host::runtime_detail
-

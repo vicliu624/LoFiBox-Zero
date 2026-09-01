@@ -1,3 +1,13 @@
+lofibox (0.3.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release 0.3.4.
+  * Add an explicit Wayland layer-shell widget runtime for TDVP/Labwc
+    desktop sessions without changing the normal desktop or framebuffer paths.
+  * Use ARGB buffers, direct pointer/touch routing, and pixel-stable commits
+    for the compact widget surface.
+
+ -- Vic Liu <vicliu@outlook.com>  Tue, 01 Sep 2026 00:00:00 +0800
+
 lofibox (0.2.8-1) UNRELEASED; urgency=medium
 
   * New upstream release 0.2.8.

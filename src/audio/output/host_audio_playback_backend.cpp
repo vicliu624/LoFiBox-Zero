@@ -14,6 +14,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <mutex>
 #include <memory>
 #include <optional>
@@ -28,6 +29,7 @@
 #endif
 
 #include "audio/dsp/realtime_dsp_engine.h"
+#include "platform/host/media_runtime_capabilities.h"
 #include "platform/host/png_canvas_loader.h"
 #include "platform/host/runtime_logger.h"
 
@@ -44,6 +46,7 @@ struct AudioExecutable {
 
 enum class PcmOutputSinkKind {
     Aplay,
+    Paplay,
     Ffplay,
     PipeWireCat,
 };
@@ -142,19 +145,12 @@ AudioExecutable resolveAudioExecutable()
 AudioExecutable resolveAnalyzerExecutable()
 {
 #if defined(_WIN32)
-    if (auto path = resolveExecutablePath(L"FFMPEG_PATH", L"ffmpeg.exe")) {
-        return AudioExecutable{*path, false};
+    if (const auto& ffmpeg = mediaRuntimeCapabilities().ffmpeg; ffmpeg) {
+        return AudioExecutable{*ffmpeg, false};
     }
 #elif defined(__linux__)
-    if (const char* env_path = std::getenv("FFMPEG_PATH"); env_path != nullptr && *env_path != '\0') {
-        fs::path path{env_path};
-        if (fs::exists(path)) {
-            return AudioExecutable{path, isWindowsExecutablePath(path)};
-        }
-    }
-
-    if (auto path = resolveExecutableFromPath("ffmpeg")) {
-        return AudioExecutable{*path, false};
+    if (const auto& ffmpeg = mediaRuntimeCapabilities().ffmpeg; ffmpeg) {
+        return AudioExecutable{*ffmpeg, isWindowsExecutablePath(*ffmpeg)};
     }
 
     if (runningUnderWsl()) {
@@ -190,14 +186,19 @@ bool pipeWireRuntimeAvailable()
 
 PcmOutputSink resolvePcmOutputSink(const AudioExecutable& ffplay)
 {
+    const auto& capabilities = mediaRuntimeCapabilities();
     if (pipeWireRuntimeAvailable()) {
         if (auto path = resolveExecutableFromPath("pw-cat")) {
             return PcmOutputSink{*path, PcmOutputSinkKind::PipeWireCat};
         }
     }
 
-    if (auto path = resolveExecutableFromPath("aplay")) {
-        return PcmOutputSink{*path, PcmOutputSinkKind::Aplay};
+    if (capabilities.paplay) {
+        return PcmOutputSink{*capabilities.paplay, PcmOutputSinkKind::Paplay};
+    }
+
+    if (capabilities.aplay) {
+        return PcmOutputSink{*capabilities.aplay, PcmOutputSinkKind::Aplay};
     }
 
     if (auto path = resolveExecutableFromPath("pw-cat")) {
@@ -220,7 +221,12 @@ bool networkInput(std::string_view input) noexcept
 constexpr std::chrono::seconds kNetworkPlaybackUiStartDelay{24};
 constexpr std::chrono::seconds kNetworkAnalyzerWarmupLimit{5};
 
-app::AudioVisualizationFrame spectrumFrameFromPcmWindow(const std::vector<float>& samples, double sample_rate)
+struct SpectrumPlan {
+    std::vector<double> hann_window{};
+    std::array<double, 10> goertzel_coefficients{};
+};
+
+SpectrumPlan makeSpectrumPlan(std::size_t sample_count, double sample_rate)
 {
     constexpr double kPi = 3.14159265358979323846;
     constexpr std::array<double, 10> kBandCenters{
@@ -236,23 +242,61 @@ app::AudioVisualizationFrame spectrumFrameFromPcmWindow(const std::vector<float>
         7000.0,
     };
 
+    SpectrumPlan plan{};
+    plan.hann_window.resize(sample_count);
+    const double count = static_cast<double>(sample_count);
+    const double denominator = std::max(1.0, count - 1.0);
+    for (std::size_t index = 0; index < sample_count; ++index) {
+        plan.hann_window[index] = 0.5 - (0.5 * std::cos((2.0 * kPi * static_cast<double>(index)) / denominator));
+    }
+    for (std::size_t band = 0; band < kBandCenters.size(); ++band) {
+        const double k = std::round((count * kBandCenters[band]) / sample_rate);
+        plan.goertzel_coefficients[band] = 2.0 * std::cos((2.0 * kPi * k) / count);
+    }
+    return plan;
+}
+
+const SpectrumPlan& spectrumPlanFor(std::size_t sample_count, double sample_rate)
+{
+    // There are normally two plans (16 kHz fallback and 48 kHz PCM output).
+    // Keeping the table process-wide avoids recalculating the same window and
+    // bins on every visualisation frame without sharing mutable FFT state.
+    static std::mutex cache_mutex{};
+    static std::map<std::pair<std::size_t, double>, std::unique_ptr<SpectrumPlan>> plans{};
+    const auto key = std::pair{sample_count, sample_rate};
+    std::lock_guard lock(cache_mutex);
+    if (const auto existing = plans.find(key); existing != plans.end()) {
+        return *existing->second;
+    }
+    auto plan = std::make_unique<SpectrumPlan>(makeSpectrumPlan(sample_count, sample_rate));
+    const auto insertion = plans.emplace(key, std::move(plan));
+    return *insertion.first->second;
+}
+
+app::AudioVisualizationFrame spectrumFrameFromPcmWindow(
+    const std::vector<float>& samples,
+    double sample_rate,
+    std::vector<double>& windowed_samples)
+{
     app::AudioVisualizationFrame frame{};
-    if (samples.empty()) {
+    if (samples.empty() || sample_rate <= 0.0) {
         return frame;
     }
 
     frame.available = true;
+    const auto& plan = spectrumPlanFor(samples.size(), sample_rate);
     const double n = static_cast<double>(samples.size());
-    for (std::size_t band = 0; band < kBandCenters.size(); ++band) {
-        const double k = std::round((n * kBandCenters[band]) / sample_rate);
-        const double omega = (2.0 * kPi * k) / n;
-        const double coeff = 2.0 * std::cos(omega);
+    windowed_samples.resize(samples.size());
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        windowed_samples[index] = static_cast<double>(samples[index]) * plan.hann_window[index];
+    }
+    for (std::size_t band = 0; band < plan.goertzel_coefficients.size(); ++band) {
+        const double coeff = plan.goertzel_coefficients[band];
         double q0 = 0.0;
         double q1 = 0.0;
         double q2 = 0.0;
         for (std::size_t index = 0; index < samples.size(); ++index) {
-            const double window = 0.5 - (0.5 * std::cos((2.0 * kPi * static_cast<double>(index)) / std::max(1.0, n - 1.0)));
-            q0 = (coeff * q1) - q2 + (static_cast<double>(samples[index]) * window);
+            q0 = (coeff * q1) - q2 + windowed_samples[index];
             q2 = q1;
             q1 = q0;
         }
@@ -281,6 +325,9 @@ public:
             logRuntime(RuntimeLogLevel::Debug, "audio", "Visualization unavailable: ffmpeg not found");
             return;
         }
+        (void)spectrumPlanFor(kWindowSize, 16000.0);
+        spectrum_workspace_.clear();
+        spectrum_workspace_.reserve(kWindowSize);
 
         std::vector<std::string> args{
             "-hide_banner",
@@ -402,7 +449,7 @@ private:
         if (window.size() < kWindowSize) {
             return;
         }
-        publishFrame(spectrumFrameFromPcmWindow(window, 16000.0));
+        publishFrame(spectrumFrameFromPcmWindow(window, 16000.0, spectrum_workspace_));
         window.clear();
     }
 
@@ -424,6 +471,7 @@ private:
     std::thread worker_{};
     std::atomic_bool stop_requested_{false};
     RunningPipeProcess process_{};
+    std::vector<double> spectrum_workspace_{};
 };
 
 #if defined(__linux__)
@@ -461,8 +509,15 @@ public:
             return false;
         }
 
+        (void)spectrumPlanFor(kVisualizationWindowSize, static_cast<double>(kSampleRate));
         dsp_.reset(kSampleRate, kChannels);
         dsp_.setProfile(profile);
+        pcm_samples_.clear();
+        pcm_samples_.reserve(8192U / sizeof(float));
+        visualization_window_.clear();
+        visualization_window_.reserve(kVisualizationWindowSize);
+        spectrum_workspace_.clear();
+        spectrum_workspace_.reserve(kVisualizationWindowSize);
         {
             std::lock_guard lock(frame_mutex_);
             frame_ = {};
@@ -495,6 +550,15 @@ public:
                 std::to_string(kChannels),
                 "--buffer-time=70000",
                 "--period-time=15000",
+                "-",
+            };
+        } else if (sink.kind == PcmOutputSinkKind::Paplay) {
+            sink_args = {
+                "--raw",
+                "--format=float32le",
+                "--rate=" + std::to_string(kSampleRate),
+                "--channels=" + std::to_string(kChannels),
+                "--stream-name=LoFiBox",
                 "-",
             };
         } else if (sink.kind == PcmOutputSinkKind::PipeWireCat) {
@@ -660,8 +724,9 @@ public:
         {
             std::lock_guard lock(frame_mutex_);
             frame_ = {};
-            visualization_window_.clear();
         }
+        pcm_samples_.clear();
+        visualization_window_.clear();
         stop_requested_ = false;
     }
 
@@ -791,11 +856,11 @@ private:
             return;
         }
 
-        std::vector<float> samples(full_bytes / sizeof(float));
-        std::memcpy(samples.data(), carry.data(), full_bytes);
-        const std::size_t frame_count = samples.size() / static_cast<std::size_t>(kChannels);
-        dsp_.processInterleaved(samples.data(), frame_count, kChannels, kSampleRate);
-        publishVisualization(samples);
+        pcm_samples_.resize(full_bytes / sizeof(float));
+        std::memcpy(pcm_samples_.data(), carry.data(), full_bytes);
+        const std::size_t frame_count = pcm_samples_.size() / static_cast<std::size_t>(kChannels);
+        dsp_.processInterleaved(pcm_samples_.data(), frame_count, kChannels, kSampleRate);
+        publishVisualization(pcm_samples_);
 
         clip_stats_counter_ += frame_count;
         if (clip_stats_counter_ >= static_cast<std::size_t>(kSampleRate) * 5) {
@@ -813,7 +878,7 @@ private:
             dsp_.resetClipStats();
         }
 
-        if (!writeAll(reinterpret_cast<const char*>(samples.data()), static_cast<int>(samples.size() * sizeof(float)))) {
+        if (!writeAll(reinterpret_cast<const char*>(pcm_samples_.data()), static_cast<int>(pcm_samples_.size() * sizeof(float)))) {
             markFailed();
             return;
         }
@@ -836,12 +901,20 @@ private:
 
     void publishVisualization(const std::vector<float>& interleaved_samples)
     {
-        std::lock_guard lock(frame_mutex_);
         for (std::size_t index = 0; index + 1U < interleaved_samples.size(); index += static_cast<std::size_t>(kChannels)) {
             const float mono = (interleaved_samples[index] + interleaved_samples[index + 1U]) * 0.5f;
             visualization_window_.push_back(mono);
             if (visualization_window_.size() >= kVisualizationWindowSize) {
-                const auto next_frame = spectrumFrameFromPcmWindow(visualization_window_, static_cast<double>(kSampleRate));
+                const auto next_frame = spectrumFrameFromPcmWindow(
+                    visualization_window_,
+                    static_cast<double>(kSampleRate),
+                    spectrum_workspace_);
+                visualization_window_.clear();
+
+                // Calculating a real PCM spectrum is deliberately kept on
+                // the audio worker, but it must not hold the UI reader's
+                // frame mutex while the Goertzel passes run.
+                std::lock_guard lock(frame_mutex_);
                 if (frame_.available) {
                     for (std::size_t band = 0; band < next_frame.bands.size(); ++band) {
                         frame_.bands[band] = (frame_.bands[band] * 0.45f) + (next_frame.bands[band] * 0.55f);
@@ -850,7 +923,6 @@ private:
                 } else {
                     frame_ = next_frame;
                 }
-                visualization_window_.clear();
             }
         }
     }
@@ -874,6 +946,9 @@ private:
         }
         if (sink_kind_ == PcmOutputSinkKind::PipeWireCat) {
             return input_is_network_ ? 0.25 : 0.12;
+        }
+        if (sink_kind_ == PcmOutputSinkKind::Paplay) {
+            return input_is_network_ ? 0.45 : 0.25;
         }
         return input_is_network_ ? 0.90 : 0.45;
     }
@@ -922,6 +997,9 @@ private:
         if (sink_kind_ == PcmOutputSinkKind::Aplay) {
             return "ALSA";
         }
+        if (sink_kind_ == PcmOutputSinkKind::Paplay) {
+            return "PulseAudio";
+        }
         return sink_kind_ == PcmOutputSinkKind::PipeWireCat ? "PipeWire" : "ffplay";
     }
 
@@ -959,6 +1037,8 @@ private:
     mutable std::mutex frame_mutex_{};
     app::AudioVisualizationFrame frame_{};
     std::vector<float> visualization_window_{};
+    std::vector<float> pcm_samples_{};
+    std::vector<double> spectrum_workspace_{};
     std::size_t clip_stats_counter_{0};
 };
 #endif
@@ -992,6 +1072,9 @@ public:
 #if defined(__linux__)
         if (!pcm_sink_executable_.path.empty() && pcm_sink_executable_.kind == PcmOutputSinkKind::Aplay) {
             return "BUILT-IN ALSA";
+        }
+        if (!pcm_sink_executable_.path.empty() && pcm_sink_executable_.kind == PcmOutputSinkKind::Paplay) {
+            return "BUILT-IN PULSEAUDIO";
         }
         if (!pcm_sink_executable_.path.empty() && pcm_sink_executable_.kind == PcmOutputSinkKind::PipeWireCat) {
             return "BUILT-IN PIPEWIRE";

@@ -16,7 +16,8 @@ public:
     [[nodiscard]] app::LibraryModel rebuild(
         const std::vector<std::filesystem::path>& media_roots,
         const app::MetadataProvider& metadata_provider,
-        app::LibraryScanProgressCallback progress = {}) const;
+        app::LibraryScanProgressCallback progress = {},
+        const app::LibraryModel* previous_model = nullptr) const;
 };
 
 } // namespace lofibox::library

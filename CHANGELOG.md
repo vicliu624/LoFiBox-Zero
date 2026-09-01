@@ -7,6 +7,27 @@ All notable changes to LoFiBox Zero will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-09-01
+
+### Added
+- Added an explicit `lofibox-widget` Wayland layer-shell runtime for TDVP/Labwc sessions. It uses a 320 x 170 top-layer surface, does not reserve desktop work area, and receives mouse-emulated touch input without opening the framebuffer directly.
+- Added pointer and touch dragging for the TDVP widget. A dragged placement is persisted as its right and bottom layer-shell margins in XDG configuration, while short gestures remain normal UI taps.
+
+### Changed
+- The widget runtime uses ARGB shared-memory buffers and avoids a Wayland surface commit when the rendered UI pixels did not change.
+- TDVP/Labwc widget dragging now uses consecutive raw pointer coordinates. This avoids feeding layer-surface repositioning back into the gesture delta, which previously caused rapid runaway drift.
+- TDVP widget drag motion now accumulates small pointer deltas and applies them only after a 5-pixel deadband, prioritizing stable touch motion without changing the click threshold.
+
+## [0.2.9] - 2026-08-31
+
+### Changed
+- Added a persistent local-library index so refreshes and application restarts reuse metadata for unchanged audio files, while files whose path, size, or modification time changed are read again.
+- Reused Linux FreeType font resources, PCM work buffers, spectrum plans, and DSP coefficient storage on the realtime playback path.
+- Switched Linux short-lived helper processes, including local metadata probes, to `posix_spawn`.
+
+### Fixed
+- Avoided holding the UI visualization mutex while calculating real PCM-derived spectrum bands.
+
 ## [0.2.8] - 2026-05-27
 
 ### Changed

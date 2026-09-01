@@ -111,6 +111,11 @@ struct TrackRecord {
     std::string lyrics_synced{};
     std::string lyrics_source{};
     std::string fingerprint{};
+    // Local-file identity used to decide whether embedded metadata can be
+    // reused during an incremental library refresh. Remote records leave
+    // these at their default values.
+    std::uintmax_t file_size_bytes{0};
+    std::int64_t file_mtime_ticks{0};
 };
 
 struct AlbumRecord {

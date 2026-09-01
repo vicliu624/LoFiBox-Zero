@@ -123,6 +123,56 @@ std::int64_t toUnixSeconds(const fs::file_time_type& time)
     return std::chrono::duration_cast<std::chrono::seconds>(translated.time_since_epoch()).count();
 }
 
+fs::path normalizeFilesystemPath(fs::path path)
+{
+    std::error_code ec{};
+    const auto absolute = fs::absolute(path, ec);
+    if (!ec) {
+        path = absolute;
+    }
+    ec.clear();
+    const auto canonical = fs::weakly_canonical(path, ec);
+    return ec ? path.lexically_normal() : canonical;
+}
+
+std::string normalizedPathKey(const fs::path& path)
+{
+    // scanLibrary normalizes every candidate before it reaches this helper.
+    // Avoid another absolute/canonical filesystem lookup for every lookup in
+    // a large persisted index.
+    return pathUtf8String(path.lexically_normal());
+}
+
+struct LocalFileFingerprint {
+    std::uintmax_t size_bytes{0};
+    std::int64_t mtime_ticks{0};
+    bool valid{false};
+};
+
+LocalFileFingerprint fingerprintForPath(const fs::path& path)
+{
+    std::error_code ec{};
+    const auto size = fs::file_size(path, ec);
+    if (ec) {
+        return {};
+    }
+    const auto write_time = fs::last_write_time(path, ec);
+    if (ec) {
+        return {};
+    }
+    return LocalFileFingerprint{
+        size,
+        static_cast<std::int64_t>(write_time.time_since_epoch().count()),
+        true};
+}
+
+bool fingerprintMatches(const TrackRecord& track, const LocalFileFingerprint& fingerprint) noexcept
+{
+    return fingerprint.valid
+        && track.file_size_bytes == fingerprint.size_bytes
+        && track.file_mtime_ticks == fingerprint.mtime_ticks;
+}
+
 bool isAudioCandidate(const fs::path& path)
 {
     if (!path.has_extension()) {
@@ -187,7 +237,7 @@ void collectRegularFiles(
     while (iterator != end) {
         const auto entry = *iterator;
         std::error_code status_error{};
-        if (entry.is_regular_file(status_error) && !status_error) {
+        if (entry.is_regular_file(status_error) && !status_error && isAudioCandidate(entry.path())) {
             files.push_back(entry.path());
             publishDiscoveredFileProgress(progress, progress_snapshot, files, entry.path());
         } else if (status_error) {
@@ -231,7 +281,7 @@ void collectRegularFiles(
 
         if (S_ISDIR(status.st_mode)) {
             collectRegularFiles(child, files, degraded, progress, progress_snapshot);
-        } else if (S_ISREG(status.st_mode)) {
+        } else if (S_ISREG(status.st_mode) && isAudioCandidate(child)) {
             files.push_back(child);
             publishDiscoveredFileProgress(progress, progress_snapshot, files, child);
         }
@@ -243,11 +293,11 @@ void collectRegularFiles(
 
 std::vector<fs::path> defaultRoots(const std::vector<fs::path>& requested_roots)
 {
+    std::vector<fs::path> roots{};
     if (!requested_roots.empty()) {
-        return requested_roots;
+        roots = requested_roots;
     }
 
-    std::vector<fs::path> roots{};
     std::string env_value{};
 #if defined(_MSC_VER)
     char* buffer = nullptr;
@@ -262,8 +312,10 @@ std::vector<fs::path> defaultRoots(const std::vector<fs::path>& requested_roots)
     }
 #endif
 
-    for (const auto& path : parsePathList(env_value)) {
-        roots.emplace_back(path);
+    if (roots.empty()) {
+        for (const auto& path : parsePathList(env_value)) {
+            roots.emplace_back(path);
+        }
     }
 
     if (roots.empty()) {
@@ -276,7 +328,19 @@ std::vector<fs::path> defaultRoots(const std::vector<fs::path>& requested_roots)
         roots.emplace_back("/music");
     }
 
-    return roots;
+    std::vector<fs::path> normalized{};
+    std::unordered_set<std::string> seen{};
+    normalized.reserve(roots.size());
+    for (const auto& root : roots) {
+        if (root.empty()) {
+            continue;
+        }
+        auto canonical = normalizeFilesystemPath(root);
+        if (seen.insert(pathUtf8String(canonical)).second) {
+            normalized.push_back(std::move(canonical));
+        }
+    }
+    return normalized;
 }
 
 StorageInfo scanStorageInfo(const std::vector<fs::path>& roots)
@@ -303,7 +367,8 @@ StorageInfo scanStorageInfo(const std::vector<fs::path>& roots)
 LibraryModel scanLibrary(
     const std::vector<fs::path>& requested_roots,
     const MetadataProvider& metadata_provider,
-    LibraryScanProgressCallback progress)
+    LibraryScanProgressCallback progress,
+    const LibraryModel* previous_model)
 {
     LibraryModel model{};
     const auto roots = defaultRoots(requested_roots);
@@ -311,11 +376,23 @@ LibraryModel scanLibrary(
 
     int next_id = 1;
     std::int64_t fallback_added = 1;
+    std::unordered_map<std::string, const TrackRecord*> previous_tracks{};
+    if (previous_model != nullptr) {
+        previous_tracks.reserve(previous_model->tracks.size());
+        for (const auto& track : previous_model->tracks) {
+            if (track.remote || track.path.empty()) {
+                continue;
+            }
+            previous_tracks.try_emplace(normalizedPathKey(track.path), &track);
+            next_id = std::max(next_id, track.id + 1);
+            fallback_added = std::max(fallback_added, track.added_time + 1);
+        }
+    }
 
     LibraryScanProgress progress_snapshot{};
     progress_snapshot.phase = LibraryScanPhase::DiscoveringFiles;
     progress_snapshot.roots_total = progressCount(roots.size());
-    progress_snapshot.message = "discovering library files";
+    progress_snapshot.message = "discovering library audio files";
     publishProgress(progress, progress_snapshot);
 
     std::vector<fs::path> files{};
@@ -346,20 +423,28 @@ LibraryModel scanLibrary(
     progress_snapshot.message = "reading local metadata";
     publishProgress(progress, progress_snapshot);
 
-    for (const auto& path : files) {
-        if (!isAudioCandidate(path)) {
+    for (const auto& discovered_path : files) {
+        const auto path = normalizeFilesystemPath(discovered_path);
+        progress_snapshot.current_path = pathUtf8String(path);
+        if (progress_snapshot.files_processed % 16 == 0) {
+            publishProgress(progress, progress_snapshot);
+        }
+
+        const auto fingerprint = fingerprintForPath(path);
+        const auto previous = previous_tracks.find(normalizedPathKey(path));
+        if (previous != previous_tracks.end() && fingerprintMatches(*previous->second, fingerprint)) {
+            TrackRecord track = *previous->second;
+            track.path = path;
+            model.tracks.push_back(std::move(track));
             ++progress_snapshot.files_processed;
-            if (progress_snapshot.files_processed % 16 == 0) {
-                publishProgress(progress, progress_snapshot);
-            }
+            progress_snapshot.tracks_indexed = progressCount(model.tracks.size());
             continue;
         }
 
-        progress_snapshot.current_path = pathUtf8String(path);
-        publishProgress(progress, progress_snapshot);
-
-        TrackRecord track{};
-        track.id = next_id++;
+        TrackRecord track = previous == previous_tracks.end() ? TrackRecord{} : *previous->second;
+        if (track.id <= 0) {
+            track.id = next_id++;
+        }
         track.path = path;
         const auto metadata = metadata_provider.read(path, MetadataReadMode::LocalOnly);
         track.title = preferMetadataOrFallback(metadata.title, pathUtf8String(path.stem()));
@@ -370,13 +455,20 @@ LibraryModel scanLibrary(
 
         std::error_code write_error{};
         const auto last_write = fs::last_write_time(path, write_error);
-        track.added_time = write_error ? fallback_added++ : toUnixSeconds(last_write);
+        if (track.added_time <= 0) {
+            track.added_time = write_error ? fallback_added++ : toUnixSeconds(last_write);
+        }
         track.duration_seconds = metadata.duration_seconds.value_or(150 + static_cast<int>((std::hash<std::string>{}(path.string()) % 210)));
+        track.file_size_bytes = fingerprint.size_bytes;
+        track.file_mtime_ticks = fingerprint.mtime_ticks;
+        track.remote = false;
 
         model.tracks.push_back(std::move(track));
         ++progress_snapshot.files_processed;
         progress_snapshot.tracks_indexed = progressCount(model.tracks.size());
-        publishProgress(progress, progress_snapshot);
+        if (progress_snapshot.files_processed % 16 == 0) {
+            publishProgress(progress, progress_snapshot);
+        }
     }
 
     progress_snapshot.phase = LibraryScanPhase::BuildingIndexes;

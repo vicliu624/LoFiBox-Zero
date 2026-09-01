@@ -10,7 +10,7 @@
 namespace lofibox::library {
 
 struct LibraryStoreMetadata {
-    int schema_version{1};
+    int schema_version{2};
 };
 
 class LibraryStore {

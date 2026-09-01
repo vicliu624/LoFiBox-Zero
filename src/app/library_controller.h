@@ -51,6 +51,7 @@ public:
     [[nodiscard]] const LibraryModel& model() const noexcept;
     [[nodiscard]] LibraryModel& mutableModel() noexcept;
 
+    void configureIndexStorePath(std::filesystem::path store_path);
     void startLoading() noexcept;
     void markStale() noexcept;
     void refreshLibrary(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider);

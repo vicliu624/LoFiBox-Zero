@@ -219,8 +219,9 @@ void RealtimeDspEngine::reset(double sample_rate_hz, int channels)
     std::lock_guard lock(mutex_);
     sample_rate_hz_ = sample_rate_hz;
     channels_.assign(static_cast<std::size_t>(std::max(0, channels)), {});
-    smoothed_graphic_gains_.assign(profile_.eq.bands.size(), 0.0);
+    smoothed_graphic_gains_.fill(0.0);
     smoothed_parametric_gains_.assign(profile_.eq.parametric_bands.size(), 0.0);
+    parametric_coefficients_.clear();
     resetRemixState();
 }
 
@@ -231,11 +232,9 @@ void RealtimeDspEngine::setProfile(DspChainProfile profile)
     const bool effect_changed = profile.effect.plugin_id != profile_.effect.plugin_id
         || profile.effect.effect_id != profile_.effect.effect_id;
     profile_ = std::move(profile);
-    if (smoothed_graphic_gains_.size() != profile_.eq.bands.size()) {
-        smoothed_graphic_gains_.assign(profile_.eq.bands.size(), 0.0);
-    }
     if (parametric_count_changed || smoothed_parametric_gains_.size() != profile_.eq.parametric_bands.size()) {
         smoothed_parametric_gains_.assign(profile_.eq.parametric_bands.size(), 0.0);
+        parametric_coefficients_.clear();
         for (auto& channel : channels_) {
             channel.parametric_bands.clear();
         }
@@ -356,23 +355,26 @@ void RealtimeDspEngine::processInterleaved(float* samples, std::size_t frame_cou
         return;
     }
 
-    std::vector<BiquadCoefficients> graphic_coefficients{};
-    graphic_coefficients.reserve(profile_.eq.bands.size());
+    const bool eq_active = profile_.eq.enabled && !profile_.eq.bypass;
     for (std::size_t index = 0; index < profile_.eq.bands.size(); ++index) {
         smoothed_graphic_gains_[index] = smooth(smoothed_graphic_gains_[index], targetGraphicGain(profile_.eq, index));
-        const auto& band = profile_.eq.bands[index];
-        graphic_coefficients.push_back(makePeakingEq(sample_rate_hz, band.frequency_hz, smoothed_graphic_gains_[index], band.q));
+        if (eq_active) {
+            const auto& band = profile_.eq.bands[index];
+            graphic_coefficients_[index] = makePeakingEq(sample_rate_hz, band.frequency_hz, smoothed_graphic_gains_[index], band.q);
+        }
     }
 
-    std::vector<BiquadCoefficients> parametric_coefficients{};
-    parametric_coefficients.reserve(profile_.eq.parametric_bands.size());
+    if (eq_active && parametric_coefficients_.size() != profile_.eq.parametric_bands.size()) {
+        parametric_coefficients_.resize(profile_.eq.parametric_bands.size());
+    }
     for (std::size_t index = 0; index < profile_.eq.parametric_bands.size(); ++index) {
         smoothed_parametric_gains_[index] = smooth(smoothed_parametric_gains_[index], targetParametricGain(profile_.eq, index));
-        const auto& band = profile_.eq.parametric_bands[index];
-        parametric_coefficients.push_back(makePeakingEq(sample_rate_hz, band.center_frequency_hz, smoothed_parametric_gains_[index], band.q));
+        if (eq_active) {
+            const auto& band = profile_.eq.parametric_bands[index];
+            parametric_coefficients_[index] = makePeakingEq(sample_rate_hz, band.center_frequency_hz, smoothed_parametric_gains_[index], band.q);
+        }
     }
 
-    const bool eq_active = profile_.eq.enabled && !profile_.eq.bypass;
     smoothed_preamp_db_ = smooth(smoothed_preamp_db_, eq_active ? profile_.eq.preamp_db : 0.0);
     smoothed_loudness_db_ = smooth(
         smoothed_loudness_db_,
@@ -382,8 +384,12 @@ void RealtimeDspEngine::processInterleaved(float* samples, std::size_t frame_cou
     const double scalar_gain = dbToLinear(smoothed_preamp_db_ + smoothed_loudness_db_ + smoothed_replay_gain_db_ + smoothed_volume_db_);
     const double limiter_ceiling = dbToLinear(
         profile_.limiter.enabled ? profile_.limiter.ceiling_db : profile_.eq.limiter_ceiling_db);
-    const auto high_pass = profile_.eq.high_pass_hz ? std::optional<BiquadCoefficients>{makeHighPass(sample_rate_hz, *profile_.eq.high_pass_hz)} : std::nullopt;
-    const auto low_pass = profile_.eq.low_pass_hz ? std::optional<BiquadCoefficients>{makeLowPass(sample_rate_hz, *profile_.eq.low_pass_hz)} : std::nullopt;
+    const auto high_pass = eq_active && profile_.eq.high_pass_hz
+        ? std::optional<BiquadCoefficients>{makeHighPass(sample_rate_hz, *profile_.eq.high_pass_hz)}
+        : std::nullopt;
+    const auto low_pass = eq_active && profile_.eq.low_pass_hz
+        ? std::optional<BiquadCoefficients>{makeLowPass(sample_rate_hz, *profile_.eq.low_pass_hz)}
+        : std::nullopt;
     const auto remix_processor = remixProcessor(profile_.effect.effect_id);
     const bool remix_active = remix_processor != RemixProcessor::Off;
     const auto remix_coefficients = remixCoefficients(remix_processor, sample_rate_hz);
@@ -405,10 +411,10 @@ void RealtimeDspEngine::processInterleaved(float* samples, std::size_t frame_cou
             double value = samples[(frame * static_cast<std::size_t>(channels)) + static_cast<std::size_t>(channel_index)];
             if (eq_active) {
                 for (std::size_t index = 0; index < channel.graphic_bands.size(); ++index) {
-                    value = channel.graphic_bands[index].process(value, graphic_coefficients[index]);
+                    value = channel.graphic_bands[index].process(value, graphic_coefficients_[index]);
                 }
                 for (std::size_t index = 0; index < channel.parametric_bands.size(); ++index) {
-                    value = channel.parametric_bands[index].process(value, parametric_coefficients[index]);
+                    value = channel.parametric_bands[index].process(value, parametric_coefficients_[index]);
                 }
                 if (high_pass) {
                     value = channel.high_pass.process(value, *high_pass);

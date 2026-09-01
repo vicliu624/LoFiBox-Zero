@@ -3,6 +3,7 @@
 #include "platform/host/runtime_enrichment_clients.h"
 #include "platform/host/runtime_enrichment_client_helpers.h"
 #include "platform/host/runtime_logger.h"
+#include "platform/host/media_runtime_capabilities.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -17,11 +18,7 @@ namespace fs = std::filesystem;
 namespace lofibox::platform::host::runtime_detail {
 FfprobeMetadataReader::FfprobeMetadataReader()
 {
-#if defined(_WIN32)
-    executable_path_ = resolveExecutablePath(L"FFPROBE_PATH", L"ffprobe.exe");
-#elif defined(__linux__)
-    executable_path_ = resolveExecutablePath("FFPROBE_PATH", "ffprobe");
-#endif
+    executable_path_ = mediaRuntimeCapabilities().ffprobe;
 }
 
 bool FfprobeMetadataReader::available() const
@@ -53,4 +50,3 @@ app::TrackMetadata FfprobeMetadataReader::read(const fs::path& path) const
 }
 
 } // namespace lofibox::platform::host::runtime_detail
-

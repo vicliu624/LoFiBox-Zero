@@ -99,6 +99,11 @@ public:
     return lofibox::app::InputEvent{lofibox::app::InputKey::Character, "", value};
 }
 
+[[nodiscard]] lofibox::app::InputEvent tap(int x, int y)
+{
+    return lofibox::app::makePointerTapInput(x, y);
+}
+
 } // namespace
 
 int main()
@@ -191,6 +196,51 @@ int main()
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::F12));
     if (target.open_search_calls != 1 || target.open_library_calls != 1 || target.open_queue_calls != 1 || target.open_settings_calls != 1) {
         std::cerr << "Expected global F9-F12 page shortcuts to route.\n";
+        return 1;
+    }
+
+    target.page = lofibox::app::AppPage::MainMenu;
+    const int help_toggles_before_tap = target.toggle_help_calls;
+    lofibox::app::routeInput(target, tap(8, 8));
+    if (target.toggle_help_calls != help_toggles_before_tap + 1) {
+        std::cerr << "Expected top-bar pointer tap to toggle page help.\n";
+        return 1;
+    }
+
+    const int menu_delta_before_tap = target.main_menu_delta;
+    const int menu_confirms_before_tap = target.confirm_main_menu_calls;
+    lofibox::app::routeInput(target, tap(48, 72));
+    lofibox::app::routeInput(target, tap(160, 72));
+    lofibox::app::routeInput(target, tap(260, 72));
+    if (target.main_menu_delta != menu_delta_before_tap ||
+        target.confirm_main_menu_calls != menu_confirms_before_tap + 3) {
+        std::cerr << "Expected main-menu pointer taps to select and activate cards.\n";
+        return 1;
+    }
+
+    target.page = lofibox::app::AppPage::NowPlaying;
+    target.now_playing_confirm_blocked = false;
+    const int steps_before_tap = target.step_track_calls;
+    const int play_toggles_before_tap = target.toggle_play_pause_calls;
+    const int shuffle_before_tap = target.toggle_shuffle_calls;
+    const int repeat_before_tap = target.cycle_repeat_calls;
+    lofibox::app::routeInput(target, tap(120, 130));
+    lofibox::app::routeInput(target, tap(168, 130));
+    lofibox::app::routeInput(target, tap(210, 130));
+    lofibox::app::routeInput(target, tap(250, 130));
+    lofibox::app::routeInput(target, tap(300, 130));
+    if (target.step_track_calls != steps_before_tap + 2 || target.last_step_delta != 1 ||
+        target.toggle_play_pause_calls != play_toggles_before_tap + 1 ||
+        target.toggle_shuffle_calls != shuffle_before_tap + 1 ||
+        target.cycle_repeat_calls != repeat_before_tap + 1) {
+        std::cerr << "Expected now-playing pointer taps to route to transport controls.\n";
+        return 1;
+    }
+
+    target.now_playing_confirm_blocked = true;
+    lofibox::app::routeInput(target, tap(168, 130));
+    if (target.toggle_play_pause_calls != play_toggles_before_tap + 1) {
+        std::cerr << "Expected blocked now-playing state to reject pointer play/pause.\n";
         return 1;
     }
 

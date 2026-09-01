@@ -9,6 +9,11 @@
 
 namespace lofibox::app {
 
+enum class InputEventKind {
+    Key,
+    PointerTap,
+};
+
 enum class InputKey {
     Unknown = 0,
     Character,
@@ -45,23 +50,41 @@ enum class InputKey {
 };
 
 struct InputEvent {
+    InputEventKind kind{InputEventKind::Key};
     InputKey key{InputKey::Unknown};
     std::string label{};
     std::string text{};
+    int x{};
+    int y{};
 
     InputEvent() = default;
 
     InputEvent(InputKey input_key, std::string input_label, std::string committed_text = {})
-        : key(input_key)
+        : kind(InputEventKind::Key)
+        , key(input_key)
         , label(std::move(input_label))
         , text(std::move(committed_text))
     {}
 
     InputEvent(InputKey input_key, std::string input_label, char committed_char)
-        : key(input_key)
+        : kind(InputEventKind::Key)
+        , key(input_key)
         , label(std::move(input_label))
         , text(committed_char == '\0' ? std::string{} : std::string(1, committed_char))
     {}
+
+    InputEvent(int pointer_x, int pointer_y, std::string input_label = "TAP")
+        : kind(InputEventKind::PointerTap)
+        , key(InputKey::Unknown)
+        , label(std::move(input_label))
+        , x(pointer_x)
+        , y(pointer_y)
+    {}
+
+    [[nodiscard]] bool isPointerTap() const noexcept
+    {
+        return kind == InputEventKind::PointerTap;
+    }
 };
 
 [[nodiscard]] inline InputEvent makeCharacterInput(char ch, std::string label = {})
@@ -75,6 +98,11 @@ struct InputEvent {
         label = text;
     }
     return InputEvent{InputKey::Character, std::move(label), std::move(text)};
+}
+
+[[nodiscard]] inline InputEvent makePointerTapInput(int x, int y, std::string label = "TAP")
+{
+    return InputEvent{x, y, std::move(label)};
 }
 
 [[nodiscard]] inline std::optional<char> singleAsciiText(const InputEvent& event) noexcept

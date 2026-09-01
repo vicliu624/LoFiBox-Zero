@@ -7,8 +7,10 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #if defined(_WIN32)
@@ -391,56 +393,83 @@ Color alphaBlend(Color dst, Color src, std::uint8_t opacity) noexcept
 }
 
 struct FreetypeFace {
-    FT_Library library{};
     FT_Face face{};
     bool valid{false};
     int pixel_size{0};
     int ascent{0};
     int line_height{0};
-
-    explicit FreetypeFace(int scale)
-    {
-        pixel_size = std::max(scale, 1) * 11;
-        if (FT_Init_FreeType(&library) != 0) {
-            return;
-        }
-
-        const auto font_path = findLinuxFontPath();
-        if (!font_path || FT_New_Face(library, font_path->string().c_str(), 0, &face) != 0) {
-            if (library) {
-                FT_Done_FreeType(library);
-                library = nullptr;
-            }
-            return;
-        }
-
-        if (FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(pixel_size)) != 0) {
-            FT_Done_Face(face);
-            FT_Done_FreeType(library);
-            face = nullptr;
-            library = nullptr;
-            return;
-        }
-
-        ascent = static_cast<int>(face->size->metrics.ascender >> 6);
-        line_height = std::max(static_cast<int>(face->size->metrics.height >> 6), pixel_size + 1);
-        valid = true;
-    }
-
-    ~FreetypeFace()
-    {
-        if (face) {
-            FT_Done_Face(face);
-        }
-        if (library) {
-            FT_Done_FreeType(library);
-        }
-    }
 };
+
+class FreetypeFaceCache {
+public:
+    ~FreetypeFaceCache()
+    {
+        for (auto& item : faces_) {
+            if (item.second.face) {
+                FT_Done_Face(item.second.face);
+            }
+        }
+        if (library_) {
+            FT_Done_FreeType(library_);
+        }
+    }
+
+    [[nodiscard]] std::mutex& mutex() noexcept
+    {
+        return mutex_;
+    }
+
+    FreetypeFace& faceForScaleLocked(int scale)
+    {
+        const int pixel_size = std::max(scale, 1) * 11;
+        const auto [iterator, inserted] = faces_.try_emplace(pixel_size);
+        auto& cached = iterator->second;
+        if (!inserted) {
+            return cached;
+        }
+
+        cached.pixel_size = pixel_size;
+        if (library_ == nullptr && FT_Init_FreeType(&library_) != 0) {
+            return cached;
+        }
+        if (!font_path_resolved_) {
+            font_path_ = findLinuxFontPath();
+            font_path_resolved_ = true;
+        }
+        if (!font_path_ || FT_New_Face(library_, font_path_->string().c_str(), 0, &cached.face) != 0) {
+            cached.face = nullptr;
+            return cached;
+        }
+        if (FT_Set_Pixel_Sizes(cached.face, 0, static_cast<FT_UInt>(pixel_size)) != 0) {
+            FT_Done_Face(cached.face);
+            cached.face = nullptr;
+            return cached;
+        }
+        cached.ascent = static_cast<int>(cached.face->size->metrics.ascender >> 6);
+        cached.line_height = std::max(static_cast<int>(cached.face->size->metrics.height >> 6), pixel_size + 1);
+        cached.valid = true;
+        return cached;
+    }
+
+private:
+    std::mutex mutex_{};
+    FT_Library library_{};
+    bool font_path_resolved_{false};
+    std::optional<fs::path> font_path_{};
+    std::unordered_map<int, FreetypeFace> faces_{};
+};
+
+FreetypeFaceCache& freetypeFaceCache()
+{
+    static FreetypeFaceCache cache{};
+    return cache;
+}
 
 int measureUtf8TextFreeType(std::string_view text, int scale) noexcept
 {
-    FreetypeFace ft(scale);
+    auto& cache = freetypeFaceCache();
+    std::lock_guard lock(cache.mutex());
+    const auto& ft = cache.faceForScaleLocked(scale);
     if (!ft.valid) {
         return 0;
     }
@@ -466,7 +495,9 @@ int measureUtf8TextFreeType(std::string_view text, int scale) noexcept
 
 void drawUtf8TextFreeType(Canvas& canvas, std::string_view text, int x, int y, Color color, int scale) noexcept
 {
-    FreetypeFace ft(scale);
+    auto& cache = freetypeFaceCache();
+    std::lock_guard lock(cache.mutex());
+    const auto& ft = cache.faceForScaleLocked(scale);
     if (!ft.valid) {
         return;
     }
@@ -557,7 +588,9 @@ int lineHeight(int scale) noexcept
         return size.cy + std::max(scale, 1);
     }
 #elif defined(LOFIBOX_HAVE_FREETYPE)
-    FreetypeFace ft(scale);
+    auto& cache = freetypeFaceCache();
+    std::lock_guard lock(cache.mutex());
+    const auto& ft = cache.faceForScaleLocked(scale);
     if (ft.valid) {
         return ft.line_height;
     }

@@ -77,10 +77,68 @@ namespace {
     }
 }
 
+void routePointerTap(AppInputTarget& target, const InputEvent& event)
+{
+    constexpr int kTopbarHeight = 20;
+    constexpr int kMainMenuLeftStart = 22;
+    constexpr int kMainMenuLeftEnd = 90;
+    constexpr int kMainMenuCenterStart = 112;
+    constexpr int kMainMenuCenterEnd = 208;
+    constexpr int kMainMenuRightStart = 230;
+    constexpr int kMainMenuRightEnd = 298;
+    constexpr int kMainMenuCardTop = 28;
+    constexpr int kMainMenuCardBottom = 124;
+
+    if (event.y >= 0 && event.y < kTopbarHeight && event.x >= 0 && event.x < 96) {
+        target.toggleHelpForCurrentPage();
+        return;
+    }
+
+    switch (target.currentPage()) {
+    case AppPage::MainMenu:
+        if (event.y < kMainMenuCardTop || event.y > kMainMenuCardBottom) {
+            return;
+        }
+        if (event.x >= kMainMenuLeftStart && event.x <= kMainMenuLeftEnd) {
+            target.moveMainMenuSelection(-1);
+            target.confirmMainMenu();
+        } else if (event.x >= kMainMenuCenterStart && event.x <= kMainMenuCenterEnd) {
+            target.confirmMainMenu();
+        } else if (event.x >= kMainMenuRightStart && event.x <= kMainMenuRightEnd) {
+            target.moveMainMenuSelection(1);
+            target.confirmMainMenu();
+        }
+        return;
+    case AppPage::NowPlaying:
+        if (event.y < 112 || event.y > 146) {
+            return;
+        }
+        if (event.x >= 104 && event.x < 144) {
+            target.stepTrack(-1);
+        } else if (event.x >= 144 && event.x < 190 && !target.nowPlayingConfirmBlocked()) {
+            target.togglePlayPause();
+        } else if (event.x >= 190 && event.x < 234) {
+            target.stepTrack(1);
+        } else if (event.x >= 234 && event.x < 276) {
+            target.toggleShuffle();
+        } else if (event.x >= 276 && event.x < 320) {
+            target.cycleRepeatMode();
+        }
+        return;
+    default:
+        return;
+    }
+}
+
 } // namespace
 
 void routeInput(AppInputTarget& target, const InputEvent& event)
 {
+    if (event.isPointerTap()) {
+        routePointerTap(target, event);
+        return;
+    }
+
     const auto action = mapInput(event);
     const auto page = target.currentPage();
 

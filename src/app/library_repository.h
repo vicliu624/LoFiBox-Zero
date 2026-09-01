@@ -3,12 +3,14 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 #include "app/library_model.h"
 #include "app/library_scanner.h"
 #include "app/runtime_services.h"
 #include "library/library_governance.h"
+#include "library/library_store.h"
 
 namespace lofibox::app {
 
@@ -20,6 +22,7 @@ public:
     [[nodiscard]] const std::vector<::lofibox::library::LibraryFileChange>& lastChanges() const noexcept;
     [[nodiscard]] const std::vector<::lofibox::library::LibraryMigration>& migrationPlan() const noexcept;
 
+    void configureIndexStorePath(std::filesystem::path store_path);
     void markLoading() noexcept;
     void markStale() noexcept;
     void markDegraded() noexcept;
@@ -40,6 +43,7 @@ public:
 private:
     LibraryIndexState state_{LibraryIndexState::Uninitialized};
     LibraryModel library_{};
+    std::optional<::lofibox::library::LibraryStore> index_store_{};
     std::vector<::lofibox::library::LibraryFileChange> last_changes_{};
     std::vector<::lofibox::library::LibraryMigration> migration_plan_{};
 };
