@@ -7,6 +7,13 @@ All notable changes to LoFiBox Zero will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-09-01
+
+### Fixed
+- Install a standard hicolor 64 x 64 application icon so desktop menus can
+  resolve the LoFiBox launcher even when they do not enumerate the existing
+  scalable or 180 x 180 icon variants.
+
 ## [0.3.4] - 2026-09-01
 
 ### Added

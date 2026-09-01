@@ -1,6 +1,8 @@
-lofibox (0.3.4-1) UNRELEASED; urgency=medium
+lofibox (0.3.5-1) UNRELEASED; urgency=medium
 
-  * New upstream release 0.3.4.
+  * New upstream release 0.3.5.
+  * Install the application icon in the standard hicolor 64x64 directory so
+    desktop menu implementations can reliably resolve it.
   * Add an explicit Wayland layer-shell widget runtime for TDVP/Labwc
     desktop sessions without changing the normal desktop or framebuffer paths.
   * Use ARGB buffers, direct pointer/touch routing, and pixel-stable commits
