@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.24)
 
-project(LoFiBoxZero VERSION 0.3.4 LANGUAGES C CXX)
+project(LoFiBoxZero VERSION 0.3.5 LANGUAGES C CXX)
 
 if(DEFINED CMAKE_EXPORT_NO_PACKAGE_REGISTRY)
     set(_lofibox_cmake_export_no_package_registry "${CMAKE_EXPORT_NO_PACKAGE_REGISTRY}")
@@ -658,6 +658,16 @@ install(FILES data/io.github.vicliu624.lofibox.svg
 
 install(FILES assets/ui/icons/legacy-lofibox/logo.png
     DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/180x180/apps"
+    RENAME io.github.vicliu624.lofibox.png
+)
+
+# The TDVP panel resolves ordinary hicolor raster directories reliably, while
+# a manually deployed SVG can sit outside its icon search path.  Keep a
+# standard-size PNG alongside the scalable and high-resolution projections so
+# menu implementations that do not select SVG still find the desktop-entry
+# icon by name.
+install(FILES assets/ui/icons/cardputer-zero/lofibox.png
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/64x64/apps"
     RENAME io.github.vicliu624.lofibox.png
 )
 

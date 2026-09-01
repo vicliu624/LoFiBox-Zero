@@ -47,6 +47,7 @@ test -x .tmp/container-install-skeleton/bin/lofibox-tui
 test -f .tmp/container-install-skeleton/share/applications/io.github.vicliu624.lofibox.desktop
 test -f .tmp/container-install-skeleton/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
 test -f .tmp/container-install-skeleton/share/icons/hicolor/scalable/apps/io.github.vicliu624.lofibox.svg
+test -f .tmp/container-install-skeleton/share/icons/hicolor/64x64/apps/io.github.vicliu624.lofibox.png
 test -f .tmp/container-install-skeleton/share/icons/hicolor/180x180/apps/io.github.vicliu624.lofibox.png
 test -f .tmp/container-install-skeleton/share/mime/packages/io.github.vicliu624.lofibox.xml
 test -f .tmp/container-install-skeleton/share/man/man1/lofibox.1
