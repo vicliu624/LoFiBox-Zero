@@ -44,8 +44,8 @@
     },
     {
       "name": "linux-x11-debug",
-      "displayName": "Linux X11 Desktop Widget",
-      "description": "Configure the real Linux X11 desktop-widget presentation target.",
+      "displayName": "Linux X11 Desktop Window",
+      "description": "Configure the real Linux X11 desktop-window presentation target.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/x11",
       "cacheVariables": {
@@ -63,8 +63,8 @@
     },
     {
       "name": "linux-wayland-debug",
-      "displayName": "Linux Wayland Desktop Widget",
-      "description": "Configure the native Linux Wayland desktop-widget presentation target.",
+      "displayName": "Linux Wayland Desktop Window",
+      "description": "Configure the native Linux Wayland desktop-window presentation target.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/wayland",
       "cacheVariables": {
@@ -118,7 +118,7 @@
     },
     {
       "name": "linux-x11-debug-build",
-      "displayName": "Build Linux X11 Desktop Widget",
+      "displayName": "Build Linux X11 Desktop Window",
       "configurePreset": "linux-x11-debug",
       "targets": [
         "lofibox_zero_x11"
@@ -126,7 +126,7 @@
     },
     {
       "name": "linux-wayland-debug-build",
-      "displayName": "Build Linux Wayland Desktop Widget",
+      "displayName": "Build Linux Wayland Desktop Window",
       "configurePreset": "linux-wayland-debug",
       "targets": [
         "lofibox_zero_wayland"

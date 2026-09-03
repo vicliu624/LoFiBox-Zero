@@ -6,7 +6,7 @@
   <img src="docs/assets/logo.png" alt="LoFiBox Zero logo" width="120">
 </p>
 
-LoFiBox Zero is a Linux-first music player for compact keyboard-driven devices and chromeless desktop-widget sessions. It presents the same focused `320x170` player surface on the Cardputer Zero class of hardware, the Linux framebuffer device target, and native Linux Wayland/X11 desktop-widget targets.
+LoFiBox Zero is a Linux-first music player for compact keyboard-driven devices and normal compositor-managed desktop sessions. It keeps one focused player canvas across the Cardputer Zero class of hardware, the Linux framebuffer device target, and native Linux Wayland/X11 desktop targets.
 
 It is built around local library playback, durable media roots, metadata and artwork enrichment, lyrics, queue control, remote media sources, and a DSP-ready audio pipeline. The goal is a small music appliance that feels deliberate rather than a resized desktop app.
 
@@ -22,7 +22,7 @@ The screenshots show the product surface, not a mock desktop simulator. LoFiBox 
 
 ## Highlights
 
-- Compact chromeless player UI for a `320x170` logical screen
+- Compact player UI tuned for small screens and desktop windows
 - Local library indexing from durable configured media roots, defaulting to `~/Music`
 - Queue, search, lyrics, artwork, metadata enrichment, and tag writeback services
 - Remote media profiles for Jellyfin, Emby, OpenSubsonic/Navidrome-style servers, playlists, WebDAV, DLNA/UPnP, and other governed source families
@@ -36,8 +36,8 @@ The repository intentionally keeps one product runtime path:
 - Linux runtime adapters in `src/platform/host`, `src/platform/wayland`, `src/platform/x11`, and `src/platform/device`
 - a single Linux device executable: `lofibox_zero_device`
 - a protocol-selecting launcher command: `lofibox`
-- a native Linux Wayland desktop-widget executable: `lofibox_zero_wayland` (`lofibox-wayland`)
-- a direct Linux X11 desktop-widget executable: `lofibox_zero_x11` (`lofibox-x11`)
+- a native Linux Wayland desktop-application executable: `lofibox_zero_wayland` (`lofibox-wayland`)
+- a direct Linux X11 desktop-application executable: `lofibox_zero_x11` (`lofibox-x11`)
 - a containerized Linux build environment for repeatable builds
 
 There is no SDL desktop simulator in this project. The app should be validated through the Linux device target, a real framebuffer/input environment, or a container wired to those Linux devices.
@@ -47,8 +47,8 @@ There is no SDL desktop simulator in this project. The app should be validated t
 - `src/app`: product state, pages, controllers, playback/library semantics
 - `src/core`: canvas, font, display primitives, platform-neutral utilities
 - `src/platform/host`: host services such as metadata, artwork, lyrics, audio process launch, logging, caching, and single-instance lock
-- `src/platform/wayland`: native Wayland presentation adapter for compositor-managed compact desktop sessions
-- `src/platform/x11`: X11 presentation adapter for traditional desktop-widget sessions
+- `src/platform/wayland`: native Wayland presentation adapter for normal compositor-managed desktop windows
+- `src/platform/x11`: X11 presentation adapter for traditional desktop sessions
 - `src/platform/device`: Linux framebuffer and evdev/xkb input adapters
 - `src/targets/device_main.cpp`: Linux product entry point
 - `assets`: icons, logo, fonts, and other product assets
@@ -109,7 +109,7 @@ LOFIBOX_MEDIA_ROOT="$HOME/Music" \
 ./build/device/lofibox_zero_device --fbdev /dev/fb0 --input-dev /dev/input/event0
 ```
 
-Build the native Linux Wayland desktop-widget target:
+Build the native Linux Wayland desktop-application target:
 
 ```bash
 cmake --preset linux-wayland-debug
@@ -137,7 +137,7 @@ APPLaunch wrapper is the appliance launch profile, so it enables WebUI by
 default and Settings shows the resulting address as `http://<device-ip>:8765`
 unless a caller overrides the bind address or port.
 
-Build the direct Linux X11 desktop-widget target:
+Build the direct Linux X11 desktop-application target:
 
 ```bash
 cmake --preset linux-x11-debug

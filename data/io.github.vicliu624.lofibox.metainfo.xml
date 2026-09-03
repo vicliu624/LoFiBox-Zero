@@ -5,12 +5,13 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>LoFiBox</name>
-  <summary>Chromeless desktop-widget music player</summary>
+  <summary>Compact Linux desktop music player</summary>
   <description>
     <p>
-      LoFiBox is a pure C++ Linux music player with a compact chromeless
-      desktop-widget surface, local playback, media-library browsing, metadata,
-      artwork, remote-source, and DSP-oriented architecture goals.
+      LoFiBox is a pure C++ Linux music player with a compact,
+      compositor-managed desktop window, local playback, media-library
+      browsing, metadata, artwork, remote-source, and DSP-oriented
+      architecture goals.
     </p>
   </description>
   <launchable type="desktop-id">io.github.vicliu624.lofibox.desktop</launchable>
@@ -21,6 +22,11 @@
   </categories>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.3.8" date="2026-09-03">
+      <description>
+        <p>Retires the TDVP layer-shell widget route in favor of a normal Labwc-managed Wayland window, restores local MP3 playback and prompt pause behavior, and adds standard desktop play/pause key handling.</p>
+      </description>
+    </release>
     <release version="0.3.5" date="2026-09-01">
       <description>
         <p>Add a standard hicolor 64 x 64 application icon for reliable desktop-menu integration.</p>

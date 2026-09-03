@@ -47,7 +47,7 @@ For current implementation progress, use `implementation-status.md`.
 - `ui`
   Windows, pages, controls, view models, themes, and projection of product state.
 - `product shell`
-  The chromeless, no-menu-bar product surface used by LoFiBox as a desktop-widget music terminal.
+  The compact, no-menu-bar product canvas used by LoFiBox inside a normal desktop window.
 - `text input`
   The boundary that receives committed UTF-8 text and optional preedit projection from runtime shells before editable product fields such as Search queries or source-profile fields mutate app state.
 - `platform/host`
@@ -93,7 +93,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Language: `C++20`
 - Build system: `CMake`
 - Product runtime family: Linux desktop application with device-profile adapters where needed
-- Primary shell form: chromeless desktop-widget music terminal with no traditional application menu bar
+- Primary shell form: compact desktop music application window with no traditional in-app menu bar
 - Standard build entry: `cmake -B build -S .`, `cmake --build build`, and `cmake --install build --prefix /usr`
 - Shared small-screen profile: `320x170` where the active target uses the Cardputer/PocketFrame profile
 - `Cardputer Zero` profile surface: same chromeless product shell, hardware-keyboard-first, small-screen-first
@@ -140,7 +140,7 @@ Any future visual or input validation must go through a real Linux product targe
 - Linux executable targets must be thin target bindings over shared product code.
 - Device-profile targets must be compatible with framebuffer-oriented deployment when that profile is active.
 - A device-profile target may remove desktop window chrome from the presented product surface, but it must not fork business logic, media handling, playback, metadata, or DSP behavior.
-- The primary desktop target must also preserve the chromeless no-menu-bar product shell unless a future specification explicitly defines a different secondary shell.
+- The primary desktop target must preserve the compact no-menu-bar product canvas; the compositor supplies standard title-bar, move, minimize, and close affordances unless a future specification explicitly defines a different secondary shell.
 - The container exists for reproducible development and validation, not as a second app runtime.
 - Third-party device wrappers may be used only behind our own device adapter; their framework shape may not leak into shared app structure.
 - Real device keyboard input belongs in `platform/device` as Linux `evdev` translation into logical app input events.

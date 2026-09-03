@@ -7,6 +7,28 @@ All notable changes to LoFiBox Zero will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-09-03
+
+### Changed
+
+- Retired the TDVP-only `lofibox-widget` layer-shell route, including its
+  protocol, target, desktop entry, launcher branch, scheduler, and tests.
+  `lofibox-wayland` is now the only native Wayland desktop target and is a
+  normal compositor-managed application window.
+- Request server-side window decorations from compositors that support
+  xdg-decoration, giving Labwc standard titlebar drag, minimize, close, and
+  workspace behavior.
+
+### Fixed
+
+- Restored local MP3 playback on TDVP by using the current PulseAudio stdin
+  contract and explicitly connecting the desktop launcher to its session
+  socket.
+- Bound PulseAudio playback latency to 40ms with 10ms processing blocks so
+  pausing stops audible output promptly instead of draining a long PCM queue.
+- Map Space and standard desktop media play/pause keys to the live playback
+  toggle outside text-entry fields.
+
 ## [0.3.5] - 2026-09-01
 
 ### Fixed

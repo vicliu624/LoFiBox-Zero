@@ -169,6 +169,15 @@ void routeInput(AppInputTarget& target, const InputEvent& event)
         return;
     }
 
+    // Desktop keyboards normally use Space, and dedicated media buttons use
+    // XF86AudioPlay/XF86AudioPause.  Keep literal spaces available while
+    // editing a search query, but treat them as a transport toggle elsewhere.
+    if (event.key == InputKey::MediaPlayPause
+        || (page != AppPage::Search && singleAsciiText(event) == std::optional<char>{' '})) {
+        target.togglePlayPause();
+        return;
+    }
+
     if (routeGlobalTransportShortcut(target, event)) {
         return;
     }

@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.24)
 
-project(LoFiBoxZero VERSION 0.3.5 LANGUAGES C CXX)
+project(LoFiBoxZero VERSION 0.3.8 LANGUAGES C CXX)
 
 if(DEFINED CMAKE_EXPORT_NO_PACKAGE_REGISTRY)
     set(_lofibox_cmake_export_no_package_registry "${CMAKE_EXPORT_NO_PACKAGE_REGISTRY}")
@@ -42,7 +42,6 @@ endif()
 option(LOFIBOX_BUILD_DEVICE "Build the Linux framebuffer device target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
 option(LOFIBOX_BUILD_X11 "Build the Linux X11 VNC/PocketFrame target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
 option(LOFIBOX_BUILD_WAYLAND "Build the Linux native Wayland toplevel target." ${LOFIBOX_BUILD_DEVICE_DEFAULT})
-option(LOFIBOX_BUILD_WIDGET "Build the Linux native Wayland layer-shell widget target." OFF)
 option(LOFIBOX_BUILD_TUI "Build the ANSI terminal UI target." ON)
 option(LOFIBOX_BUILD_WEBUI "Build the WebUI remote-control HTTP/WebSocket server." ${LOFIBOX_BUILD_WEBUI_DEFAULT})
 option(LOFIBOX_INSTALL_LAUNCHER "Install the generic runtime-selecting lofibox launcher." ON)
@@ -350,9 +349,9 @@ if(LOFIBOX_BUILD_X11)
     )
 endif()
 
-if(LOFIBOX_BUILD_WAYLAND OR LOFIBOX_BUILD_WIDGET)
+if(LOFIBOX_BUILD_WAYLAND)
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        message(FATAL_ERROR "LOFIBOX_BUILD_WAYLAND and LOFIBOX_BUILD_WIDGET require a Linux target environment.")
+        message(FATAL_ERROR "LOFIBOX_BUILD_WAYLAND requires a Linux target environment.")
     endif()
 
     # A normal Linux developer install obtains the scanner and XML files through
@@ -443,39 +442,6 @@ if(LOFIBOX_BUILD_WAYLAND OR LOFIBOX_BUILD_WIDGET)
         VERBATIM
     )
 
-    if(LOFIBOX_BUILD_WIDGET)
-        # wlr-layer-shell is a wlroots protocol, not part of the upstream
-        # wayland-protocols install set. Keep the protocol definition with the
-        # client so a TDVP cross build does not depend on transient build-tree
-        # files from gtk-layer-shell or wlroots.
-        set(LOFIBOX_WLR_LAYER_SHELL_XML "${PROJECT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml")
-        set(LOFIBOX_WLR_LAYER_SHELL_HEADER "${LOFIBOX_WAYLAND_PROTOCOL_DIR}/wlr-layer-shell-unstable-v1-client-protocol.h")
-        set(LOFIBOX_WLR_LAYER_SHELL_SOURCE "${LOFIBOX_WAYLAND_PROTOCOL_DIR}/wlr-layer-shell-unstable-v1-protocol.c")
-        if(NOT EXISTS "${LOFIBOX_WLR_LAYER_SHELL_XML}")
-            message(FATAL_ERROR "wlr-layer-shell-unstable-v1.xml not found at ${LOFIBOX_WLR_LAYER_SHELL_XML}")
-        endif()
-        add_custom_command(
-            OUTPUT "${LOFIBOX_WLR_LAYER_SHELL_HEADER}"
-            COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" client-header
-                    "${LOFIBOX_WLR_LAYER_SHELL_XML}"
-                    "${LOFIBOX_WLR_LAYER_SHELL_HEADER}"
-            DEPENDS "${LOFIBOX_WLR_LAYER_SHELL_XML}"
-            VERBATIM
-        )
-        add_custom_command(
-            OUTPUT "${LOFIBOX_WLR_LAYER_SHELL_SOURCE}"
-            COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" private-code
-                    "${LOFIBOX_WLR_LAYER_SHELL_XML}"
-                    "${LOFIBOX_WLR_LAYER_SHELL_SOURCE}"
-            DEPENDS "${LOFIBOX_WLR_LAYER_SHELL_XML}"
-            VERBATIM
-        )
-        list(APPEND LOFIBOX_WAYLAND_PROTOCOL_SOURCES
-            "${LOFIBOX_WLR_LAYER_SHELL_SOURCE}"
-            "${LOFIBOX_WLR_LAYER_SHELL_HEADER}"
-        )
-    endif()
-
     add_library(lofibox_wayland_protocol STATIC
         ${LOFIBOX_WAYLAND_PROTOCOL_SOURCES}
     )
@@ -510,34 +476,6 @@ if(LOFIBOX_BUILD_WAYLAND OR LOFIBOX_BUILD_WIDGET)
         )
     endif()
 
-    if(LOFIBOX_BUILD_WIDGET)
-        add_executable(lofibox_zero_widget
-            src/platform/wayland/layer_shell_client.c
-            src/platform/wayland/widget_presenter.cpp
-            src/targets/widget_main.cpp
-        )
-        set_target_properties(lofibox_zero_widget PROPERTIES OUTPUT_NAME lofibox-widget)
-        target_link_libraries(lofibox_zero_widget PRIVATE
-            lofibox_zero_host_runtime
-            lofibox_zero_target_cli
-            lofibox_wayland_protocol
-            PkgConfig::WAYLAND_CLIENT
-            PkgConfig::XKBCOMMON
-            rt
-        )
-        target_include_directories(lofibox_zero_widget PRIVATE "${LOFIBOX_WAYLAND_PROTOCOL_DIR}")
-        if(TARGET lofibox_zero_tui)
-            target_link_libraries(lofibox_zero_widget PRIVATE lofibox_zero_tui)
-            target_compile_definitions(lofibox_zero_widget PRIVATE LOFIBOX_HAVE_TUI=1)
-        endif()
-        if(TARGET lofibox_webui)
-            target_link_libraries(lofibox_zero_widget PRIVATE lofibox_zero_core lofibox_webui)
-            target_compile_definitions(lofibox_zero_widget PRIVATE LOFIBOX_HAVE_WEBUI=1)
-        endif()
-        install(TARGETS lofibox_zero_widget
-            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        )
-    endif()
 endif()
 
 if(LOFIBOX_BUILD_DEVICE)
@@ -621,16 +559,9 @@ install(DIRECTORY src/remote/
     PATTERN "__pycache__" EXCLUDE
 )
 
-if(LOFIBOX_BUILD_WIDGET AND NOT LOFIBOX_BUILD_WAYLAND AND NOT LOFIBOX_BUILD_X11 AND NOT LOFIBOX_BUILD_DEVICE)
-    install(FILES data/io.github.vicliu624.lofibox.widget.desktop
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
-        RENAME io.github.vicliu624.lofibox.desktop
-    )
-else()
-    install(FILES data/io.github.vicliu624.lofibox.desktop
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
-    )
-endif()
+install(FILES data/io.github.vicliu624.lofibox.desktop
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
+)
 
 if(TARGET lofibox_zero_device)
     install(PROGRAMS data/lofibox-cardputer-zero-applaunch
@@ -873,10 +804,6 @@ if(BUILD_TESTING)
         target_link_libraries(lofibox_runtime_process_smoke PRIVATE lofibox_zero_host_runtime)
         add_test(NAME lofibox_runtime_process_smoke COMMAND lofibox_runtime_process_smoke)
     endif()
-
-    add_executable(lofibox_media_runtime_capabilities_smoke tests/media_runtime_capabilities_smoke.cpp)
-    target_link_libraries(lofibox_media_runtime_capabilities_smoke PRIVATE lofibox_zero_host_runtime)
-    add_test(NAME lofibox_media_runtime_capabilities_smoke COMMAND lofibox_media_runtime_capabilities_smoke)
 
     add_executable(lofibox_host_audio_realtime_dsp_smoke tests/host_audio_realtime_dsp_smoke.cpp)
     target_link_libraries(lofibox_host_audio_realtime_dsp_smoke PRIVATE lofibox_zero_host_runtime)

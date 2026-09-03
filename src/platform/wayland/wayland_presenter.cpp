@@ -94,6 +94,9 @@ int createAnonymousFile(std::size_t size)
         return {app::InputEvent{app::InputKey::Enter, "OK", '\0'}};
     case XKB_KEY_Tab:
         return {app::InputEvent{app::InputKey::Tab, "TAB", '\0'}};
+    case XKB_KEY_XF86AudioPlay:
+    case XKB_KEY_XF86AudioPause:
+        return {app::InputEvent{app::InputKey::MediaPlayPause, "PLAY/PAUSE", '\0'}};
     case XKB_KEY_F1:
         return {app::InputEvent{app::InputKey::F1, "F1", '\0'}};
     case XKB_KEY_F2:
@@ -179,9 +182,11 @@ struct WaylandPresenter::Impl {
         xdg_toplevel_set_max_size(toplevel_, kWidth, kHeight);
         if (decoration_manager_ != nullptr) {
             decoration_ = zxdg_decoration_manager_v1_get_toplevel_decoration(decoration_manager_, toplevel_);
+            // Request Labwc's server-side frame.  This provides the normal
+            // titlebar with drag, minimize, and close controls.
             zxdg_toplevel_decoration_v1_set_mode(
                 decoration_,
-                ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
+                ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
         }
 
         if (!createBuffer(buffers[0]) || !createBuffer(buffers[1])) {

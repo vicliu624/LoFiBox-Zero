@@ -33,6 +33,7 @@ enum class InputKey {
     F10,
     F11,
     F12,
+    MediaPlayPause,
     Home,
     PageUp,
     PageDown,

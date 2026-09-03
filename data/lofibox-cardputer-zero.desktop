@@ -4,7 +4,7 @@
 Type=Application
 Name=LoFiBox
 GenericName=Music Player
-Comment=Chromeless desktop-widget music player
+Comment=Compact music player
 Exec=/usr/lib/lofibox/lofibox-applaunch
 Icon=share/images/lofibox.png
 Terminal=false

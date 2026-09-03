@@ -31,6 +31,7 @@ UserAction mapInput(const InputEvent& event)
     case InputKey::F10:
     case InputKey::F11:
     case InputKey::F12:
+    case InputKey::MediaPlayPause:
     case InputKey::Insert:
         return UserAction::None;
     case InputKey::Home:

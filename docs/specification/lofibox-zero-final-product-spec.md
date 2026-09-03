@@ -75,11 +75,11 @@ The finished product must be capable of being installed through official distrib
 sudo apt install lofibox
 ```
 
-The primary product presentation is a chromeless desktop-widget music terminal.
-It must look and behave more like a focused desktop gadget than a conventional document-style desktop application.
+The primary product presentation is a compact music application hosted in a normal compositor-managed desktop window.
+It must look and behave like a focused music player rather than a conventional document-style desktop application.
 
-The main product surface must not expose a traditional application menu bar.
-Desktop integration still exists through `.desktop`, AppStream, MIME, MPRIS, D-Bus, media keys, notifications, and XDG paths, but those integrations must not force conventional desktop chrome into the product UI.
+The main product surface must not expose a traditional in-app application menu bar.
+Desktop integration still exists through `.desktop`, AppStream, MIME, MPRIS, D-Bus, media keys, notifications, and XDG paths, but those integrations must not force conventional desktop chrome into the product canvas. The compositor-provided title bar remains outside the product UI.
 
 `Cardputer Zero`, `PocketFrame`, framebuffer builds, VNC validation, and other device-shaped runtimes are adapter profiles and validation targets.
 They are important, but they are not the product's highest identity.
@@ -96,7 +96,7 @@ Its final form is:
 - desktop-integrated
 - packageable for official Debian and Ubuntu archive review
 - operable by keyboard and small-screen profiles where those profiles are active
-- presented as a chromeless desktop-widget style app without a traditional menu bar
+- presented as a compositor-managed desktop application without a traditional in-app menu bar
 - metadata-aware
 - recording-identity-aware
 - cover-art-aware
@@ -121,7 +121,7 @@ The finished product must remain:
 
 - a focused music player
 - coherent as a Linux desktop application
-- chromeless and widget-like in its primary surface
+- compact and low-distraction in its primary surface
 - usable through keyboard-first and device-profile surfaces
 - consistent across local, remote, and streamed content where their semantics overlap
 - suitable for Debian and Ubuntu packaging norms without deleting product domains
@@ -233,7 +233,7 @@ The finished product must include these capability domains.
 - XDG-compliant config, data, cache, and state paths
 
 Linux desktop integration must not imply a conventional menu bar or document-window user experience.
-The product may be launchable and controllable through desktop standards while still presenting a compact chromeless widget surface.
+The product may be launchable and controllable through desktop standards while still presenting a compact player canvas inside its normal managed window.
 
 ### 6.9 Device Profiles
 
@@ -280,8 +280,8 @@ The finished product must expose the following first-class user-facing surfaces,
 - settings surface
 - about or diagnostics surface
 - Linux desktop integration surfaces where exposed by the platform
-- device-profile surfaces that adapt the shared chromeless shell to the target form factor
-- desktop-widget surfaces that preserve the no-menu-bar product identity
+- device-profile surfaces that adapt the shared compact canvas to the target form factor
+- desktop-window surfaces that preserve the no-menu-bar product identity
 
 This document defines that these surfaces must exist in the final product model.
 Their current implementation shape belongs to the UI implementation specifications.

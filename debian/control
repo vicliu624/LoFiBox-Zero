@@ -29,8 +29,8 @@ Depends:
  python3-mutagen
 Recommends:
  fonts-noto-cjk
-Description: chromeless desktop-widget music player
- LoFiBox is a pure C++ Linux music player with a compact chromeless
- desktop-widget surface. It is designed around local playback, media-library
+Description: compact desktop music player
+ LoFiBox is a pure C++ Linux music player with a compact
+ compositor-managed desktop window. It is designed around local playback, media-library
  browsing, metadata and artwork, remote-source extensibility, and a DSP-ready
  audio pipeline.

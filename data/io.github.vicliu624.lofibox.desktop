@@ -4,7 +4,7 @@
 Type=Application
 Name=LoFiBox
 GenericName=Music Player
-Comment=Chromeless desktop-widget music player
+Comment=Wayland desktop music player
 Exec=lofibox %U
 Icon=io.github.vicliu624.lofibox
 Terminal=false

@@ -92,7 +92,7 @@ The integrated product core distinguishes media identity, media source, media st
 - `AppRenderer` must not translate app state into UI projection structs inline; projection building belongs to `AppProjectionBuilder`.
 - Lyrics pages must not own lyric parsing, active-line location, scrolling-window algorithms, or spectrum rendering algorithms; those belong to widgets/effects.
 - Host runtime helper utilities must be named by responsibility rather than hidden inside `runtime_host_internal`.
-- Runtime shells such as PocketFrame, Cardputer Zero, container, framebuffer, X11, VNC, or desktop widget surfaces must not fork media identity, playback, audio, library, remote, enrichment, or projection semantics.
+- Runtime shells such as PocketFrame, Cardputer Zero, container, framebuffer, X11, VNC, or desktop window surfaces must not fork media identity, playback, audio, library, remote, enrichment, or projection semantics.
 - Host runtime service group construction must stay outside app controllers and outside UI/page code; factory code may compose service groups but must not regain protocol, playback, or metadata implementation details.
 - Core code must not include app, platform, UI, playback, audio, metadata, library, remote, desktop, or security layers.
 - Host adapters implement runtime services and helper/resource resolution, but do not depend on concrete app/page classes.

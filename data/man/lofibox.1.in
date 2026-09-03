@@ -2,7 +2,7 @@
 .\"
 .TH LOFIBOX 1 "May 2026" "LoFiBox @PROJECT_VERSION@" "User Commands"
 .SH NAME
-lofibox \- chromeless desktop-widget music player
+lofibox \- compact Linux desktop music player
 .SH SYNOPSIS
 .B lofibox
 [\fB\-\-help\fR]
@@ -21,7 +21,7 @@ lofibox \- chromeless desktop-widget music player
 [\fB\-\-theme\fR \fIdark|light|amber|mono\fR]
 .SH DESCRIPTION
 .B LoFiBox
-is a compact Linux music player with a chromeless desktop-widget surface.
+is a compact Linux music player with a compositor-managed desktop window.
 It is designed for local music playback, media-library browsing, metadata
 and artwork display, remote-source extensibility, and a DSP-ready audio
 pipeline.

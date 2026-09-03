@@ -4,8 +4,6 @@
 
 #include <filesystem>
 #include <optional>
-#include <string>
-#include <vector>
 
 namespace lofibox::platform::host {
 
@@ -19,12 +17,5 @@ struct MediaRuntimeCapabilities {
 };
 
 [[nodiscard]] const MediaRuntimeCapabilities& mediaRuntimeCapabilities();
-
-// The TDVP widget is a complete local music player, not a presentation-only
-// fallback. It needs the decoder, metadata probe and one native PCM sink
-// before it opens its Wayland surface.
-[[nodiscard]] std::vector<std::string> missingWidgetMediaRuntimeTools(
-    const MediaRuntimeCapabilities& capabilities);
-void requireWidgetMediaRuntime();
 
 } // namespace lofibox::platform::host

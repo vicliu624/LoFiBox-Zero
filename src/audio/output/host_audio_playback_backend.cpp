@@ -559,7 +559,11 @@ public:
                 "--rate=" + std::to_string(kSampleRate),
                 "--channels=" + std::to_string(kChannels),
                 "--stream-name=LoFiBox",
-                "-",
+                // Bound the PulseAudio queue so pausing the paplay process
+                // stops audible output promptly instead of draining seconds
+                // of already-buffered PCM.
+                "--latency-msec=40",
+                "--process-time-msec=10",
             };
         } else if (sink.kind == PcmOutputSinkKind::PipeWireCat) {
             sink_args = {

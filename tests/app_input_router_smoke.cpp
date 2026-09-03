@@ -136,6 +136,14 @@ int main()
         return 1;
     }
 
+    const int transport_toggles_before_media_keys = target.toggle_play_pause_calls;
+    lofibox::app::routeInput(target, key(lofibox::app::InputKey::MediaPlayPause));
+    lofibox::app::routeInput(target, character(' '));
+    if (target.toggle_play_pause_calls != transport_toggles_before_media_keys + 2) {
+        std::cerr << "Expected desktop media and Space keys to toggle playback.\n";
+        return 1;
+    }
+
     target.page = lofibox::app::AppPage::NowPlaying;
     lofibox::app::routeInput(target, character('L'));
     if (target.page != lofibox::app::AppPage::Lyrics || target.push_page_calls != 1) {

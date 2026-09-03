@@ -91,7 +91,7 @@ When writing UI or feature code, ask:
 - am I solving complexity by deleting a product capability rather than organizing it behind a proper boundary?
 - am I leaking desktop, protocol, or packaging details into product state?
 - am I confusing a required device profile, such as `Cardputer Zero`, with the product's whole identity?
-- am I accidentally turning the chromeless desktop-widget shell into a conventional menu-bar application?
+- am I accidentally turning the compact desktop canvas into a conventional in-app menu-bar application?
 
 If a feature requires new dependencies, install paths, provider split, desktop files, tests, or copyright review, the relevant governance spec must be updated before implementation shortcuts become structure.
 
@@ -348,7 +348,7 @@ Example:
 
 ### 4.4 Product Shell Beats Generic Desktop Chrome
 
-- LoFiBox's primary product shell is chromeless and widget-like; generic desktop window chrome must not be treated as part of the app UI.
+- LoFiBox's primary product shell is a compact player canvas in a normal compositor-managed window; generic desktop window chrome is supplied by the compositor and is not part of the app UI.
 
 Example:
 

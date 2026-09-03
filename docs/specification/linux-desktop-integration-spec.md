@@ -7,8 +7,10 @@
 This document defines Linux desktop integration requirements for `LoFiBox Zero`.
 Desktop integration is a product and packaging requirement, not decorative metadata.
 
-LoFiBox's primary UI is a chromeless desktop-widget music terminal.
-Linux desktop integration must make it launchable, controllable, discoverable, and packageable without forcing a traditional application menu bar into the product surface.
+LoFiBox's primary Linux desktop UI is a compact music application hosted in a
+normal compositor- or window-manager-managed window. Linux desktop integration
+must make it launchable, controllable, discoverable, and packageable without
+forcing a traditional application menu bar into the product canvas.
 
 ## 2. Required Data Files
 
@@ -64,25 +66,29 @@ Those translated commands must converge through the application command/query bo
 
 ## 6. Product Shell Constraint
 
-The Linux desktop target must support a compact no-menu-bar product shell.
+The Linux desktop target must support a compact no-menu-bar product canvas
+inside a normal managed application window.
 
 This means:
 
-- no traditional application menu bar inside the primary product surface
+- no traditional application menu bar inside the primary product canvas
 - no document-window assumptions in the UI model
 - no protocol, settings, or help affordance hidden only behind a menu bar
 - keyboard and page-local help affordances remain first-class
 - desktop standards are used for launch, metadata, media control, notifications, and file/URL opening rather than for adding product chrome
 
-The X11 desktop-widget shell must choose window behavior from physical display capability rather than board names. If the active physical display cannot provide free space beyond the minimum `320x170` product surface, the shell may present a fixed device-like surface. If the display is larger than the minimum surface, the shell must open centered and remain movable without requiring a traditional menu bar.
-
-The X11 desktop-widget shell `MUST` remain chromeless without a traditional menu bar while still being managed by the desktop window manager where one is available. It `MUST NOT` use unmanaged-window behavior as the mechanism for removing window chrome when that would prevent normal desktop actions such as minimize. `Super+H` is reserved by the X11 presentation adapter as a shell-level minimize shortcut; it must iconify/minimize the LoFiBox window and must not be forwarded into the shared app input router as a product command.
+The Wayland desktop target must use an `xdg_toplevel`, participate in ordinary
+workspace management, and request server-side decorations when the compositor
+supports `xdg-decoration`. The compositor owns titlebar dragging, minimizing,
+and closing; LoFiBox must not emulate a desktop widget or claim a layer-shell
+surface. X11 targets must likewise remain managed by the window manager and
+must not use unmanaged-window behavior to avoid standard desktop actions.
 
 The application icon must be installed through the hicolor icon theme under the desktop id `io.github.vicliu624.lofibox`, including the SVG metadata icon and a product-logo PNG fallback where available.
 
 ## 6.1 Pointer Projection Constraint
 
-The X11 desktop-widget shell is a keyboard-first, compact product surface.
+The desktop application is keyboard-first and keeps a compact product canvas.
 Pointer input may be translated by the shell for development convenience, but the
 pointer graphic is not product information and must not be projected into the
 LoFiBox canvas.
@@ -96,7 +102,7 @@ capture-shell cursor artifact over the application surface.
 
 ## 7. Desktop Input Method Integration
 
-The X11 desktop-widget shell must participate in the user's Debian/Linux text-input session.
+The desktop application must participate in the user's Debian/Linux text-input session.
 
 This means:
 

@@ -9,7 +9,7 @@ LoFiBox Zero.
 
 The TUI is not a debug print view, a GUI fallback, or a second player. It is a
 formal presentation target alongside the Linux framebuffer/device target and the
-X11 desktop-widget target.
+X11 desktop-window target.
 
 The intended entry points are:
 

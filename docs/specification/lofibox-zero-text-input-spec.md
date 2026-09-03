@@ -77,7 +77,7 @@ The shared app layer consumes:
 
 The shared app layer must not include Linux input headers, X11 input-method calls, Fcitx/IBus protocol clients, or device-path knowledge.
 
-### 5.2 X11 Desktop-Widget Target
+### 5.2 X11 Desktop-Window Target
 
 The X11 shell is the primary Debian desktop presentation target.
 It must integrate with the system input method for text-entry pages.

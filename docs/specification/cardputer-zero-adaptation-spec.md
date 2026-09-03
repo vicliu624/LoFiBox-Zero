@@ -14,7 +14,7 @@ This distinction prevents two opposite failures:
 - shrinking LoFiBox into a board-specific demo
 - ignoring a real target's special screen and interaction constraints because LoFiBox is also a Linux desktop application
 
-The base LoFiBox product is already a chromeless desktop-widget music terminal.
+The base LoFiBox product is a compact desktop music application hosted in a normal compositor-managed window.
 The Cardputer Zero profile adapts that product shell to a stricter small-screen and hardware-keyboard environment; it does not invent the no-menu-bar rule by itself.
 
 ## 2. Authority
