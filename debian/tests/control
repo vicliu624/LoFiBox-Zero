@@ -1,5 +1,5 @@
 Tests: smoke
 Depends:
- @,
+ lofibox | lofibox-cardputer-zero,
  appstream,
  desktop-file-utils
