@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Add a separate Cardputer Zero ARM64 framebuffer package with namespaced
+  executables, assets and APPLaunch integration; retain the Debian Wayland
+  package as a separate artifact.
+- Map contextual icon actions to the Cardputer's 4–8 keys across pages, with
+  translucent background spectrum and keyboard lights following its rightmost
+  column.
+- Decode local MP3 through the native 48 kHz PCM path, and bound playback,
+  library/enrichment work and descriptor ownership for the small device.
+- Add independent session timers for stopping playback and exiting LoFiBox,
+  and for idle screen blanking while music continues. Consume wake keys and
+  repeats, suspend hidden rendering, and restore the launcher backlight on exit.
 - Retired the TDVP-only `lofibox-widget` layer-shell route, including its
   protocol, target, desktop entry, launcher branch, scheduler, and tests.
   `lofibox-wayland` is now the only native Wayland desktop target and is a

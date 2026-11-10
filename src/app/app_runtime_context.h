@@ -139,7 +139,8 @@ private:
     [[nodiscard]] std::optional<std::string> remoteBrowseTitleOverride() const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> serverDiagnosticsRows() const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> streamDetailRows() const;
-    [[nodiscard]] std::vector<std::pair<std::string, std::string>> queueRows() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> queueRows(
+        const std::vector<int>& ids, int active_index, int first, int count) const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> searchRows() const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> remoteSetupRows() const;
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> remoteProfileSettingsRows() const;

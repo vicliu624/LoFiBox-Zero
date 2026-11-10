@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "platform/host/runtime_provider_factories.h"
+#include "core/operation_cancellation.h"
 
 #include <filesystem>
 #include <memory>
@@ -65,10 +66,8 @@ public:
         }
 
         const auto key = cacheKeyForPath(path);
-        auto& entry = cache_->entries[key];
-        if (!entry.track_identity_attempted && fs::exists(metadataCachePath(*cache_, key))) {
-            entry = loadMetadataCache(*cache_, key);
-        }
+        CacheEntrySession session{*cache_, key};
+        auto& entry = session.entry;
         const bool cached_identity_is_current = entry.identity.found && entry.track_identity_version >= kTrackIdentityVersion;
         const bool cached_identity_is_strong_enough = entry.identity.audio_fingerprint_verified || !acoustid_.available();
         if (cached_identity_is_current && cached_identity_is_strong_enough) {
@@ -98,6 +97,7 @@ public:
             }
         }
 
+        if (core::operationCancelled()) return {};
         entry.track_identity_attempted = true;
         entry.track_identity_version = kTrackIdentityVersion;
         if (!identity.fingerprint.empty()) {
@@ -114,7 +114,7 @@ public:
         } else {
             logRuntime(RuntimeLogLevel::Warn, "identity", "Track identity miss for " + pathUtf8String(path));
         }
-        storeMetadataCache(*cache_, key, entry);
+        session.persist();
         return identity;
     }
 
@@ -129,10 +129,8 @@ public:
         }
 
         const std::string key{stable_cache_key};
-        auto& entry = cache_->entries[key];
-        if (!entry.track_identity_attempted && fs::exists(metadataCachePath(*cache_, key))) {
-            entry = loadMetadataCache(*cache_, key);
-        }
+        CacheEntrySession session{*cache_, key};
+        auto& entry = session.entry;
         const bool cached_identity_is_current = entry.identity.found && entry.track_identity_version >= kTrackIdentityVersion;
         const bool cached_identity_is_strong_enough = entry.identity.audio_fingerprint_verified || !acoustid_.available();
         if (cached_identity_is_current && cached_identity_is_strong_enough) {
@@ -162,6 +160,7 @@ public:
             }
         }
 
+        if (core::operationCancelled()) return {};
         entry.track_identity_attempted = true;
         entry.track_identity_version = kTrackIdentityVersion;
         if (!identity.fingerprint.empty()) {
@@ -179,7 +178,7 @@ public:
         } else {
             logRuntime(RuntimeLogLevel::Warn, "identity", "Remote track identity miss for " + pathUtf8String(lookup_path));
         }
-        storeMetadataCache(*cache_, key, entry);
+        session.persist();
         return identity;
     }
 

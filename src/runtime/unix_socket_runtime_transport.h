@@ -89,8 +89,9 @@ public:
 
 private:
     void run();
-    void handleClient(int client_fd) noexcept;
-    void handleEventStream(int client_fd, RuntimeEventStreamRequest request) noexcept;
+    void handleClient(int client_fd);
+    void handleEventStream(int client_fd, RuntimeEventStreamRequest request);
+    struct ClientWorker;
 
     RuntimeCommandServer& server_;
     std::filesystem::path socket_path_{};
@@ -98,8 +99,7 @@ private:
     std::atomic_bool running_{false};
     int server_fd_{-1};
     std::thread thread_{};
-    std::mutex client_threads_mutex_{};
-    std::vector<std::thread> client_threads_{};
+    std::vector<std::unique_ptr<ClientWorker>> clients_{};
 };
 
 } // namespace lofibox::runtime

@@ -38,6 +38,7 @@ struct PlaybackSession {
     std::string current_stream_url_redacted{};
     std::string current_stream_artwork_url{};
     bool current_stream_live{false};
+    bool current_stream_seekable{false};
     bool shuffle_enabled{false};
     bool repeat_all{false};
     bool repeat_one{false};
@@ -65,6 +66,8 @@ struct PlaybackEnrichmentResult {
     RemoteServerProfile remote_profile{};
     RemoteTrack remote_track{};
     bool cache_remote_facts{false};
+    // Local tags/artwork can arrive while online lyrics/metadata are pending.
+    bool complete{true};
 };
 
 } // namespace lofibox::app

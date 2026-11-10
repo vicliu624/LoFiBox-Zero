@@ -13,6 +13,7 @@ WebUiRuntimeAdapter::WebUiRuntimeAdapter(runtime::RuntimeCommandClient& client)
 
 runtime::RuntimeSnapshot WebUiRuntimeAdapter::querySnapshot()
 {
+    const std::lock_guard lock{mutex_};
     try {
         current_snapshot_ = client_.snapshot();
         last_error_.clear();
@@ -26,6 +27,7 @@ runtime::RuntimeSnapshot WebUiRuntimeAdapter::querySnapshot()
 
 runtime::RuntimeCommandResult WebUiRuntimeAdapter::submitCommand(runtime::RuntimeCommand command)
 {
+    const std::lock_guard lock{mutex_};
     try {
         auto result = client_.dispatch(command);
         if (!result.accepted) {
@@ -43,6 +45,7 @@ runtime::RuntimeCommandResult WebUiRuntimeAdapter::submitCommand(runtime::Runtim
 
 std::vector<runtime::RuntimeEvent> WebUiRuntimeAdapter::pollEvents()
 {
+    const std::lock_guard lock{mutex_};
     std::vector<runtime::RuntimeEvent> events;
     try {
         current_snapshot_ = client_.snapshot();
@@ -59,18 +62,21 @@ std::vector<runtime::RuntimeEvent> WebUiRuntimeAdapter::pollEvents()
     return events;
 }
 
-const runtime::RuntimeSnapshot& WebUiRuntimeAdapter::lastSnapshot() const noexcept
+runtime::RuntimeSnapshot WebUiRuntimeAdapter::lastSnapshot() const
 {
+    const std::lock_guard lock{mutex_};
     return current_snapshot_;
 }
 
-const std::string& WebUiRuntimeAdapter::lastError() const noexcept
+std::string WebUiRuntimeAdapter::lastError() const
 {
+    const std::lock_guard lock{mutex_};
     return last_error_;
 }
 
 bool WebUiRuntimeAdapter::isConnected() const noexcept
 {
+    const std::lock_guard lock{mutex_};
     return connected_;
 }
 

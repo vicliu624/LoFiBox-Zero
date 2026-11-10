@@ -46,6 +46,13 @@
 - Play/Pause control
 - Next control
 - Playback mode control
+- A translucent spectrum background across the content area while playing,
+  using the existing visualization frame. Columns may extend from just above
+  the action bar to just below the top bar (about 114 px on the 320×170 canvas).
+  Keep opacity around 10–25%, soften column tips and edges, and draw artwork,
+  metadata and progress above this layer. Pause, unavailable data and silence
+  must not display invented spectrum motion. No additional audio analysis or
+  per-frame overlay canvas belongs to this presentation change.
 
 ## 7. Event Contract
 

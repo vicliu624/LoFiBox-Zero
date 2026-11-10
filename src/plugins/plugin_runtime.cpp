@@ -157,7 +157,7 @@ bool PluginRuntime::spawnProcess()
     int stdout_pipe[2]{-1, -1};
     int stderr_pipe[2]{-1, -1};
 
-    if (::pipe(stdin_pipe) < 0 || ::pipe(stdout_pipe) < 0 || ::pipe(stderr_pipe) < 0) {
+    if (::pipe2(stdin_pipe, O_CLOEXEC) < 0 || ::pipe2(stdout_pipe, O_CLOEXEC) < 0 || ::pipe2(stderr_pipe, O_CLOEXEC) < 0) {
         last_error_ = "Failed to create pipes: " + std::string(std::strerror(errno));
         closePipe(stdin_pipe);
         closePipe(stdout_pipe);
@@ -182,6 +182,7 @@ bool PluginRuntime::spawnProcess()
         ::close(stdin_pipe[0]);  ::close(stdin_pipe[1]);
         ::close(stdout_pipe[0]); ::close(stdout_pipe[1]);
         ::close(stderr_pipe[0]); ::close(stderr_pipe[1]);
+        ::closefrom(STDERR_FILENO + 1);
 
         auto cwd = config_.cwd ? std::filesystem::path{*config_.cwd} : config_.plugin_dir;
         if (config_.cwd && cwd.is_relative()) {

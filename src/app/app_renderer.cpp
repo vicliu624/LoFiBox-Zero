@@ -7,6 +7,8 @@
 #include <string>
 
 #include "app/app_projection_builder.h"
+#include "app/page_screen_keys.h"
+#include "core/bitmap_font.h"
 #include "core/display_profile.h"
 #include "ui/pages/about_page.h"
 #include "ui/pages/equalizer_page.h"
@@ -24,130 +26,107 @@ using clock = std::chrono::steady_clock;
 
 std::vector<std::pair<std::string_view, std::string_view>> helpRowsForPage(AppPage page)
 {
-    switch (page) {
-    case AppPage::MainMenu:
-        return {
-            {"LEFT/RIGHT", "CHOOSE PAGE"},
-            {"PGUP/PGDN", "JUMP PAGE"},
-            {"OK", "OPEN"},
-            {"F2/F3", "PLAY / PAUSE"},
-            {"F4/F5", "PREV / NEXT"},
-            {"F6", "PLAY MODE"},
-            {"R", "REMIX MODE"},
-            {"F9-F12", "SEARCH LIB QUEUE SET"},
-        };
-    case AppPage::Songs:
-    case AppPage::PlaylistDetail:
-        return {
-            {"UP/DOWN", "MOVE"},
-            {"PGUP/PGDN", "PAGE"},
-            {"OK", "PLAY"},
-            {"BACKSPACE", "BACK"},
-            {"T", "SORT"},
-            {"E/INS", "EDIT PLAYLIST"},
-            {"F2-F6", "PLAYBACK"},
-            {"R", "REMIX MODE"},
-            {"F9", "SEARCH"},
-        };
-    case AppPage::NowPlaying:
-        return {
-            {"OK", "PLAY / PAUSE"},
-            {"LEFT", "PREVIOUS"},
-            {"RIGHT", "NEXT"},
-            {"UP/DOWN", "PLAY MODE"},
-            {"L", "LYRICS"},
-            {"Q", "QUEUE"},
-            {"F2-F6", "PLAYBACK"},
-            {"R", "REMIX MODE"},
-            {"HOME", "MENU"},
-        };
-    case AppPage::Lyrics:
-        return {
-            {"L", "NOW PLAYING"},
-            {"LEFT/RIGHT", "PREV / NEXT"},
-            {"BACKSPACE", "BACK"},
-            {"F2-F6", "PLAYBACK"},
-            {"R", "REMIX MODE"},
-            {"HOME", "MENU"},
-        };
-    case AppPage::Equalizer:
-        return {
-            {"LEFT/RIGHT", "BAND"},
-            {"UP/DOWN", "+/- 1DB"},
-            {"PGUP/PGDN", "+/- 3DB"},
-            {"OK", "PRESET"},
-            {"F2-F6", "PLAYBACK"},
-            {"R", "REMIX MODE"},
-            {"HOME", "MENU"},
-        };
-    case AppPage::Search:
-        return {
-            {"TYPE", "QUERY"},
-            {"BACKSPACE", "EDIT"},
-            {"UP/DOWN", "MOVE"},
-            {"PGUP/PGDN", "PAGE"},
-            {"OK", "PLAY"},
-            {"F2-F6", "PLAYBACK"},
-            {"HOME", "MENU"},
-        };
-    case AppPage::RemoteFieldEditor:
-        return {
-            {"TYPE", "VALUE"},
-            {"BACKSPACE", "EDIT"},
-            {"OK", "SAVE"},
-            {"F1", "HELP"},
-        };
-    case AppPage::PlaylistEditor:
-        return {
-            {"UP/DOWN", "MOVE"},
-            {"PGUP/PGDN", "PAGE"},
-            {"OK", "OPEN"},
-            {"DEL", "REMOVE"},
-            {"BACKSPACE", "BACK"},
-            {"F2-F6", "PLAYBACK"},
-            {"R", "REMIX MODE"},
-            {"HOME", "MENU"},
-        };
-    case AppPage::MusicIndex:
-    case AppPage::Artists:
-    case AppPage::Albums:
-    case AppPage::Genres:
-    case AppPage::Composers:
-    case AppPage::Compilations:
-    case AppPage::Playlists:
-    case AppPage::RemoteSetup:
-    case AppPage::SourceManager:
-    case AppPage::RemoteProfileSettings:
-    case AppPage::Queue:
-    case AppPage::RemoteBrowse:
-    case AppPage::ServerDiagnostics:
-    case AppPage::StreamDetail:
-        return {
-            {"UP/DOWN", "MOVE"},
-            {"PGUP/PGDN", "PAGE"},
-            {"OK", "OPEN"},
-            {"BACKSPACE", "BACK"},
-            {"F2-F6", "PLAYBACK"},
-            {"R", "REMIX MODE"},
-            {"F9-F12", "SEARCH LIB QUEUE SET"},
-            {"HOME", "MENU"},
-        };
-    case AppPage::Boot:
-    case AppPage::Settings:
-        return {
-            {"UP/DOWN", "MOVE"},
-            {"PGUP/PGDN", "PAGE"},
-            {"OK", "OPEN"},
-            {"BACKSPACE", "BACK"},
-            {"F2-F6", "PLAYBACK"},
-            {"R", "REMIX MODE"},
-            {"F9", "SEARCH"},
-            {"HOME", "MENU"},
-        };
-    case AppPage::About:
-        return {};
+    using Row = std::pair<std::string_view, std::string_view>;
+    std::vector<Row> rows;
+    if (page == AppPage::RemoteFieldEditor) {
+        rows = {{"TYPE", "VALUE"}, {"BACKSPACE", "EDIT"}, {"OK", "SAVE"}, {"ESC", "CANCEL"}};
+    } else if (page == AppPage::Search) {
+        rows = {{"TYPE", "QUERY"}, {"BACKSPACE", "EDIT"}, {"FnF/FnX", "MOVE RESULTS"},
+                {"FnL/FnM", "PAGE UP / DOWN"}, {"OK", "PLAY"}};
+    } else {
+        constexpr std::array<std::string_view, 5> numbers{"4", "5", "6", "7", "8"};
+          const auto keys = screenKeysForPage(page);
+            for (std::size_t index = 0; index < keys.size(); ++index) {
+                if (keys[index].action != ScreenKeyAction::None) rows.emplace_back(numbers[index], keys[index].description);
+            }
+            rows.emplace_back(page == AppPage::Equalizer ? "F/X Z/C" : "FZXC / OK",
+                              page == AppPage::Equalizer ? "GAIN / BAND" : "NAVIGATE / CONFIRM");
     }
-    return {};
+    rows.emplace_back("FnQ/W/E", "MEDIA CONTROLS");
+    rows.emplace_back("FnS/D/A", "VOL- / VOL+ / MUTE");
+    if (page != AppPage::RemoteFieldEditor) rows.emplace_back("ESC", "BACK / CANCEL");
+    rows.emplace_back("F1 / FnH", "HELP");
+    return rows;
+}
+
+ui::ActionIcon screenKeyIcon(ScreenKeyAction action, bool playing)
+{
+    using A = ScreenKeyAction;
+    using I = ui::ActionIcon;
+    switch (action) {
+    case A::Back: return I::Back;
+    case A::MenuPrevious: case A::PreviousBand: return I::Left;
+    case A::MenuNext: case A::NextBand: return I::Right;
+    case A::MenuOpen: case A::Open: return I::Open;
+    case A::NowPlaying: return I::Player;
+    case A::Search: return I::Search;
+    case A::PageUp: return I::PageUp;
+    case A::PageDown: return I::PageDown;
+    case A::PlaySelection: return I::Play;
+    case A::PreviousTrack: return I::PreviousTrack;
+    case A::PlayPause: return playing ? I::Pause : I::Play;
+    case A::NextTrack: return I::NextTrack;
+    case A::Lyrics: return I::Lyrics;
+    case A::Queue: return I::Queue;
+    case A::Sort: return I::Sort;
+    case A::PlaybackMode: return I::Repeat;
+    case A::GainDown: return I::Minus;
+    case A::GainUp: return I::Plus;
+    case A::Preset: return I::Equalizer;
+    case A::Library: return I::Library;
+    case A::Settings: return I::Settings;
+    case A::None: case A::Help: return I::Help;
+    }
+    return I::Help;
+}
+
+void renderScreenKeys(core::Canvas& canvas, const AppRenderTarget& target)
+{
+    const auto page = target.currentPage();
+    if (page == AppPage::Boot || target.helpOpen()) return;
+    const auto& theme = target.theme();
+    const bool playing = target.playbackSession().status == PlaybackStatus::Playing;
+    const std::array colors{theme.palette.background, theme.palette.divider,
+                           theme.palette.text_primary, theme.palette.text_secondary, theme.palette.progress};
+    struct BarCache {
+        core::Canvas image{core::kDisplayWidth, core::kDisplayHeight - kScreenKeyBarTop};
+        AppPage page{AppPage::Boot};
+        bool playing{};
+        std::array<core::Color, 5> colors{};
+        bool valid{};
+    };
+    // One bounded 35 KiB entry per render thread; page/theme/state changes
+    // invalidate it. No growing text or image cache and no shared mutable state.
+    thread_local BarCache cache;
+    if (cache.valid && cache.page == page && cache.playing == playing && cache.colors == colors) {
+        canvas.blit(cache.image, 0, kScreenKeyBarTop);
+        return;
+    }
+    auto& bar = cache.image;
+    bar.clear(theme.palette.background);
+    bar.fillRect(21, 0, 280, 1, theme.palette.divider);
+    if (page == AppPage::Search || page == AppPage::RemoteFieldEditor) {
+        ui::drawActionIcon(bar, ui::ActionIcon::Keyboard, kScreenKeyCenters[0]-9, 5, theme.palette.text_secondary);
+        ui::drawActionIcon(bar, page == AppPage::Search ? ui::ActionIcon::Play : ui::ActionIcon::Save,
+                           kScreenKeyCenters[2]-9, 5, theme.palette.progress);
+        ui::drawActionIcon(bar, ui::ActionIcon::Back, kScreenKeyCenters[4]-9, 5, theme.palette.text_secondary);
+    } else {
+        const auto keys = screenKeysForPage(page);
+        for (std::size_t index = 0; index < keys.size(); ++index) {
+            const auto& key = keys[index];
+            if (key.action == ScreenKeyAction::None) continue;
+            const bool primary = key.action == ScreenKeyAction::MenuOpen || key.action == ScreenKeyAction::Open
+                || key.action == ScreenKeyAction::PlayPause || key.action == ScreenKeyAction::PlaySelection
+                || key.action == ScreenKeyAction::Preset;
+            ui::drawActionIcon(bar, screenKeyIcon(key.action, playing), kScreenKeyCenters[index]-9, 5,
+                               primary ? theme.palette.progress : theme.palette.text_secondary);
+        }
+    }
+    cache.page = page;
+    cache.playing = playing;
+    cache.colors = colors;
+    cache.valid = true;
+    canvas.blit(bar, 0, kScreenKeyBarTop);
 }
 
 void renderHelpIfOpen(core::Canvas& canvas, const AppRenderTarget& target)
@@ -279,7 +258,6 @@ void renderMainMenu(core::Canvas& canvas, const AppRenderTarget& target)
         canvas,
         buildMainMenuProjection(target),
         theme);
-    renderHelpIfOpen(canvas, target);
 }
 
 void renderNowPlaying(core::Canvas& canvas, const AppRenderTarget& target)
@@ -300,7 +278,6 @@ void renderNowPlaying(core::Canvas& canvas, const AppRenderTarget& target)
         canvas,
         buildNowPlayingProjection(target),
         theme);
-    renderHelpIfOpen(canvas, target);
 }
 
 void renderLyrics(core::Canvas& canvas, const AppRenderTarget& target)
@@ -312,7 +289,6 @@ void renderLyrics(core::Canvas& canvas, const AppRenderTarget& target)
         canvas,
         buildLyricsProjection(target),
         theme);
-    renderHelpIfOpen(canvas, target);
 }
 
 void renderList(core::Canvas& canvas, const AppRenderTarget& target)
@@ -322,7 +298,6 @@ void renderList(core::Canvas& canvas, const AppRenderTarget& target)
         canvas,
         buildListProjection(target),
         theme);
-    renderHelpIfOpen(canvas, target);
 }
 
 } // namespace
@@ -338,21 +313,19 @@ void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
         return;
     case AppPage::MainMenu:
         renderMainMenu(canvas, target);
-        return;
+        break;
     case AppPage::NowPlaying:
         renderNowPlaying(canvas, target);
-        return;
+        break;
     case AppPage::Lyrics:
         renderLyrics(canvas, target);
-        return;
+        break;
     case AppPage::Equalizer:
         ui_pages::renderEqualizerPage(canvas, buildEqualizerProjection(target), theme);
-        renderHelpIfOpen(canvas, target);
-        return;
+        break;
     case AppPage::About:
         ui_pages::renderAboutPage(canvas, buildAboutProjection(target), theme);
-        renderHelpIfOpen(canvas, target);
-        return;
+        break;
     case AppPage::MusicIndex:
     case AppPage::Artists:
     case AppPage::Albums:
@@ -374,8 +347,10 @@ void renderApp(core::Canvas& canvas, const AppRenderTarget& target)
     case AppPage::StreamDetail:
     case AppPage::PlaylistEditor:
         renderList(canvas, target);
-        return;
+        break;
     }
+    renderScreenKeys(canvas, target);
+    renderHelpIfOpen(canvas, target);
 }
 
 } // namespace lofibox::app

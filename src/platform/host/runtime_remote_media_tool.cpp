@@ -70,7 +70,7 @@ std::vector<fs::path> pluginSearchDirs()
     dirs.push_back(projectRoot() / "data" / "plugins");
     dirs.push_back(runtime_paths::appDataDir() / "plugins");
 #if !defined(_WIN32)
-    dirs.emplace_back("/usr/share/lofibox/plugins");
+    dirs.emplace_back(LOFIBOX_SYSTEM_PLUGIN_DIR);
 #endif
     return dirs;
 }

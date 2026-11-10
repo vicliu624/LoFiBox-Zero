@@ -418,6 +418,14 @@ void test_command_parse_next()
 
 void test_command_parse_queue_jump()
 {
+    FakeRuntimeCommandClient invalid_client;
+    lofibox::webui::WebUiRuntimeAdapter invalid_adapter{invalid_client};
+    lofibox::webui::WebUiHttpRouter invalid_router{invalid_adapter};
+    for (const auto number : {"999999999999999999999", "-2147483649", "2147483648", "1junk", "1.5"}) {
+        lofibox::runtime::RuntimeCommand invalid{};
+        const std::string body = std::string{R"({"kind":"webui.QueueJump","queue_index":)"} + number + "}";
+        assert(!invalid_router.parseWebUiCommand(body, invalid));
+    }
     FakeRuntimeCommandClient fake_client;
     lofibox::webui::WebUiRuntimeAdapter adapter{fake_client};
     lofibox::webui::WebUiHttpRouter router{adapter};
@@ -660,6 +668,38 @@ void test_http_router_responses()
 
 } // namespace
 
+void test_command_eq_toggle_and_escaped_context()
+{
+    FakeRuntimeCommandClient client;
+    lofibox::webui::WebUiRuntimeAdapter adapter{client};
+    lofibox::webui::WebUiHttpRouter router{adapter};
+    lofibox::runtime::RuntimeCommand command;
+    assert(router.parseWebUiCommand(R"({"kind" : "webui.EqEnable"})", command));
+    assert(command.kind == lofibox::runtime::RuntimeCommandKind::EqEnable);
+    assert(router.parseWebUiCommand(R"({"kind":"webui.EqDisable"})", command));
+    assert(command.kind == lofibox::runtime::RuntimeCommandKind::EqDisable);
+    assert(router.parseWebUiCommand(R"({"kind":"webui.PlayStartTrack","track_id":5,"album":"A\\B & \"Quotes\" '作品","artist":"C:\\Band '中文"})", command));
+    const auto* payload = command.payload.get<lofibox::runtime::PlaybackStartTrackPayload>();
+    assert(payload && payload->album == "A\\B & \"Quotes\" '作品" && payload->artist == "C:\\Band '中文");
+}
+
+void test_event_clears_media_and_updates_queue()
+{
+    lofibox::runtime::RuntimeEvent event;
+    event.kind = lofibox::runtime::RuntimeEventKind::LyricsChanged;
+    const auto unavailable = lofibox::webui::buildEventJson(event);
+    assert(unavailable.find("\"lyrics\":{\"available\":false") != std::string::npos);
+    assert(unavailable.find("\"visualization\":{\"available\":false,\"bands\":[]}") != std::string::npos);
+    event.snapshot.lyrics.available = true;
+    event.snapshot.lyrics.visible_lines.push_back({.text = "Line", .translation = "Translation"});
+    assert(lofibox::webui::buildEventJson(event).find("\"translation\":\"Translation\"") != std::string::npos);
+    event.kind = lofibox::runtime::RuntimeEventKind::QueueChanged;
+    event.snapshot.queue.active_ids = {7};
+    assert(lofibox::webui::buildEventJson(event).find("\"queue\":{") != std::string::npos);
+    event.kind = lofibox::runtime::RuntimeEventKind::VisualizationFrame;
+    assert(lofibox::webui::buildEventJson(event).find("\"queue\":{") == std::string::npos);
+}
+
 int main()
 {
     std::cout << "=== LoFiBox WebUI Smoke Tests ===\n\n";
@@ -683,6 +723,7 @@ int main()
     test_projection_eq();
     test_projection_event();
     test_projection_event_includes_current_track_id();
+    test_event_clears_media_and_updates_queue();
     std::cout << '\n';
 
     std::cout << "[Command Parsing]\n";
@@ -694,6 +735,7 @@ int main()
     test_command_parse_eq_cycle_preset();
     test_command_parse_invalid();
     test_command_parse_missing_params();
+    test_command_eq_toggle_and_escaped_context();
     std::cout << '\n';
 
     std::cout << "[Static Assets]\n";

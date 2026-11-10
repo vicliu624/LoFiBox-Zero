@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -129,9 +130,35 @@ struct CacheEntry {
 
 struct SharedRuntimeCache {
     fs::path root{};
-    mutable std::unordered_map<std::string, CacheEntry> entries{};
+    mutable std::recursive_mutex file_mutex{};
     mutable std::chrono::steady_clock::time_point last_musicbrainz_request{};
+    mutable std::mutex musicbrainz_mutex{};
     SharedRuntimeCache();
+
+private:
+    friend class CacheEntrySession;
+    mutable std::mutex entries_mutex_{};
+    mutable std::unordered_map<std::string, CacheEntry> entries_{};
+};
+
+// Each provider works on its own copy, so slow network/decoder work never holds
+// the cache lock. Only fields changed by this session are merged back; nested
+// identity lookups and concurrent artwork requests cannot erase other results.
+class CacheEntrySession {
+public:
+    CacheEntrySession(const SharedRuntimeCache& cache, std::string_view key);
+    ~CacheEntrySession();
+    CacheEntrySession(const CacheEntrySession&) = delete;
+    CacheEntrySession& operator=(const CacheEntrySession&) = delete;
+
+    void commit();
+    void persist();
+    CacheEntry entry{};
+
+private:
+    const SharedRuntimeCache& cache_;
+    std::string key_;
+    CacheEntry base_{};
 };
 
 std::string cacheKeyForPath(const fs::path& path);

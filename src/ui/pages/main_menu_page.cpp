@@ -36,7 +36,7 @@ void drawMainMenuTopbar(core::Canvas& canvas, const MainMenuView& view, const Ui
     canvas.fillRect(0, 19, core::kDisplayWidth, 1, theme.palette.divider);
 
     const int text_y = ::lofibox::ui::centeredTextY(0, theme.spacing.top_bar_height, 1);
-    ::lofibox::ui::drawText(canvas, "F1:HELP", 6, text_y, theme.palette.text_secondary, 1);
+    ::lofibox::ui::drawActionIcon(canvas, ActionIcon::Help, 7, 1, theme.palette.text_secondary);
 
     constexpr int kInfoX = 118;
     constexpr int kInfoWidth = core::kDisplayWidth - kInfoX - 8;

@@ -46,6 +46,28 @@ option(LOFIBOX_BUILD_TUI "Build the ANSI terminal UI target." ON)
 option(LOFIBOX_BUILD_WEBUI "Build the WebUI remote-control HTTP/WebSocket server." ${LOFIBOX_BUILD_WEBUI_DEFAULT})
 option(LOFIBOX_INSTALL_LAUNCHER "Install the generic runtime-selecting lofibox launcher." ON)
 option(LOFIBOX_INSTALL_DOCUMENTATION "Install the full user and engineering documentation set." ON)
+option(LOFIBOX_BROWSER_TESTS "Enable optional Chromium/Weston integration tests." OFF)
+option(LOFIBOX_BUILD_NATIVE_MP3_HELPER "Build the Linux native MP3 PCM producer." ON)
+
+set(LOFIBOX_PRODUCT_PROFILE "developer" CACHE STRING "Product artifact: developer, cardputer, or debian")
+set_property(CACHE LOFIBOX_PRODUCT_PROFILE PROPERTY STRINGS developer cardputer debian)
+if(LOFIBOX_PRODUCT_PROFILE STREQUAL "cardputer")
+    set(LOFIBOX_INSTALL_NAMESPACE "lofibox-cardputer-zero")
+    set(LOFIBOX_PRIVATE_LIBDIR "lib/${LOFIBOX_INSTALL_NAMESPACE}" CACHE PATH "Private LoFiBox runtime directory" FORCE)
+    set(LOFIBOX_BUILD_DEVICE ON CACHE BOOL "Build framebuffer runtime" FORCE)
+    set(LOFIBOX_BUILD_WAYLAND OFF CACHE BOOL "Build Wayland runtime" FORCE)
+    set(LOFIBOX_BUILD_X11 OFF CACHE BOOL "Build X11 runtime" FORCE)
+elseif(LOFIBOX_PRODUCT_PROFILE STREQUAL "debian")
+    set(LOFIBOX_INSTALL_NAMESPACE "lofibox")
+    set(LOFIBOX_PRIVATE_LIBDIR "lib/lofibox" CACHE PATH "Private LoFiBox runtime directory" FORCE)
+    set(LOFIBOX_BUILD_DEVICE OFF CACHE BOOL "Build framebuffer runtime" FORCE)
+    set(LOFIBOX_BUILD_WAYLAND ON CACHE BOOL "Build Wayland runtime" FORCE)
+    set(LOFIBOX_BUILD_X11 OFF CACHE BOOL "Build X11 runtime" FORCE)
+elseif(NOT LOFIBOX_PRODUCT_PROFILE STREQUAL "developer")
+    message(FATAL_ERROR "Unknown LOFIBOX_PRODUCT_PROFILE: ${LOFIBOX_PRODUCT_PROFILE}")
+else()
+    set(LOFIBOX_INSTALL_NAMESPACE "lofibox")
+endif()
 
 add_library(lofibox_zero_core STATIC
     src/audio/audio_pipeline_controller.cpp
@@ -155,7 +177,7 @@ target_link_libraries(lofibox_zero_core PUBLIC Threads::Threads)
 target_compile_definitions(lofibox_zero_core PUBLIC
     LOFIBOX_VERSION="${PROJECT_VERSION}"
     LOFIBOX_ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
-    LOFIBOX_SYSTEM_ASSET_DIR="${CMAKE_INSTALL_FULL_DATADIR}/lofibox/assets"
+    LOFIBOX_SYSTEM_ASSET_DIR="${CMAKE_INSTALL_FULL_DATADIR}/${LOFIBOX_INSTALL_NAMESPACE}/assets"
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -214,12 +236,32 @@ add_library(lofibox_zero_host_runtime STATIC
     src/platform/host/track_identity_provider.cpp
     src/platform/host/xdg_remote_profile_store.cpp
 )
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND LOFIBOX_BUILD_NATIVE_MP3_HELPER)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(MPG123 QUIET IMPORTED_TARGET libmpg123)
+    pkg_check_modules(SOXR QUIET IMPORTED_TARGET soxr)
+    if(TARGET PkgConfig::MPG123 AND TARGET PkgConfig::SOXR)
+        add_executable(lofibox_mp3_decoder src/audio/decoder/native_mp3_helper.cpp)
+        set_target_properties(lofibox_mp3_decoder PROPERTIES OUTPUT_NAME lofibox-mp3-decoder)
+        target_include_directories(lofibox_mp3_decoder PRIVATE "${PROJECT_SOURCE_DIR}/src")
+        target_link_libraries(lofibox_mp3_decoder PRIVATE PkgConfig::MPG123 PkgConfig::SOXR Threads::Threads)
+        target_compile_options(lofibox_mp3_decoder PRIVATE -Wall -Wextra -Wpedantic)
+        add_dependencies(lofibox_zero_host_runtime lofibox_mp3_decoder)
+        install(TARGETS lofibox_mp3_decoder RUNTIME DESTINATION "${LOFIBOX_PRIVATE_LIBDIR}")
+    elseif(NOT LOFIBOX_PRODUCT_PROFILE STREQUAL "developer")
+        message(FATAL_ERROR "Product packages require libmpg123-dev and libsoxr-dev for the native MP3 helper")
+    else()
+        message(STATUS "libmpg123-dev/libsoxr-dev unavailable; developer playback uses FFmpeg")
+    endif()
+endif()
+
 target_include_directories(lofibox_zero_host_runtime PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(lofibox_zero_host_runtime PUBLIC cxx_std_20)
 target_link_libraries(lofibox_zero_host_runtime PUBLIC lofibox_zero_host_lock lofibox_zero_core Threads::Threads)
 target_compile_definitions(lofibox_zero_host_runtime PRIVATE
     LOFIBOX_PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     LOFIBOX_INSTALLED_HELPER_DIR="${CMAKE_INSTALL_PREFIX}/${LOFIBOX_PRIVATE_LIBDIR}"
+    LOFIBOX_SYSTEM_PLUGIN_DIR="${CMAKE_INSTALL_FULL_DATADIR}/${LOFIBOX_INSTALL_NAMESPACE}/plugins"
 )
 if(MSVC)
     target_compile_options(lofibox_zero_host_runtime PRIVATE /W4 /permissive- /FS)
@@ -312,7 +354,7 @@ if(LOFIBOX_BUILD_TUI)
     add_executable(lofibox_zero_tui_bin
         src/targets/tui_main.cpp
     )
-    set_target_properties(lofibox_zero_tui_bin PROPERTIES OUTPUT_NAME lofibox-tui)
+    set_target_properties(lofibox_zero_tui_bin PROPERTIES OUTPUT_NAME "${LOFIBOX_INSTALL_NAMESPACE}-tui")
     target_link_libraries(lofibox_zero_tui_bin PRIVATE lofibox_zero_tui)
     install(TARGETS lofibox_zero_tui_bin
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
@@ -487,8 +529,10 @@ if(LOFIBOX_BUILD_DEVICE)
     pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
 
     add_executable(lofibox_zero_device
+        src/platform/device/cardputer_rhythm_lights.cpp
         src/platform/device/linux_evdev_keyboard.cpp
         src/platform/device/linux_framebuffer.cpp
+        src/platform/device/framebuffer_blitter.cpp
         src/platform/device/linux_framebuffer_platform.cpp
         src/targets/device_main.cpp
     )
@@ -512,22 +556,29 @@ if(LOFIBOX_BUILD_DEVICE)
 endif()
 
 if(LOFIBOX_INSTALL_LAUNCHER)
-    install(PROGRAMS data/lofibox-launcher
+    if(LOFIBOX_PRODUCT_PROFILE STREQUAL "cardputer")
+        set(LOFIBOX_LAUNCHER data/lofibox-cardputer-launcher)
+    elseif(LOFIBOX_PRODUCT_PROFILE STREQUAL "debian")
+        set(LOFIBOX_LAUNCHER data/lofibox-debian-launcher)
+    else()
+        set(LOFIBOX_LAUNCHER data/lofibox-launcher)
+    endif()
+    install(PROGRAMS ${LOFIBOX_LAUNCHER}
         DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        RENAME lofibox
+        RENAME "${LOFIBOX_INSTALL_NAMESPACE}"
     )
 endif()
 
 install(FILES assets/README.md
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/lofibox/assets"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/${LOFIBOX_INSTALL_NAMESPACE}/assets"
 )
 
 install(DIRECTORY assets/ui/icons/
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/lofibox/assets/ui/icons"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/${LOFIBOX_INSTALL_NAMESPACE}/assets/ui/icons"
 )
 
 install(DIRECTORY data/plugins/
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/lofibox/plugins"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/${LOFIBOX_INSTALL_NAMESPACE}/plugins"
 )
 
 # Generated Python version module — single source of truth for Python helpers.
@@ -559,9 +610,11 @@ install(DIRECTORY src/remote/
     PATTERN "__pycache__" EXCLUDE
 )
 
-install(FILES data/io.github.vicliu624.lofibox.desktop
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
-)
+if(NOT LOFIBOX_PRODUCT_PROFILE STREQUAL "cardputer")
+    install(FILES data/io.github.vicliu624.lofibox.desktop
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
+    )
+endif()
 
 if(TARGET lofibox_zero_device)
     install(PROGRAMS data/lofibox-cardputer-zero-applaunch
@@ -569,16 +622,23 @@ if(TARGET lofibox_zero_device)
         RENAME lofibox-applaunch
     )
 
+    # APPLaunch metadata belongs to the appliance product, whose private
+    # paths and namespace are fixed. Developer installs retain their generic
+    # launcher and desktop entry instead of advertising an appliance path.
+    if(LOFIBOX_PRODUCT_PROFILE STREQUAL "cardputer")
     install(FILES data/lofibox-cardputer-zero.desktop
         DESTINATION "${CMAKE_INSTALL_DATADIR}/APPLaunch/applications"
-        RENAME lofibox.desktop
+        RENAME "${LOFIBOX_INSTALL_NAMESPACE}.desktop"
     )
 
     install(FILES assets/ui/icons/cardputer-zero/lofibox.png
         DESTINATION "${CMAKE_INSTALL_DATADIR}/APPLaunch/share/images"
+        RENAME "${LOFIBOX_INSTALL_NAMESPACE}.png"
     )
+    endif()
 endif()
 
+if(NOT LOFIBOX_PRODUCT_PROFILE STREQUAL "cardputer")
 install(FILES data/io.github.vicliu624.lofibox.metainfo.xml
     DESTINATION "${CMAKE_INSTALL_DATADIR}/metainfo"
 )
@@ -605,9 +665,11 @@ install(FILES assets/ui/icons/cardputer-zero/lofibox.png
 install(FILES data/mime/io.github.vicliu624.lofibox.xml
     DESTINATION "${CMAKE_INSTALL_DATADIR}/mime/packages"
 )
+endif()
 
 install(FILES "${CMAKE_BINARY_DIR}/generated/man/lofibox.1"
     DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
+    RENAME "${LOFIBOX_INSTALL_NAMESPACE}.1"
 )
 
 if(LOFIBOX_INSTALL_DOCUMENTATION)
@@ -625,6 +687,53 @@ if(LOFIBOX_INSTALL_DOCUMENTATION)
 endif()
 
 if(BUILD_TESTING)
+    if(LOFIBOX_BROWSER_TESTS)
+        if(NOT TARGET lofibox_zero_wayland OR NOT TARGET lofibox_webui)
+            message(FATAL_ERROR "Browser tests require the Wayland and WebUI targets.")
+        endif()
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        find_program(LOFIBOX_TEST_CHROMIUM NAMES chromium chromium-browser REQUIRED)
+        find_program(LOFIBOX_TEST_WESTON NAMES weston REQUIRED)
+        add_test(NAME lofibox_webui_browser_smoke
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/webui_browser_smoke.py"
+                --player "$<TARGET_FILE:lofibox_zero_wayland>"
+                --browser "${LOFIBOX_TEST_CHROMIUM}" --weston "${LOFIBOX_TEST_WESTON}"
+                --output "${CMAKE_CURRENT_BINARY_DIR}/browser-results")
+        set_tests_properties(lofibox_webui_browser_smoke PROPERTIES TIMEOUT 90)
+    endif()
+    add_executable(lofibox_library_rows_smoke tests/library_rows_smoke.cpp)
+    target_link_libraries(lofibox_library_rows_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_library_rows_smoke COMMAND lofibox_library_rows_smoke)
+    add_executable(lofibox_library_sort_smoke tests/library_sort_smoke.cpp)
+    target_link_libraries(lofibox_library_sort_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_library_sort_smoke COMMAND lofibox_library_sort_smoke)
+    add_executable(lofibox_library_external_access_smoke tests/library_external_access_smoke.cpp)
+    target_link_libraries(lofibox_library_external_access_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_library_external_access_smoke COMMAND lofibox_library_external_access_smoke)
+    set_tests_properties(lofibox_library_external_access_smoke PROPERTIES TIMEOUT 20)
+    add_executable(lofibox_runtime_cache_concurrency_smoke tests/runtime_cache_concurrency_smoke.cpp)
+    target_link_libraries(lofibox_runtime_cache_concurrency_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_runtime_cache_concurrency_smoke COMMAND lofibox_runtime_cache_concurrency_smoke)
+    set_tests_properties(lofibox_runtime_cache_concurrency_smoke PROPERTIES TIMEOUT 15)
+    add_executable(lofibox_gui_page_matrix_smoke tests/gui_page_matrix_smoke.cpp)
+    target_link_libraries(lofibox_gui_page_matrix_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_gui_page_matrix_smoke COMMAND lofibox_gui_page_matrix_smoke)
+    set_tests_properties(lofibox_gui_page_matrix_smoke PROPERTIES TIMEOUT 20)
+    add_executable(lofibox_queue_playlist_interaction_smoke tests/queue_playlist_interaction_smoke.cpp)
+    target_link_libraries(lofibox_queue_playlist_interaction_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_queue_playlist_interaction_smoke COMMAND lofibox_queue_playlist_interaction_smoke)
+    add_executable(lofibox_playback_enrichment_worker_smoke tests/playback_enrichment_worker_smoke.cpp)
+    target_link_libraries(lofibox_playback_enrichment_worker_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_playback_enrichment_worker_smoke COMMAND lofibox_playback_enrichment_worker_smoke)
+    set_tests_properties(lofibox_playback_enrichment_worker_smoke PROPERTIES TIMEOUT 10)
+    add_executable(lofibox_playback_start_responsiveness_smoke tests/playback_start_responsiveness_smoke.cpp)
+    target_link_libraries(lofibox_playback_start_responsiveness_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_playback_start_responsiveness_smoke COMMAND lofibox_playback_start_responsiveness_smoke)
+    set_tests_properties(lofibox_playback_start_responsiveness_smoke PROPERTIES TIMEOUT 15)
+    add_executable(lofibox_frame_deadline_smoke tests/frame_deadline_smoke.cpp)
+    target_include_directories(lofibox_frame_deadline_smoke PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    add_test(NAME lofibox_frame_deadline_smoke COMMAND lofibox_frame_deadline_smoke)
+
     add_executable(lofibox_app_smoke tests/hello_app_smoke.cpp)
     target_link_libraries(lofibox_app_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_app_smoke COMMAND lofibox_app_smoke)
@@ -665,6 +774,21 @@ if(BUILD_TESTING)
     target_link_libraries(lofibox_runtime_cli_smoke PRIVATE lofibox_zero_target_cli)
     add_test(NAME lofibox_runtime_cli_smoke COMMAND lofibox_runtime_cli_smoke)
 
+    add_executable(lofibox_runtime_stream_playback_smoke tests/runtime_stream_playback_smoke.cpp)
+    target_link_libraries(lofibox_runtime_stream_playback_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_stream_playback_smoke COMMAND lofibox_runtime_stream_playback_smoke)
+
+    add_executable(lofibox_runtime_numeric_wire_smoke tests/runtime_numeric_wire_smoke.cpp)
+    target_link_libraries(lofibox_runtime_numeric_wire_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_runtime_numeric_wire_smoke COMMAND lofibox_runtime_numeric_wire_smoke)
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_executable(lofibox_runtime_play_input_smoke tests/runtime_play_input_smoke.cpp)
+        target_link_libraries(lofibox_runtime_play_input_smoke PRIVATE lofibox_zero_target_cli)
+        add_test(NAME lofibox_runtime_play_input_smoke COMMAND lofibox_runtime_play_input_smoke)
+        set_tests_properties(lofibox_runtime_play_input_smoke PROPERTIES TIMEOUT 15)
+    endif()
+
     add_executable(lofibox_cli_options_smoke tests/cli_options_smoke.cpp)
     target_link_libraries(lofibox_cli_options_smoke PRIVATE lofibox_zero_target_cli)
     add_test(NAME lofibox_cli_options_smoke COMMAND lofibox_cli_options_smoke)
@@ -673,6 +797,9 @@ if(BUILD_TESTING)
         add_executable(lofibox_tui_progress_bar_smoke tests/tui_progress_bar_smoke.cpp)
         target_link_libraries(lofibox_tui_progress_bar_smoke PRIVATE lofibox_zero_tui)
         add_test(NAME lofibox_tui_progress_bar_smoke COMMAND lofibox_tui_progress_bar_smoke)
+        add_executable(lofibox_tui_timers_smoke tests/tui_timers_smoke.cpp)
+        target_link_libraries(lofibox_tui_timers_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_timers_smoke COMMAND lofibox_tui_timers_smoke)
 
         add_executable(lofibox_tui_spectrum_renderer_smoke tests/tui_spectrum_renderer_smoke.cpp)
         target_link_libraries(lofibox_tui_spectrum_renderer_smoke PRIVATE lofibox_zero_tui)
@@ -689,6 +816,9 @@ if(BUILD_TESTING)
         add_executable(lofibox_tui_input_router_smoke tests/tui_input_router_smoke.cpp)
         target_link_libraries(lofibox_tui_input_router_smoke PRIVATE lofibox_zero_tui)
         add_test(NAME lofibox_tui_input_router_smoke COMMAND lofibox_tui_input_router_smoke)
+        add_executable(lofibox_tui_utf8_input_smoke tests/tui_utf8_input_smoke.cpp)
+        target_link_libraries(lofibox_tui_utf8_input_smoke PRIVATE lofibox_zero_tui)
+        add_test(NAME lofibox_tui_utf8_input_smoke COMMAND lofibox_tui_utf8_input_smoke)
 
         add_executable(lofibox_tui_dashboard_render_smoke tests/tui_dashboard_render_smoke.cpp)
         target_link_libraries(lofibox_tui_dashboard_render_smoke PRIVATE lofibox_zero_tui)
@@ -710,6 +840,12 @@ if(BUILD_TESTING)
     add_executable(lofibox_runtime_settings_apply_smoke tests/runtime_settings_apply_smoke.cpp)
     target_link_libraries(lofibox_runtime_settings_apply_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_runtime_settings_apply_smoke COMMAND lofibox_runtime_settings_apply_smoke)
+    add_executable(lofibox_session_timers_smoke tests/session_timers_smoke.cpp)
+    target_link_libraries(lofibox_session_timers_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_session_timers_smoke COMMAND lofibox_session_timers_smoke)
+    add_executable(lofibox_timer_gui_smoke tests/timer_gui_smoke.cpp)
+    target_link_libraries(lofibox_timer_gui_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_timer_gui_smoke COMMAND lofibox_timer_gui_smoke)
 
     add_executable(lofibox_runtime_shutdown_reload_smoke tests/runtime_shutdown_reload_smoke.cpp)
     target_link_libraries(lofibox_runtime_shutdown_reload_smoke PRIVATE lofibox_zero_core)
@@ -800,9 +936,51 @@ if(BUILD_TESTING)
     add_test(NAME lofibox_audio_child_lifecycle_smoke COMMAND lofibox_audio_child_lifecycle_smoke)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        if(TARGET lofibox_mp3_decoder)
+            find_package(Python3 COMPONENTS Interpreter REQUIRED)
+            find_program(LOFIBOX_TEST_FFMPEG_EXECUTABLE ffmpeg)
+            if(LOFIBOX_TEST_FFMPEG_EXECUTABLE)
+                add_executable(lofibox_audio_pcm_contract_smoke tests/audio_pcm_contract_smoke.cpp)
+                target_link_libraries(lofibox_audio_pcm_contract_smoke PRIVATE lofibox_zero_host_runtime)
+                add_test(NAME lofibox_audio_pcm_contract_smoke COMMAND lofibox_audio_pcm_contract_smoke
+                    "$<TARGET_FILE:lofibox_mp3_decoder>" "${LOFIBOX_TEST_FFMPEG_EXECUTABLE}")
+                set_tests_properties(lofibox_audio_pcm_contract_smoke PROPERTIES TIMEOUT 25)
+                add_test(NAME lofibox_native_mp3_helper_smoke COMMAND "${Python3_EXECUTABLE}"
+                    "${PROJECT_SOURCE_DIR}/tests/native_mp3_helper_smoke.py"
+                    "$<TARGET_FILE:lofibox_mp3_decoder>" "${LOFIBOX_TEST_FFMPEG_EXECUTABLE}")
+                set_tests_properties(lofibox_native_mp3_helper_smoke PROPERTIES TIMEOUT 45)
+            endif()
+        endif()
+        add_executable(lofibox_audio_restart_lifecycle_smoke tests/audio_restart_lifecycle_smoke.cpp)
+        add_executable(lofibox_fd_ownership_smoke tests/fd_ownership_smoke.cpp src/platform/device/linux_framebuffer.cpp)
+        target_link_libraries(lofibox_fd_ownership_smoke PRIVATE lofibox_zero_host_runtime)
+        add_test(NAME lofibox_fd_ownership_smoke COMMAND lofibox_fd_ownership_smoke)
+        set_tests_properties(lofibox_fd_ownership_smoke PROPERTIES TIMEOUT 20)
+        add_executable(lofibox_runtime_socket_lifecycle_smoke tests/runtime_socket_lifecycle_smoke.cpp)
+        target_link_libraries(lofibox_runtime_socket_lifecycle_smoke PRIVATE lofibox_zero_core)
+        add_test(NAME lofibox_runtime_socket_lifecycle_smoke COMMAND lofibox_runtime_socket_lifecycle_smoke)
+        set_tests_properties(lofibox_runtime_socket_lifecycle_smoke PROPERTIES TIMEOUT 15)
+        target_link_libraries(lofibox_audio_restart_lifecycle_smoke PRIVATE lofibox_zero_host_runtime)
+        add_test(NAME lofibox_audio_restart_lifecycle_smoke COMMAND lofibox_audio_restart_lifecycle_smoke)
+        set_tests_properties(lofibox_audio_restart_lifecycle_smoke PROPERTIES TIMEOUT 25)
+        add_executable(lofibox_tag_writer_capability_smoke tests/tag_writer_capability_smoke.cpp)
+        target_link_libraries(lofibox_tag_writer_capability_smoke PRIVATE lofibox_zero_host_runtime)
+        add_test(NAME lofibox_tag_writer_capability_smoke COMMAND lofibox_tag_writer_capability_smoke)
+
         add_executable(lofibox_runtime_process_smoke tests/runtime_process_smoke.cpp)
         target_link_libraries(lofibox_runtime_process_smoke PRIVATE lofibox_zero_host_runtime)
         add_test(NAME lofibox_runtime_process_smoke COMMAND lofibox_runtime_process_smoke)
+        add_executable(lofibox_system_media_key_handler_smoke tests/system_media_key_handler_smoke.cpp)
+        target_link_libraries(lofibox_system_media_key_handler_smoke PRIVATE lofibox_zero_host_runtime)
+        add_test(NAME lofibox_system_media_key_handler_smoke COMMAND lofibox_system_media_key_handler_smoke)
+        set_tests_properties(lofibox_system_media_key_handler_smoke PROPERTIES TIMEOUT 10)
+        add_executable(lofibox_cardputer_rhythm_lights_smoke
+            tests/cardputer_rhythm_lights_smoke.cpp
+            src/platform/device/cardputer_rhythm_lights.cpp
+        )
+        target_link_libraries(lofibox_cardputer_rhythm_lights_smoke PRIVATE lofibox_zero_core)
+        add_test(NAME lofibox_cardputer_rhythm_lights_smoke COMMAND lofibox_cardputer_rhythm_lights_smoke)
+        set_tests_properties(lofibox_cardputer_rhythm_lights_smoke PROPERTIES TIMEOUT 10)
     endif()
 
     add_executable(lofibox_host_audio_realtime_dsp_smoke tests/host_audio_realtime_dsp_smoke.cpp)
@@ -858,6 +1036,16 @@ if(BUILD_TESTING)
     add_test(NAME lofibox_cardputer_applaunch_metadata_smoke COMMAND lofibox_cardputer_applaunch_metadata_smoke)
 
     if(LOFIBOX_BUILD_DEVICE)
+        add_executable(lofibox_framebuffer_backlight_smoke tests/framebuffer_backlight_smoke.cpp)
+        target_link_libraries(lofibox_framebuffer_backlight_smoke PRIVATE lofibox_zero_core)
+        add_test(NAME lofibox_framebuffer_backlight_smoke COMMAND lofibox_framebuffer_backlight_smoke)
+        add_executable(lofibox_framebuffer_blitter_smoke
+            tests/framebuffer_blitter_smoke.cpp
+            src/platform/device/framebuffer_blitter.cpp
+        )
+        target_link_libraries(lofibox_framebuffer_blitter_smoke PRIVATE lofibox_zero_core)
+        add_test(NAME lofibox_framebuffer_blitter_smoke COMMAND lofibox_framebuffer_blitter_smoke)
+
         add_executable(lofibox_linux_evdev_keyboard_smoke
             tests/linux_evdev_keyboard_smoke.cpp
             src/platform/device/linux_evdev_keyboard.cpp
@@ -1003,5 +1191,22 @@ if(BUILD_TESTING)
         add_executable(lofibox_webui_smoke tests/webui_smoke.cpp)
         target_link_libraries(lofibox_webui_smoke PRIVATE lofibox_webui)
         add_test(NAME lofibox_webui_smoke COMMAND lofibox_webui_smoke)
+        add_executable(lofibox_webui_server_smoke tests/webui_server_smoke.cpp)
+        target_link_libraries(lofibox_webui_server_smoke PRIVATE lofibox_webui lofibox_zero_host_runtime)
+        add_test(NAME lofibox_webui_server_smoke COMMAND lofibox_webui_server_smoke)
+        set_tests_properties(lofibox_webui_server_smoke PROPERTIES TIMEOUT 20)
     endif()
+
+    # Release tests must execute their assertions; only the product libraries
+    # should inherit NDEBUG from the optimized build configuration.
+    get_property(_lofibox_test_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_lofibox_test_target IN LISTS _lofibox_test_targets)
+        if(_lofibox_test_target MATCHES "_smoke$")
+            if(MSVC)
+                target_compile_options(${_lofibox_test_target} PRIVATE /UNDEBUG)
+            else()
+                target_compile_options(${_lofibox_test_target} PRIVATE -UNDEBUG)
+            endif()
+        endif()
+    endforeach()
   endif()

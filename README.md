@@ -58,6 +58,14 @@ There is no SDL desktop simulator in this project. The app should be validated t
 
 ## Build In Container
 
+Release builds have two product profiles: **Cardputer Zero uses framebuffer**
+(`lofibox-cardputer-zero` package), and **Debian desktop uses Wayland**
+(`lofibox` package). Use `cardputer-release` / `cardputer-release-build` or
+`debian-wayland-release` / `debian-wayland-release-build` CMake presets.
+See [packaging](docs/packaging.md#product-artifacts) for the matching package build
+profiles and [offline validation](docs/cardputer-offline-validation.md) for the
+performance work and the remaining device checks.
+
 Build the development image:
 
 ```powershell
@@ -212,6 +220,120 @@ Linux validation:
 ```bash
 bash scripts/wsl-validate.sh
 ```
+
+## Cardputer Keyboard Controls
+
+The framebuffer GUI follows the device's [keyboard specification](https://cardputer.cc/docs/zh-CN/CP0_keys.md).
+The keyboard driver already translates Fn combinations into Linux keycodes;
+LoFiBox does not emulate the firmware's sticky Fn/Shift/Sym state.
+
+| Keys | Action |
+| --- | --- |
+| F / Z / X / C | Up / left / down / right outside text editors |
+| Enter | Open, confirm or play the selected item |
+| Short ESC | Back; cancels an unsaved field edit |
+| Hold ESC for 2 seconds | Exit the framebuffer app and return control to APPLaunch |
+| Fn+H or F1 | Toggle page help |
+| Fn+Q / Fn+W / Fn+E | Play/pause / previous track / next track, including while help or an editor is open |
+| Fn+S / Fn+D / Fn+A | System volume down / up / mute in the framebuffer app |
+| 4-8 | The five actions displayed along the bottom of the current page |
+| Fn+L / Fn+M | Page up / page down; larger EQ adjustments on the equalizer page |
+| Fn+K | Player main menu |
+
+Search and remote-profile fields accept literal letters, spaces and digits,
+including F/Z/X/C and 4-8. Backspace deletes text; Escape cancels/leaves the
+editor. Held navigation/typing keys may repeat; held help, transport and numeric
+screen actions do not repeat. Existing F2-F6 and F9-F12
+bindings remain available. System volume changes use one coalescing background
+worker so PipeWire/PulseAudio helper calls never block input or rendering.
+
+The five bottom actions line up with the physical 4-8 keys beneath the display
+at x=49/105/161/217/273. A consistent set of crisp icons replaces the stacked
+action labels and digits on every page. Primary actions use the theme accent;
+play/pause updates with playback state. The top-left help control is also an
+icon. The same page definition supplies keyboard actions, pointer actions and
+the full descriptions in F1/FnH help. Search and field editors show keyboard,
+confirm and cancel icons while preserving literal numeric input.
+
+| Page | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- |
+| Main menu | Left item | Open | Right item | Player | Search |
+| Now playing | Previous | Play/pause | Next | Lyrics | Queue |
+| Lyrics / queue status | Previous | Play/pause | Next | Player | Play mode |
+| Music categories / remote browse | Back | Page up | Open | Page down | Search |
+| Songs / playlist tracks | Back | Page up | Play selection | Page down | Sort |
+| Playlists | Back | Page up | Open | Page down | Search |
+| Equalizer | Previous band | Gain -1dB | Next preset | Gain +1dB | Next band |
+| Settings / remote configuration | Back | Page up | Open/change | Page down | Help |
+| Server diagnostics | Back | Page up | Help | Page down | Settings |
+| Stream details | Back | — | Play stream | — | Help |
+| Playlist editor (unfinished) | Back | Page up | Help | Page down | Search |
+| About | Back | Library | Player | Settings | Help |
+| Search / field editor | Literal 4 | Literal 5 | Literal 6 | Literal 7 | Literal 8 |
+
+List content reserves five visible rows above the action bar, and its scrolling
+and page movement use that same row count. A help modal consumes numeric screen
+actions until closed, while dedicated Fn media controls remain available.
+The playlist editor's existing create/remove/reorder/save rows are not wired to
+commands yet; the action bar does not advertise those operations.
+
+## Cardputer Rhythm Lights
+
+The three keyboard indicators follow the rightmost Now Playing spectrum column.
+The renderer and lights share the same band-to-height conversion. A rise of
+four pixels from a trough turns the lamps on; a fall of four pixels from a crest
+turns them off. Smaller reversals are ignored, and heights below ten pixels are
+dark. A held crest can hold the lamps on. There is no beat estimate or pulse
+timer: elapsed time or changes in the other nine bands cannot create flashes.
+They are **white single-color LEDs**, as shown
+on page 8 of the [official schematic](https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/1243/C154-CardputerZERO_SCH_V0.6.1_20260702.pdf#page=8);
+the built-in hardware cannot produce RGB colors. Silence, pause, stop and normal
+exit turn the music indications off.
+Shift/Fn/Sym indications take priority over the music pattern.
+
+The Cardputer APPLaunch wrapper enables the spectrum-following lights by default;
+set `LOFIBOX_RHYTHM_LIGHTS=0` to disable it. The stock LED-mode interface is used;
+smooth breathing is **not implemented** and requires no firmware experiment
+to use this pattern.
+The Debian Wayland runtime does not access the
+Cardputer light controller. The device adapter validates the internal keyboard
+and device-tree mapping before accessing the three LED-mode registers; it
+does not change the backlight, PWM frequency or GPIO power controls.
+
+Now Playing renders its spectrum behind the artwork and metadata across the
+page body, with soft column tips and roughly 10–25% opacity. The top bar and
+action bar remain clear. This layer reuses the existing visualization and blends
+once per scanline without an extra canvas, blur pass or audio analysis.
+
+The lights reuse the player's existing ten-band visualization. One background
+worker samples the latest frame at up to 20 Hz, without another decoder or a
+queue of stale animation frames. Input and rendering never perform the light
+controller's I2C operations. The experimental brightness probes are validation
+scripts only and are not part of the installed player.
+
+## Sleep And Screen Timers
+
+In Settings, select **SLEEP TIMER** and press Enter or the open/change icon
+(Cardputer key **6**) to cycle OFF, 15, 30, 45, 60, 90 and 120 minutes.
+At expiry, LoFiBox stops playback and exits to its launcher. It does not power
+off the device. Select OFF to cancel, or another duration to restart the countdown.
+
+The separate **SCREEN OFF** setting on the framebuffer build cycles OFF,
+30 seconds, 1, 2, 5 and 10 minutes of keyboard inactivity. Music continues while
+the backlight is off; drawing and framebuffer copies stop, and the music LEDs
+go dark. Any physical key wakes the display at its previous brightness. That
+wake press, including held repeats, is consumed before playback/navigation
+commands resume. Changing screen timeout does not reset the exit countdown.
+Wayland delegates monitor power management to the desktop environment and
+does not offer the device backlight timer.
+
+Timers are session settings and start OFF each time LoFiBox opens. CLI users
+can use `lofibox-cardputer-zero runtime settings apply '' '' 30M 1M` (on Debian,
+use `lofibox` and omit the framebuffer-only final argument). Empty arguments
+leave settings alone; OFF cancels a timer. TUI's command palette accepts
+`sleep 30m`, `sleep off`, `screen 1m` and `screen off`. WebUI's More tab exposes
+the same shared runtime settings. CLI/API durations accept positive integer
+S/M/H values up to 24 hours; invalid values leave the entire update unchanged.
 
 ## Runtime Boundary
 

@@ -187,6 +187,14 @@ void waitUntilMapped(Display* display, Window window)
     }
 
     switch (keysym) {
+    case XK_Escape:
+        return {app::InputEvent{app::InputKey::Escape, "ESC", '\0'}};
+    case XK_Help:
+        return {app::InputEvent{app::InputKey::F1, "HELP", '\0'}};
+    case XF86XK_AudioPrev:
+        return {app::InputEvent{app::InputKey::MediaPrevious, "PREV", '\0'}};
+    case XF86XK_AudioNext:
+        return {app::InputEvent{app::InputKey::MediaNext, "NEXT", '\0'}};
     case XK_BackSpace:
         return {app::InputEvent{app::InputKey::Backspace, "BACK", '\0'}};
     case XK_Delete:

@@ -47,6 +47,11 @@ public:
     LibraryController(const LibraryController&) = delete;
     LibraryController& operator=(const LibraryController&) = delete;
 
+    // Shared ownership boundary for GUI, runtime commands and external library
+    // readers. Hold it for the lifetime of references into controller state.
+    // Recursion permits GUI handlers to dispatch through the runtime bus.
+    [[nodiscard]] std::recursive_mutex& stateMutex() const noexcept { return state_mutex_; }
+
     [[nodiscard]] LibraryIndexState state() const noexcept;
     [[nodiscard]] const LibraryModel& model() const noexcept;
     [[nodiscard]] LibraryModel& mutableModel() noexcept;
@@ -54,6 +59,7 @@ public:
     void configureIndexStorePath(std::filesystem::path store_path);
     void startLoading() noexcept;
     void markStale() noexcept;
+    [[nodiscard]] int registerLocalFile(const std::filesystem::path& path);
     void refreshLibrary(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider);
     void beginAsyncRefreshLibrary(
         const std::vector<std::filesystem::path>& media_roots,
@@ -92,9 +98,13 @@ private:
     void publishScanProgress(const LibraryScanProgress& progress);
     void resetScanProgress(LibraryScanPhase phase, std::string message);
     void joinAsyncScan() noexcept;
+    [[nodiscard]] std::vector<TrackRecord> explicitTracks() const;
+    void preserveExplicitTracks(LibraryModel& next);
 
+    mutable std::recursive_mutex state_mutex_{};
     LibraryRepository repository_{};
     LibraryListContext list_context_{};
+    std::vector<std::pair<int, std::filesystem::path>> explicit_tracks_{};
     std::thread scan_thread_{};
     mutable std::mutex async_mutex_{};
     std::optional<LibraryModel> pending_scan_model_{};

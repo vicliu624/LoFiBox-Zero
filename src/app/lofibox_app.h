@@ -53,6 +53,7 @@ public:
 
     [[nodiscard]] AppDebugSnapshot snapshot() const;
     [[nodiscard]] bool runtimeShutdownRequested() const noexcept;
+    [[nodiscard]] std::chrono::seconds screenTimeout() const noexcept;
 
 private:
     using clock = std::chrono::steady_clock;

@@ -11,6 +11,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include "app/library_query_provider.h"
@@ -41,11 +42,15 @@ public:
     {
         std::vector<app::LibraryTrackInfo> result;
         if (!service_) return result;
+        const auto guard = service_->lockState();
+        std::unordered_map<int, const app::TrackRecord*> tracks;
+        for (const auto& track : service_->model().tracks) tracks.emplace(track.id, &track);
         const auto ids = service_->allSongIdsSorted();
         result.reserve(ids.size());
         for (int id : ids) {
-            const auto* track = service_->findTrack(id);
-            if (!track) continue;
+            const auto it = tracks.find(id);
+            if (it == tracks.end()) continue;
+            const auto* track = it->second;
             result.push_back(app::LibraryTrackInfo{
                 .id = track->id,
                 .title = track->title,
@@ -63,15 +68,19 @@ public:
     {
         std::vector<app::LibraryAlbumInfo> result;
         if (!service_) return result;
+        const auto guard = service_->lockState();
         const auto& model = service_->model();
+        std::unordered_map<int, const app::TrackRecord*> tracks;
+        for (const auto& track : model.tracks) tracks.emplace(track.id, &track);
         result.reserve(model.albums.size());
         for (const auto& album : model.albums) {
             std::string artwork_url;
             int first_track_id = 0;
             // Pick the first track with artwork_url, or just the first track
             for (int tid : album.track_ids) {
-                const auto* t = service_->findTrack(tid);
-                if (!t) continue;
+                const auto it = tracks.find(tid);
+                if (it == tracks.end()) continue;
+                const auto* t = it->second;
                 if (first_track_id == 0) first_track_id = t->id;
                 if (!t->artwork_url.empty()) {
                     artwork_url = t->artwork_url;
@@ -95,7 +104,13 @@ public:
     {
         if (!service_ || !artwork_) return std::nullopt;
 
-        const auto* track = service_->findTrack(track_id);
+        // The model can be replaced by a scan while artwork is read/downloaded.
+        // Keep an owned record and release the shared state guard before I/O.
+        const auto track = [&]() -> std::optional<app::TrackRecord> {
+            const auto guard = service_->lockState();
+            if (const auto* found = service_->findTrack(track_id)) return *found;
+            return std::nullopt;
+        }();
         if (!track) return std::nullopt;
 
         namespace rd = lofibox::platform::host::runtime_detail;
@@ -160,7 +175,10 @@ private:
         if (!std::filesystem::exists(path, ec) || ec) return std::nullopt;
         std::ifstream file(path, std::ios::binary | std::ios::ate);
         if (!file) return std::nullopt;
-        std::vector<std::uint8_t> result(static_cast<std::size_t>(file.tellg()));
+        const auto size = file.tellg();
+        constexpr std::streamoff kMaximumArtworkBytes = 8 * 1024 * 1024;
+        if (size <= 0 || size > kMaximumArtworkBytes) return std::nullopt;
+        std::vector<std::uint8_t> result(static_cast<std::size_t>(size));
         file.seekg(0);
         file.read(reinterpret_cast<char*>(result.data()),
                   static_cast<std::streamsize>(result.size()));

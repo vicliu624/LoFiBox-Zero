@@ -17,6 +17,7 @@
 
 #include "webui/webui_projection.h"
 #include "webui/webui_runtime_adapter.h"
+#include "webui/webui_socket_io.h"
 
 namespace lofibox::webui {
 namespace {
@@ -253,8 +254,7 @@ bool WebUiWsRuntimeStream::performUpgrade(std::string_view request_headers)
              << "\r\n";
 
     std::string resp_str = response.str();
-    ssize_t sent = ::send(fd_, resp_str.data(), resp_str.size(), 0);
-    if (sent != static_cast<ssize_t>(resp_str.size())) return false;
+    if (!sendSocketBytes(fd_, resp_str)) return false;
 
     running_.store(true, std::memory_order_release);
     return true;
@@ -262,11 +262,15 @@ bool WebUiWsRuntimeStream::performUpgrade(std::string_view request_headers)
 
 void WebUiWsRuntimeStream::run()
 {
-    // Prime the adapter with a snapshot so pollEvents has a baseline
-    adapter_.querySnapshot();
+    // Each browser needs its own baseline. Sharing the adapter's event cursor
+    // made one tab consume changes that the other tabs still needed.
+    std::optional<runtime::RuntimeSnapshot> previous;
 
     while (running_.load(std::memory_order_acquire)) {
-        auto events = adapter_.pollEvents();
+        if (!processClientInput()) break;
+        auto snapshot = adapter_.querySnapshot();
+        auto events = runtime::runtimeEventsBetween(previous, snapshot, runtime::runtimeEventTimestampMs());
+        previous = std::move(snapshot);
 
         for (const auto& event : events) {
             std::string json = buildEventJson(event);
@@ -289,14 +293,14 @@ void WebUiWsRuntimeStream::stop()
     running_.store(false, std::memory_order_release);
 }
 
-bool WebUiWsRuntimeStream::sendFrame(std::string_view payload)
+bool WebUiWsRuntimeStream::sendFrame(std::string_view payload, std::uint8_t opcode)
 {
     // Build WebSocket frame (server → client, unmasked)
     std::vector<std::uint8_t> frame;
     frame.reserve(2 + 8 + payload.size());
 
     // First byte: FIN + opcode (text)
-    frame.push_back(0x80 | kOpText);
+    frame.push_back(0x80 | opcode);
 
     // Second byte + extended length
     if (payload.size() <= 125) {
@@ -315,15 +319,40 @@ bool WebUiWsRuntimeStream::sendFrame(std::string_view payload)
     // Payload
     frame.insert(frame.end(), payload.begin(), payload.end());
 
-    ssize_t sent = ::send(fd_, frame.data(), frame.size(), 0);
-    return sent == static_cast<ssize_t>(frame.size());
+    return sendSocketBytes(fd_, std::string_view{reinterpret_cast<const char*>(frame.data()), frame.size()});
+}
+
+bool WebUiWsRuntimeStream::processClientInput()
+{
+    std::uint8_t bytes[512];
+    const auto count = ::recv(fd_, bytes, sizeof(bytes), MSG_DONTWAIT);
+    if (count == 0) return false;
+    if (count < 0) return errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK;
+    incoming_.insert(incoming_.end(), bytes, bytes + count);
+    if (incoming_.size() > 1024) return false;
+    while (incoming_.size() >= 2) {
+        const auto opcode = incoming_[0] & 0x0fU;
+        const std::size_t length = incoming_[1] & 0x7fU;
+        // This is a server-push stream; inbound messages are control frames.
+        if (!(incoming_[0] & 0x80U) || !(incoming_[1] & 0x80U) || length > 125
+            || (opcode != 0x8 && opcode != 0x9 && opcode != 0xa)) return false;
+        if (incoming_.size() < length + 6) return true;
+        std::string payload(length, '\0');
+        for (std::size_t i = 0; i < length; ++i) payload[i] = static_cast<char>(incoming_[6 + i] ^ incoming_[2 + i % 4]);
+        if (opcode == 0x8) {
+            return false;
+        }
+        if (opcode == 0x9 && !sendFrame(payload, 0xa)) return false;
+        incoming_.erase(incoming_.begin(), incoming_.begin() + static_cast<std::ptrdiff_t>(length + 6));
+    }
+    return true;
 }
 
 void WebUiWsRuntimeStream::sendClose()
 {
     // Send close frame: FIN + close opcode, no payload
     std::uint8_t close_frame[] = { 0x88, 0x00 };
-    ::send(fd_, close_frame, sizeof(close_frame), 0);
+    (void)sendSocketBytes(fd_, std::string_view{reinterpret_cast<const char*>(close_frame), sizeof(close_frame)});
 }
 
 } // namespace lofibox::webui

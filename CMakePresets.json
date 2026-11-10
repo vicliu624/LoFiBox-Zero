@@ -7,6 +7,48 @@
   },
   "configurePresets": [
     {
+      "name": "cardputer-release",
+      "displayName": "Cardputer Zero framebuffer Release",
+      "description": "Optimized Linux appliance build with framebuffer, TUI and WebUI; no desktop display libraries.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/cardputer",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "/usr",
+        "LOFIBOX_PRODUCT_PROFILE": "cardputer",
+        "LOFIBOX_BUILD_DEVICE": "ON",
+        "LOFIBOX_BUILD_X11": "OFF",
+        "LOFIBOX_BUILD_WAYLAND": "OFF",
+        "LOFIBOX_BUILD_TUI": "ON",
+        "LOFIBOX_BUILD_WEBUI": "ON",
+        "BUILD_TESTING": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "debian-wayland-release",
+      "displayName": "Debian Wayland Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/debian-wayland",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "/usr",
+        "LOFIBOX_PRODUCT_PROFILE": "debian",
+        "LOFIBOX_BUILD_TUI": "ON",
+        "LOFIBOX_BUILD_WEBUI": "ON",
+        "BUILD_TESTING": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
       "name": "windows-vs2022-test-debug",
       "displayName": "Windows VS2022 Debug Tests",
       "description": "Generate a Visual Studio 2022 solution for shared-layer tests.",
@@ -99,6 +141,17 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "debian-wayland-release-build",
+      "displayName": "Build Debian Wayland",
+      "configurePreset": "debian-wayland-release"
+    },
+    {
+      "name": "cardputer-release-build",
+      "displayName": "Build Cardputer Zero (one compiler job for 512 MB devices)",
+      "configurePreset": "cardputer-release",
+      "jobs": 1
+    },
     {
       "name": "windows-vs2022-debug-build-tests",
       "displayName": "Build Windows Tests",

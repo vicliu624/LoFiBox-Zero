@@ -26,11 +26,12 @@ std::runtime_error makeSystemError(const std::string& step)
 struct LinuxFramebuffer::Impl {
     explicit Impl(std::string framebuffer_path)
     {
-        fd = ::open(framebuffer_path.c_str(), O_RDWR);
+        fd = ::open(framebuffer_path.c_str(), O_RDWR | O_CLOEXEC);
         if (fd < 0) {
             throw makeSystemError("open framebuffer");
         }
 
+        try {
         if (::ioctl(fd, FBIOGET_FSCREENINFO, &fixed_info) < 0) {
             throw makeSystemError("FBIOGET_FSCREENINFO");
         }
@@ -45,6 +46,11 @@ struct LinuxFramebuffer::Impl {
             throw makeSystemError("mmap framebuffer");
         }
         framebuffer_memory = reinterpret_cast<std::byte*>(mapped);
+        } catch (...) {
+            // A throwing constructor does not run ~Impl().
+            ::close(std::exchange(fd, -1));
+            throw;
+        }
     }
 
     ~Impl()

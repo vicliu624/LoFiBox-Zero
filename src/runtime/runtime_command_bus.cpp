@@ -5,7 +5,8 @@
 namespace lofibox::runtime {
 
 RuntimeCommandBus::RuntimeCommandBus(RuntimeSessionFacade& session) noexcept
-    : session_(session),
+    : mutex_(session.stateMutex()),
+      session_(session),
       commands_(session),
       queries_(session)
 {

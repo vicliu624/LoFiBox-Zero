@@ -3,6 +3,7 @@
 #pragma once
 
 #include <optional>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -21,6 +22,8 @@ namespace lofibox::application {
 class LibraryQueryService {
 public:
     explicit LibraryQueryService(const app::LibraryController& controller) noexcept;
+
+    [[nodiscard]] std::unique_lock<std::recursive_mutex> lockState() const;
 
     [[nodiscard]] app::LibraryIndexState state() const noexcept;
     [[nodiscard]] const app::LibraryModel& model() const noexcept;

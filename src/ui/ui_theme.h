@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "core/color.h"
+#include "core/display_profile.h"
 
 namespace lofibox::ui {
 
@@ -33,7 +34,7 @@ struct UiSpacing {
     int top_bar_height{20};
     int list_top{28};
     int list_row_height{21};
-    int max_visible_rows{6};
+    int max_visible_rows{core::kListVisibleRows};
     int list_inset{8};
 };
 

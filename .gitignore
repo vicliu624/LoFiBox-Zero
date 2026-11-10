@@ -21,6 +21,7 @@ debian/.debhelper/
 debian/debhelper-build-stamp
 debian/files
 debian/lofibox/
+debian/lofibox-cardputer-zero/
 debian/*.substvars
 debian/*.debhelper.log
 

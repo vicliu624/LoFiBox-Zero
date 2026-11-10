@@ -16,6 +16,7 @@
 #include "runtime/runtime_envelope_serializer.h"
 
 #if defined(__unix__) || defined(__APPLE__)
+#include <fcntl.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -117,6 +118,33 @@ void closeFd(int& fd) noexcept
         fd = -1;
     }
 }
+
+struct SocketFdOwner {
+    int& fd;
+    ~SocketFdOwner() { closeFd(fd); }
+};
+
+int openUnixSocket() noexcept
+{
+#if defined(__linux__)
+    return ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#else
+    int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd >= 0 && ::fcntl(fd, F_SETFD, FD_CLOEXEC) != 0) closeFd(fd);
+    return fd;
+#endif
+}
+
+int acceptUnixSocket(int listener) noexcept
+{
+#if defined(__linux__)
+    return ::accept4(listener, nullptr, nullptr, SOCK_CLOEXEC);
+#else
+    int fd = ::accept(listener, nullptr, nullptr);
+    if (fd >= 0 && ::fcntl(fd, F_SETFD, FD_CLOEXEC) != 0) closeFd(fd);
+    return fd;
+#endif
+}
 #endif
 
 RuntimeCommandResult transportReject(std::string message)
@@ -174,7 +202,8 @@ std::string UnixSocketRuntimeTransport::transact(std::string request_json)
 {
     last_error_.clear();
 #if defined(__unix__) || defined(__APPLE__)
-    int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    int fd = openUnixSocket();
+    const SocketFdOwner connection{fd};
     if (fd < 0) {
         last_error_ = "Could not create runtime socket.";
         return {};
@@ -252,7 +281,7 @@ bool UnixSocketRuntimeEventStream::connect(RuntimeEventStreamRequest request)
     close();
     last_error_.clear();
 #if defined(__unix__) || defined(__APPLE__)
-    fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    fd_ = openUnixSocket();
     if (fd_ < 0) {
         last_error_ = "Could not create runtime event socket.";
         return false;
@@ -342,6 +371,13 @@ const std::string& UnixSocketRuntimeEventStream::lastError() const noexcept
     return last_error_;
 }
 
+struct UnixSocketRuntimeCommandServer::ClientWorker {
+    std::mutex socket_mutex{};
+    int fd{-1};
+    std::atomic_bool finished{false};
+    std::thread thread{};
+};
+
 UnixSocketRuntimeCommandServer::UnixSocketRuntimeCommandServer(RuntimeCommandServer& server, std::filesystem::path socket_path)
     : server_(server),
       socket_path_(socket_path.empty() ? defaultRuntimeSocketPath() : std::move(socket_path))
@@ -361,7 +397,7 @@ bool UnixSocketRuntimeCommandServer::start()
     std::error_code ec{};
     std::filesystem::create_directories(socket_path_.parent_path(), ec);
     std::filesystem::remove(socket_path_, ec);
-    server_fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    server_fd_ = openUnixSocket();
     if (server_fd_ < 0) {
         last_error_ = "Could not create runtime server socket.";
         return false;
@@ -400,7 +436,7 @@ void UnixSocketRuntimeCommandServer::stop() noexcept
     running_ = false;
 #if defined(__unix__) || defined(__APPLE__)
     if (server_fd_ >= 0) {
-        int wake_fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        int wake_fd = openUnixSocket();
         if (wake_fd >= 0) {
             sockaddr_un address{};
             address.sun_family = AF_UNIX;
@@ -411,22 +447,21 @@ void UnixSocketRuntimeCommandServer::stop() noexcept
             }
             ::close(wake_fd);
         }
+        (void)::shutdown(server_fd_, SHUT_RDWR);
     }
-    closeFd(server_fd_);
 #endif
     if (thread_.joinable()) {
         thread_.join();
     }
-    std::vector<std::thread> client_threads{};
-    {
-        const std::lock_guard lock{client_threads_mutex_};
-        client_threads.swap(client_threads_);
+#if defined(__unix__) || defined(__APPLE__)
+    closeFd(server_fd_);
+    for (const auto& client : clients_) {
+        const std::lock_guard lock{client->socket_mutex};
+        if (client->fd >= 0) ::shutdown(client->fd, SHUT_RDWR);
     }
-    for (auto& client_thread : client_threads) {
-        if (client_thread.joinable()) {
-            client_thread.join();
-        }
-    }
+#endif
+    for (const auto& client : clients_) if (client->thread.joinable()) client->thread.join();
+    clients_.clear();
     std::error_code ec{};
     std::filesystem::remove(socket_path_, ec);
 }
@@ -445,25 +480,48 @@ void UnixSocketRuntimeCommandServer::run()
 {
 #if defined(__unix__) || defined(__APPLE__)
     while (running_) {
-        const int client_fd = ::accept(server_fd_, nullptr, nullptr);
+        const int client_fd = acceptUnixSocket(server_fd_);
         if (client_fd < 0) {
             if (running_) {
                 last_error_ = "Runtime socket accept failed.";
             }
             continue;
         }
-        const std::lock_guard lock{client_threads_mutex_};
-        client_threads_.emplace_back([this, client_fd]() { handleClient(client_fd); });
+        std::erase_if(clients_, [](const auto& client) {
+            if (!client->finished.load(std::memory_order_acquire)) return false;
+            client->thread.join();
+            return true;
+        });
+        if (!running_ || clients_.size() >= 16) {
+            ::close(client_fd);
+            continue;
+        }
+        clients_.push_back(std::make_unique<ClientWorker>());
+        auto* client = clients_.back().get();
+        client->fd = client_fd;
+        try {
+            client->thread = std::thread([this, client, client_fd]() {
+                try { handleClient(client_fd); }
+                catch (...) { /* A failed request still releases its connection. */ }
+                {
+                    const std::lock_guard lock{client->socket_mutex};
+                    closeFd(client->fd);
+                }
+                client->finished.store(true, std::memory_order_release);
+            });
+        } catch (...) {
+            ::close(client_fd);
+            clients_.pop_back();
+        }
     }
 #endif
 }
 
-void UnixSocketRuntimeCommandServer::handleClient(int client_fd) noexcept
+void UnixSocketRuntimeCommandServer::handleClient(int client_fd)
 {
 #if defined(__unix__) || defined(__APPLE__)
     auto request = readFrame(client_fd);
     if (request.empty()) {
-        closeFd(client_fd);
         return;
     }
 
@@ -486,13 +544,12 @@ void UnixSocketRuntimeCommandServer::handleClient(int client_fd) noexcept
             0)});
     }
     (void)writeFrame(client_fd, response);
-    closeFd(client_fd);
 #else
     (void)client_fd;
 #endif
 }
 
-void UnixSocketRuntimeCommandServer::handleEventStream(int client_fd, RuntimeEventStreamRequest request) noexcept
+void UnixSocketRuntimeCommandServer::handleEventStream(int client_fd, RuntimeEventStreamRequest request)
 {
 #if defined(__unix__) || defined(__APPLE__)
     std::optional<RuntimeSnapshot> previous{};
@@ -539,7 +596,6 @@ void UnixSocketRuntimeCommandServer::handleEventStream(int client_fd, RuntimeEve
         previous = snapshot;
         std::this_thread::sleep_for(std::chrono::milliseconds{33});
     }
-    closeFd(client_fd);
 #else
     (void)client_fd;
     (void)request;

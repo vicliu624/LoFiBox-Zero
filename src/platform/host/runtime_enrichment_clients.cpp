@@ -871,6 +871,7 @@ std::optional<std::string> captureUrl(const std::optional<fs::path>& curl_path, 
     if (curl_path) {
         const std::vector<std::string> curl_args{
             "-fsSL",
+            "--connect-timeout", "3", "--max-time", "8",
             "-A",
             "LoFiBoxZero/0.1 (local development)",
             url};
@@ -898,6 +899,7 @@ std::optional<std::string> captureFormPost(
     if (curl_path) {
         std::vector<std::string> curl_args{
             "-fsSL",
+            "--connect-timeout", "3", "--max-time", "8",
             "-A",
             "LoFiBoxZero/0.1 (local development)"};
         for (const auto& [name, value] : fields) {
@@ -939,12 +941,13 @@ bool downloadUrlToFile(const std::optional<fs::path>& curl_path, const std::stri
     if (curl_path) {
         const std::vector<std::string> curl_args{
             "-fsSL",
+            "--connect-timeout", "3", "--max-time", "8",
             "-A",
             "LoFiBoxZero/0.1 (local development)",
             "-o",
             pathUtf8String(output_path),
             url};
-        return runProcess(*curl_path, curl_args) && fs::exists(output_path, ec) && !ec;
+        return captureProcessOutput(*curl_path, curl_args).has_value() && fs::exists(output_path, ec) && !ec;
     }
 
     const auto python_path = resolvePythonPath();
@@ -957,7 +960,7 @@ bool downloadUrlToFile(const std::optional<fs::path>& curl_path, const std::stri
         "req = urllib.request.Request(sys.argv[1], headers={'User-Agent': 'LoFiBoxZero/0.1 (local development)'})\n"
         "with urllib.request.urlopen(req, timeout=15) as response:\n"
         "    pathlib.Path(sys.argv[2]).write_bytes(response.read())\n";
-    return runProcess(*python_path, {"-c", code, url, pathUtf8String(output_path)}) && fs::exists(output_path, ec) && !ec;
+    return captureProcessOutput(*python_path, {"-c", code, url, pathUtf8String(output_path)}).has_value() && fs::exists(output_path, ec) && !ec;
 }
 
 bool downloadUrlToPngFile(

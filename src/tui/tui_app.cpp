@@ -3,6 +3,7 @@
 #include "tui/tui_app.h"
 
 #include <chrono>
+#include <condition_variable>
 #include <atomic>
 #include <csignal>
 #include <cstdlib>
@@ -203,6 +204,7 @@ public:
     void stop() noexcept
     {
         running_ = false;
+        retry_ready_.notify_one();
         if (thread_.joinable()) {
             thread_.join();
         }
@@ -232,10 +234,10 @@ private:
     void pushEvent(runtime::RuntimeEvent event)
     {
         const std::lock_guard lock{mutex_};
+        // Every event carries a full snapshot. Only the newest state is needed
+        // for presentation; retaining 256 full queues can consume substantial RAM.
+        events_.clear();
         events_.push_back(std::move(event));
-        if (events_.size() > 256) {
-            events_.erase(events_.begin(), events_.begin() + static_cast<std::ptrdiff_t>(events_.size() - 256));
-        }
     }
 
     void run()
@@ -247,7 +249,8 @@ private:
             request.heartbeat_ms = 1000;
             if (!stream.connect(request)) {
                 setError(stream.lastError());
-                std::this_thread::sleep_for(std::chrono::seconds{1});
+                std::unique_lock lock{retry_mutex_};
+                retry_ready_.wait_for(lock, std::chrono::seconds{1}, [this] { return !running_.load(); });
                 continue;
             }
             setError({});
@@ -271,6 +274,8 @@ private:
     std::string last_error_{};
     std::atomic_bool running_{false};
     std::thread thread_{};
+    std::mutex retry_mutex_{};
+    std::condition_variable retry_ready_{};
 };
 
 } // namespace

@@ -18,6 +18,8 @@ public:
     [[nodiscard]] bool pump() override;
     [[nodiscard]] std::vector<app::InputEvent> drainInput() override;
     void present(const core::Canvas& canvas) override;
+    void setIdleTimeout(std::chrono::seconds timeout) override;
+    [[nodiscard]] bool renderEnabled() const noexcept override;
 
 private:
     struct Impl;

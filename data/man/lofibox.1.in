@@ -2,20 +2,20 @@
 .\"
 .TH LOFIBOX 1 "May 2026" "LoFiBox @PROJECT_VERSION@" "User Commands"
 .SH NAME
-lofibox \- compact Linux desktop music player
+@LOFIBOX_INSTALL_NAMESPACE@ \- compact Linux music player
 .SH SYNOPSIS
-.B lofibox
+.B @LOFIBOX_INSTALL_NAMESPACE@
 [\fB\-\-help\fR]
 [\fB\-\-version\fR]
 .PP
-.B lofibox
+.B @LOFIBOX_INSTALL_NAMESPACE@
 [\fB\-\-json\fR|\fB\-\-porcelain\fR]
 [\fB\-\-fields\fR \fIFIELDS\fR]
 [\fB\-\-quiet\fR]
 \fICOMMAND\fR
 [\fIARGS\fR...]
 .PP
-.B lofibox-tui
+.B @LOFIBOX_INSTALL_NAMESPACE@-tui
 [\fIVIEW\fR]
 [\fB\-\-charset\fR \fIunicode|ascii|minimal\fR]
 [\fB\-\-theme\fR \fIdark|light|amber|mono\fR]
@@ -112,10 +112,10 @@ Inspect or mutate the active runtime EQ state.
 .TP
 .B tui [dashboard|now|lyrics|spectrum|queue|library|sources|eq|diagnostics|creator]
 Open the terminal-native LoFiBox TUI through the installed
-.B lofibox
+.B @LOFIBOX_INSTALL_NAMESPACE@
 entry point when the target is built with TUI support.
 .TP
-.B lofibox-tui [VIEW]
+.B @LOFIBOX_INSTALL_NAMESPACE@-tui [VIEW]
 Open the same terminal UI through the standalone executable. TUI options include
 .BR \-\-charset ,
 .BR \-\-theme ,

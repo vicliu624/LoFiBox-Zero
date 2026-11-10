@@ -231,6 +231,7 @@ struct LibraryServices {
 struct UiServices {
     std::shared_ptr<ui::UiTheme> theme{};
     std::string webui_url{};
+    bool framebuffer_backlight{false};
 };
 
 struct PluginServices {

@@ -9,10 +9,11 @@ std::vector<std::pair<std::string, std::string>> buildSettingsProjectionRows(con
     auto rows = std::vector<std::pair<std::string, std::string>>{
         {"NETWORK", input.network_connected ? "ONLINE" : "OFFLINE"},
         {"METADATA", input.metadata_display_name},
-        {"SLEEP TIMER", input.sleep_timer_index == 0 ? "OFF" : "ON"},
+        {"SLEEP TIMER", input.sleep_timer},
         {"BACKLIGHT", std::to_string(input.backlight_index + 1)},
         {"LANGUAGE", "EN"},
     };
+    if (input.screen_timeout != "SYSTEM") rows.insert(rows.begin() + 3, {"SCREEN OFF", input.screen_timeout});
     if (!input.webui_url.empty()) {
         rows.emplace_back("WEBUI", input.webui_url);
     }

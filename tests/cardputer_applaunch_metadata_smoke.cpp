@@ -2,16 +2,60 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+#if defined(__unix__)
+#include <unistd.h>
+#endif
 
 #ifndef LOFIBOX_PROJECT_SOURCE_DIR
 #error "LOFIBOX_PROJECT_SOURCE_DIR must be defined"
 #endif
 
 namespace {
+
+std::string readTextFile(const std::filesystem::path& path);
+
+bool checkFramebufferDetection(const std::string& wrapper)
+{
+#if defined(__unix__)
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("lofibox-wrapper-probe-" + std::to_string(::getpid()));
+    std::filesystem::create_directories(directory);
+    const auto fixture = directory / "framebuffers";
+    const auto script = directory / "probe.sh";
+    const auto output = directory / "output";
+    auto detector = wrapper.substr(0, wrapper.find("case \"$0\" in"));
+    for (auto position = detector.find("/proc/fb"); position != std::string::npos;
+         position = detector.find("/proc/fb", position + fixture.string().size())) {
+        detector.replace(position, 8, fixture.string());
+    }
+    std::ofstream(script) << detector << "\nfind_st7789v_fbdev\n";
+    struct Case { const char* input; const char* expected; };
+    const Case cases[] = {
+        {"0 panel-mipi-dbid\n", "/dev/fb0\n"},
+        {"0 vc4drmfb\n1 panel-mipi-dbi\n", "/dev/fb1\n"},
+        {"0 vc4drmfb\n1 fb_st7789v\n", "/dev/fb1\n"},
+        {"2 fb_st7789v\n", "/dev/fb2\n"},
+        {"0 vc4drmfb\n", ""},
+        {"invalid panel-mipi-dbid\n", ""},
+    };
+    bool passed = true;
+    for (const auto& test : cases) {
+        std::ofstream(fixture) << test.input;
+        const auto status = std::system(("sh '" + script.string() + "' > '" + output.string() + "'").c_str());
+        if (readTextFile(output) != test.expected || (status == 0) != (test.expected[0] != '\0')) passed = false;
+    }
+    std::filesystem::remove_all(directory);
+    return passed;
+#else
+    (void)wrapper;
+    return true;
+#endif
+}
 
 std::string readTextFile(const std::filesystem::path& path)
 {
@@ -92,12 +136,12 @@ int main()
 
     try {
         const auto desktop = readTextFile(desktop_file);
-        if (!hasLine(desktop, "Exec=/usr/lib/lofibox/lofibox-applaunch")) {
+        if (!hasLine(desktop, "Exec=/usr/lib/lofibox-cardputer-zero/lofibox-applaunch")) {
             std::cerr << "Expected Cardputer APPLaunch metadata to start the installed wrapper.\n";
             return 1;
         }
-        if (!hasLine(desktop, "Icon=share/images/lofibox.png")) {
-            std::cerr << "Expected Cardputer APPLaunch metadata to use the APPLaunch-relative icon path.\n";
+        if (!hasLine(desktop, "Icon=/usr/share/APPLaunch/share/images/lofibox-cardputer-zero.png")) {
+            std::cerr << "Expected the APPLaunch-supported absolute icon path to satisfy desktop metadata validation.\n";
             return 1;
         }
         if (!hasLine(desktop, "StartupWMClass=lofibox")) {
@@ -105,15 +149,20 @@ int main()
             return 1;
         }
         if (!hasLine(desktop, "X-Zero-AppId=io.github.vicliu624.lofibox")) {
-            std::cerr << "Expected Cardputer APPLaunch metadata to expose the LoFiBox Wayland app id.\n";
+            std::cerr << "Expected Cardputer APPLaunch metadata to expose the stable LoFiBox app id.\n";
             return 1;
         }
-        if (!hasLine(desktop, "X-Zero-Display=wayland")) {
-            std::cerr << "Expected Cardputer APPLaunch metadata to declare the native Wayland runtime.\n";
+        if (hasLine(desktop, "X-Zero-Display=wayland")) {
+            std::cerr << "Cardputer APPLaunch must not request a Wayland surface.\n";
             return 1;
         }
 
         const auto wrapper = readTextFile(wrapper_file);
+        if (!hasLine(wrapper, ": \"${LOFIBOX_RHYTHM_LIGHTS:=1}\"")
+            || !hasLine(wrapper, "export LOFIBOX_RHYTHM_LIGHTS")) {
+            std::cerr << "Expected the regular rhythm lights to be enabled by the Cardputer wrapper.\n";
+            return 1;
+        }
         if (!hasLine(wrapper, "find_st7789v_fbdev()")) {
             std::cerr << "Expected Cardputer APPLaunch wrapper to be able to detect the ST7789V framebuffer.\n";
             return 1;
@@ -125,20 +174,14 @@ int main()
             std::cerr << "Expected Cardputer APPLaunch wrapper to enable the appliance WebUI by default.\n";
             return 1;
         }
-        if (!hasLine(wrapper, "    wayland|labwc)")) {
-            std::cerr << "Expected Cardputer APPLaunch wrapper to support an explicit Wayland backend.\n";
+        if (!hasLine(wrapper, "LOFIBOX_DISPLAY_BACKEND=fbdev")
+            || wrapper.find("exec lofibox-wayland") != std::string::npos
+            || wrapper.find("exec lofibox-x11") != std::string::npos) {
+            std::cerr << "Cardputer APPLaunch must always select the framebuffer runtime.\n";
             return 1;
         }
-        if (!hasLine(wrapper, "    fb|fbdev|framebuffer|device)")) {
-            std::cerr << "Expected Cardputer APPLaunch wrapper to support an explicit framebuffer backend.\n";
-            return 1;
-        }
-        if (!hasLine(wrapper, "            exec lofibox-wayland \"$@\"")) {
-            std::cerr << "Expected Cardputer APPLaunch wrapper to start the native desktop runtime in Wayland sessions.\n";
-            return 1;
-        }
-        if (!hasLine(wrapper, "            *fb_st7789v*)")) {
-            std::cerr << "Expected Cardputer APPLaunch wrapper to detect fb_st7789v from /proc/fb.\n";
+        if (!hasLine(wrapper, "            *fb_st7789v*|*panel-mipi-dbi*)") || !checkFramebufferDetection(wrapper)) {
+            std::cerr << "Expected Cardputer APPLaunch wrapper to detect legacy and DRM panel drivers from /proc/fb.\n";
             return 1;
         }
         if (!hasLine(wrapper, "        LOFIBOX_FBDEV=$APPLAUNCH_LINUX_FBDEV_DEVICE")) {

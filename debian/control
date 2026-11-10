@@ -6,12 +6,13 @@ Build-Depends:
  cmake,
  debhelper-compat (= 13),
  libfreetype-dev,
- libwayland-bin,
- libwayland-dev,
- libx11-dev,
+ libmpg123-dev,
+ libsoxr-dev,
+ libwayland-bin <!pkg.lofibox.cardputer>,
+ libwayland-dev <!pkg.lofibox.cardputer>,
  libxkbcommon-dev,
- pkgconf,
- wayland-protocols
+ pkgconf:native,
+ wayland-protocols <!pkg.lofibox.cardputer>
 Standards-Version: 4.7.0
 Homepage: https://github.com/vicliu624/LoFiBox-Zero
 Vcs-Browser: https://github.com/vicliu624/LoFiBox-Zero
@@ -19,6 +20,7 @@ Vcs-Git: https://github.com/vicliu624/LoFiBox-Zero.git
 Rules-Requires-Root: no
 
 Package: lofibox
+Build-Profiles: <!pkg.lofibox.cardputer>
 Architecture: any
 Depends:
  ${misc:Depends},
@@ -29,8 +31,27 @@ Depends:
  python3-mutagen
 Recommends:
  fonts-noto-cjk
-Description: compact desktop music player
+Description: compact Wayland desktop music player
  LoFiBox is a pure C++ Linux music player with a compact
- compositor-managed desktop window. It is designed around local playback, media-library
- browsing, metadata and artwork, remote-source extensibility, and a DSP-ready
- audio pipeline.
+ Wayland compositor-managed desktop window. It is designed around local
+ playback, media-library browsing, metadata and artwork, remote-source
+ extensibility, and a DSP-ready audio pipeline.
+
+Package: lofibox-cardputer-zero
+Build-Profiles: <pkg.lofibox.cardputer>
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ alsa-utils,
+ ffmpeg,
+ python3,
+ python3-mutagen
+Recommends:
+ fonts-noto-cjk
+Conflicts: lofibox
+Description: framebuffer music player for Cardputer Zero
+ LoFiBox for Cardputer Zero renders directly to the Linux framebuffer
+ and reads the hardware keyboard through evdev. It includes APPLaunch
+ integration, local playback, media-library browsing, metadata, lyrics,
+ queue control, DSP and WebUI remote control.

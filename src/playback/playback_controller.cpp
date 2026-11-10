@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <random>
 #include <utility>
@@ -84,6 +86,7 @@ bool PlaybackController::startRemoteStream(const ResolvedRemoteStream& stream, c
     session_.current_stream_url_redacted = stream.diagnostics.resolved_url_redacted;
     session_.current_stream_artwork_url = track.artwork_url;
     session_.current_stream_live = stream.diagnostics.live;
+    session_.current_stream_seekable = stream.seekable && stream.diagnostics.seekable && !stream.diagnostics.live;
     session_.status = PlaybackStatus::Playing;
     runtime_.beginTrack(session_);
     session_.current_artwork.reset();
@@ -119,6 +122,7 @@ bool PlaybackController::startRemoteLibraryTrack(
     session_.current_stream_url_redacted = stream.diagnostics.resolved_url_redacted;
     session_.current_stream_artwork_url = remote_track.artwork_url;
     session_.current_stream_live = stream.diagnostics.live;
+    session_.current_stream_seekable = stream.seekable && stream.diagnostics.seekable && !stream.diagnostics.live;
     session_.status = PlaybackStatus::Playing;
     runtime_.beginTrack(session_);
     session_.current_artwork.reset();
@@ -177,6 +181,7 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
     session_.current_stream_url_redacted.clear();
     session_.current_stream_artwork_url.clear();
     session_.current_stream_live = false;
+    session_.current_stream_seekable = false;
     session_.status = PlaybackStatus::Playing;
     runtime_.beginTrack(session_);
     session_.current_artwork.reset();
@@ -188,8 +193,11 @@ bool PlaybackController::playQueueIndex(LibraryController& library_controller, i
         session_.visualization_frame = {};
         return false;
     }
-    refreshMetadata(library_controller, MetadataReadMode::LocalOnly);
-    refreshArtwork(library_controller, ArtworkReadMode::LocalOnly);
+    // Providers may spawn ffprobe/ffmpeg or wait for a cache entry even in
+    // LocalOnly mode. Keep all enrichment off the playback command/UI thread.
+    session_.current_lyrics.plain = track->lyrics_plain;
+    session_.current_lyrics.synced = track->lyrics_synced;
+    session_.current_lyrics.source = track->lyrics_source;
     recordPlaybackStarted(*track);
     enrichment_.request(*track);
     return true;
@@ -269,12 +277,17 @@ void PlaybackController::stop() noexcept
 
 bool PlaybackController::seek(LibraryController& library_controller, double seconds)
 {
+    // Decoder seek formatting and the stability clock use integer milliseconds.
+    if (!std::isfinite(seconds) || seconds > static_cast<double>(std::numeric_limits<int>::max()) / 1000.0) return false;
     if (!session_.current_track_id) {
-        return false;
+        return session_.current_stream_seekable && runtime_.seekBackendUri(seconds, session_);
     }
     auto* track = library_controller.findMutableTrack(*session_.current_track_id);
-    if (track == nullptr || track->remote) {
+    if (track == nullptr) {
         return false;
+    }
+    if (track->remote) {
+        return session_.current_stream_seekable && runtime_.seekBackendUri(seconds, session_);
     }
     return runtime_.seekBackend(track->path, seconds, session_);
 }
@@ -332,16 +345,32 @@ void PlaybackController::cycleRepeatMode() noexcept
 
 void PlaybackController::rebuildQueueForCurrentSongs(const LibraryController& library_controller, int selected_track_id)
 {
-    queue_.base_ids = library_controller.trackIdsForCurrentSongs();
-    if (queue_.base_ids.empty()) {
-        queue_.base_ids = library_controller.allSongIdsSorted();
+    if (!library_controller.findTrack(selected_track_id)) {
+        queue_ = {};
+        return;
     }
+    auto base_ids = library_controller.trackIdsForCurrentSongs();
+    if (std::find(base_ids.begin(), base_ids.end(), selected_track_id) == base_ids.end()) {
+        base_ids = library_controller.allSongIdsSorted();
+    }
+    if (base_ids == queue_.base_ids) {
+        const auto active = std::find(queue_.active_ids.begin(), queue_.active_ids.end(), selected_track_id);
+        if (active != queue_.active_ids.end()) {
+            queue_.active_index = static_cast<int>(std::distance(queue_.active_ids.begin(), active));
+            return; // Retain an existing shuffle order for the same origin.
+        }
+    }
+    queue_.base_ids = std::move(base_ids);
     rebuildActiveQueueForMode(selected_track_id);
 }
 
 void PlaybackController::rebuildActiveQueueForMode(std::optional<int> selected_track_id)
 {
     queue_.active_ids = queue_.base_ids;
+    if (queue_.active_ids.empty()) {
+        queue_.active_index = -1;
+        return;
+    }
     if (session_.shuffle_enabled && queue_.active_ids.size() > 1) {
         static std::mt19937 rng{std::random_device{}()};
         std::shuffle(queue_.active_ids.begin(), queue_.active_ids.end(), rng);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "platform/host/runtime_provider_factories.h"
+#include "core/operation_cancellation.h"
 
 #include <algorithm>
 #include <array>
@@ -69,10 +70,8 @@ public:
         const auto missing_marker = artworkMissingMarkerPath(*cache_, key);
         const bool parent_is_library_root = pathEquivalentToAnyRoot(path.parent_path(), media_roots_);
         std::error_code ec{};
-        auto& entry = cache_->entries[key];
-        if (!entry.online_metadata_attempted && fs::exists(metadataCachePath(*cache_, key), ec)) {
-            entry = loadMetadataCache(*cache_, key);
-        }
+        CacheEntrySession session{*cache_, key};
+        auto& entry = session.entry;
         const bool allow_online_artwork = mode == app::ArtworkReadMode::AllowOnline;
         const bool can_try_online_artwork = allow_online_artwork
             && (!entry.release_mbid.empty() || !entry.release_group_mbid.empty())
@@ -121,16 +120,17 @@ public:
             if (!online_hit && !entry.release_group_mbid.empty()) {
                 online_hit = online_artwork_.fetchReleaseGroupFrontCover(entry.release_group_mbid, cache_path);
             }
+            if (core::operationCancelled()) return std::nullopt;
             if (online_hit) {
                 entry.online_artwork_attempted = true;
-                storeMetadataCache(*cache_, key, entry);
+                session.persist();
                 fs::remove(missing_marker, ec);
                 writeArtworkBack(path, cache_path, !parent_is_library_root);
                 logRuntime(RuntimeLogLevel::Info, "artwork", "Online artwork hit for " + pathUtf8String(path));
                 return loadPngCanvas(cache_path);
             }
             entry.online_artwork_attempted = true;
-            storeMetadataCache(*cache_, key, entry);
+            session.persist();
             logRuntime(RuntimeLogLevel::Warn, "artwork", "Online artwork miss for " + pathUtf8String(path));
         } else if (!allow_online_artwork) {
             logRuntime(RuntimeLogLevel::Debug, "artwork", "Online artwork skipped for " + pathUtf8String(path) + ": local-only read");
@@ -142,6 +142,7 @@ public:
             logRuntime(RuntimeLogLevel::Warn, "artwork", "Online artwork skipped for " + pathUtf8String(path) + ": network disconnected");
         }
 
+        if (core::operationCancelled()) return std::nullopt;
         std::ofstream marker(missing_marker, std::ios::binary | std::ios::trunc);
         marker << "missing";
         logRuntime(RuntimeLogLevel::Debug, "artwork", "No artwork found for " + pathUtf8String(path));
@@ -162,10 +163,8 @@ public:
         const auto cache_path = artworkCachePath(*cache_, key);
         const auto missing_marker = artworkMissingMarkerPath(*cache_, key);
         std::error_code ec{};
-        auto& entry = cache_->entries[key];
-        if (!entry.online_metadata_attempted && fs::exists(metadataCachePath(*cache_, key), ec)) {
-            entry = loadMetadataCache(*cache_, key);
-        }
+        CacheEntrySession session{*cache_, key};
+        auto& entry = session.entry;
         if (fs::exists(cache_path, ec) && !ec) {
             logRuntime(RuntimeLogLevel::Debug, "artwork", "Remote artwork cache hit for " + pathUtf8String(lookup_path));
             return loadPngCanvas(cache_path);
@@ -199,8 +198,9 @@ public:
             if (!online_hit && !entry.release_group_mbid.empty()) {
                 online_hit = online_artwork_.fetchReleaseGroupFrontCover(entry.release_group_mbid, cache_path);
             }
+            if (core::operationCancelled()) return std::nullopt;
             entry.online_artwork_attempted = true;
-            storeMetadataCache(*cache_, key, entry);
+            session.persist();
             if (online_hit) {
                 fs::remove(missing_marker, ec);
                 logRuntime(RuntimeLogLevel::Info, "artwork", "Remote online artwork hit for " + pathUtf8String(lookup_path));
@@ -208,6 +208,7 @@ public:
             }
             logRuntime(RuntimeLogLevel::Warn, "artwork", "Remote online artwork miss for " + pathUtf8String(lookup_path));
         }
+        if (core::operationCancelled()) return std::nullopt;
         std::ofstream marker(missing_marker, std::ios::binary | std::ios::trunc);
         marker << "missing";
         return std::nullopt;

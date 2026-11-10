@@ -116,6 +116,8 @@ struct TrackRecord {
     // these at their default values.
     std::uintmax_t file_size_bytes{0};
     std::int64_t file_mtime_ticks{0};
+    // A directly opened file can start before its first background tag read.
+    bool pending_local_title{false};
 };
 
 struct AlbumRecord {

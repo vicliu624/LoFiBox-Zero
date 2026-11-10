@@ -15,6 +15,11 @@ RuntimeCommandDispatcher::RuntimeCommandDispatcher(RuntimeSessionFacade& session
 RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& command)
 {
     switch (command.kind) {
+    case RuntimeCommandKind::PlaybackOpenInput:
+        {
+            const auto* payload = command.payload.get<PlaybackOpenInputPayload>();
+            return applied(command, "PLAYBACK_OPEN_INPUT", "Playback input submitted.", payload && session_.openInput(payload->input));
+        }
     case RuntimeCommandKind::PlaybackPlay:
         return applied(command, "PLAYBACK_PLAY", "Playback play submitted.", session_.playFirstAvailable());
     case RuntimeCommandKind::PlaybackPause:
@@ -85,6 +90,9 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
                 return applied(command, "PLAYBACK_REPEAT_ALL", "Repeat-all payload missing.", false);
             }
             session_.queue().setRepeatAll(payload->enabled);
+            // CLI/WebUI encode the three-state repeat mode's OFF action as
+            // repeat-all=false. It must also leave an active repeat-one mode.
+            if (!payload->enabled) session_.queue().setRepeatOne(false);
             return applied(command, "PLAYBACK_REPEAT_ALL", "Repeat-all submitted.", true);
         }
     case RuntimeCommandKind::PlaybackSetRepeatOne:
@@ -110,6 +118,9 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
             if (const auto* library_payload = command.payload.get<RemotePlayResolvedLibraryTrackPayload>()) {
                 const bool started = session_.playback().startRemoteLibraryTrack(*library_payload);
                 if (started) {
+                    // This is an explicit resolved selection. Queue traversal
+                    // resolves internally and retains its existing ordering.
+                    session_.queue().prepareForTrack(library_payload->local_track_id);
                     session_.remote().setSnapshot(library_payload->snapshot);
                 }
                 return applied(command, "REMOTE_START_ACTIVE_STREAM", "Remote library stream playback submitted.", started);
@@ -167,12 +178,14 @@ RuntimeCommandResult RuntimeCommandDispatcher::dispatch(const RuntimeCommand& co
             if (payload == nullptr) {
                 return applied(command, "SETTINGS_APPLY_LIVE", "Settings payload missing.", false);
             }
-            session_.settings().applyLive(payload->output_mode, payload->network_policy, payload->sleep_timer);
-            return applied(command, "SETTINGS_APPLY_LIVE", "Live settings submitted.", true);
+            const bool valid = session_.settings().applyLive(payload->output_mode, payload->network_policy,
+                                                           payload->sleep_timer, payload->screen_timeout);
+            return applied(command, "SETTINGS_APPLY_LIVE", valid ? "Live settings submitted." : "Invalid or unavailable timer setting. Use OFF or 1S through 24H; screen timers require framebuffer.", valid);
         }
     case RuntimeCommandKind::LibraryRefresh:
         return applied(command, "LIBRARY_REFRESH", "Library refresh requested.", session_.refreshLibrary());
     case RuntimeCommandKind::RuntimeShutdown:
+        session_.playback().stop();
         session_.settings().requestShutdown();
         return applied(command, "RUNTIME_SHUTDOWN", "Runtime shutdown requested.", true);
     case RuntimeCommandKind::RuntimeReload:

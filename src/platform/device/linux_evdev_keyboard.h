@@ -24,7 +24,8 @@ public:
     LinuxEvdevKeyboard& operator=(const LinuxEvdevKeyboard&) = delete;
 
     [[nodiscard]] bool available() const noexcept;
-    [[nodiscard]] std::vector<app::InputEvent> drainInput();
+    [[nodiscard]] std::vector<app::InputEvent> drainInput(bool wake_only = false);
+    [[nodiscard]] bool inputActivity() const noexcept;
     [[nodiscard]] std::chrono::milliseconds escHeldDuration() const noexcept;
 
 private:

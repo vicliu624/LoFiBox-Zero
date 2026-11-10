@@ -21,6 +21,7 @@ public:
     [[nodiscard]] std::string displayName() const override { return "RUNTIME-CLI-TEST"; }
     bool playFile(const std::filesystem::path&, double) override
     {
+        ++starts;
         playing = true;
         return true;
     }
@@ -29,6 +30,7 @@ public:
     [[nodiscard]] bool isFinished() override { return false; }
 
     bool playing{false};
+    int starts{0};
 };
 
 std::optional<int> runCli(std::vector<std::string> args, std::ostream& out, std::ostream& err)
@@ -47,7 +49,8 @@ int main()
 {
 #if defined(__unix__) || defined(__APPLE__)
     auto services = lofibox::app::withNullRuntimeServices();
-    services.playback.audio_backend = std::make_shared<RuntimeCliAudioBackend>();
+    auto audio_backend = std::make_shared<RuntimeCliAudioBackend>();
+    services.playback.audio_backend = audio_backend;
 
     lofibox::application::AppServiceHost app_host{services};
     app_host.controllers().library.mutableModel().tracks.push_back(
@@ -184,6 +187,56 @@ int main()
     exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "runtime", "playback", "--fields", "shuffle", "--json"}, out, err);
     if (!exit_code || *exit_code != 0 || out.str().find("\"shuffle\":\"OFF\"") == std::string::npos) {
         std::cerr << "Expected play --shuffle off to set shuffle OFF: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+
+    for (const auto invalid : {"nan", "inf", "-inf", "12junk", "1e308:1"}) {
+        out.str({}); err.str({});
+        const auto rejected = runCli({"lofibox", "--runtime-socket", socket_path.string(), "seek", invalid, "--json"}, out, err);
+        if (!rejected || *rejected != 2) {
+            std::cerr << "Expected malformed/non-finite duration to be rejected: " << invalid << '\n';
+            return 1;
+        }
+    }
+    out.str({}); err.str({});
+    const auto bad_index = runCli({"lofibox", "--runtime-socket", socket_path.string(), "play", "--id", "61junk", "--json"}, out, err);
+    if (!bad_index || *bad_index != 2) return 1;
+
+    out.str({}); err.str({});
+    if (runCli({"lofibox", "--runtime-socket", socket_path.string(), "repeat", "one"}, out, err) != 0) return 1;
+    if (runCli({"lofibox", "--runtime-socket", socket_path.string(), "repeat", "off"}, out, err) != 0) return 1;
+    out.str({}); err.str({});
+    if (runCli({"lofibox", "--runtime-socket", socket_path.string(), "now", "--fields", "repeat", "--json"}, out, err) != 0
+        || out.str().find("\"repeat\":\"OFF\"") == std::string::npos) return 1;
+
+    out.str({}); err.str({});
+    if (runCli({"lofibox", "--runtime-socket", socket_path.string(), "play", "--id", "61"}, out, err) != 0) return 1;
+    const int starts_before_rejection = audio_backend->starts;
+    for (const auto& rejected_args : std::vector<std::vector<std::string>>{
+             {"play", "--id", "99999"}, {"seek", "1e308"}, {"eq", "band", "999", "1"}}) {
+        std::vector<std::string> args{"lofibox", "--runtime-socket", socket_path.string(), "--json"};
+        args.insert(args.end(), rejected_args.begin(), rejected_args.end());
+        out.str({}); err.str({});
+        const auto rejected = runCli(std::move(args), out, err);
+        const int expected = rejected_args.front() == "eq" ? 2 : 6;
+        if (!rejected || *rejected != expected || out.str().find("\"applied\":false") == std::string::npos
+            || audio_backend->starts != starts_before_rejection) {
+            std::cerr << "Expected an unapplied runtime command to return a failure exit code: " << out.str() << err.str() << '\n';
+            return 1;
+        }
+    }
+
+    out.str({}); err.str({});
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "runtime", "settings", "apply", "ALSA", "LAN_ONLY", "15M", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0 || out.str().find("\"code\":\"SETTINGS_APPLY_LIVE\"") == std::string::npos) {
+        std::cerr << "Expected settings apply to dispatch a command rather than query: " << out.str() << err.str() << '\n';
+        return 1;
+    }
+    out.str({}); err.str({});
+    exit_code = runCli({"lofibox", "--runtime-socket", socket_path.string(), "runtime", "settings", "--json"}, out, err);
+    if (!exit_code || *exit_code != 0 || out.str().find("15M") == std::string::npos
+        || out.str().find("LAN_ONLY") == std::string::npos || out.str().find("ALSA") == std::string::npos) {
+        std::cerr << "Expected settings query to return the applied values: " << out.str() << err.str() << '\n';
         return 1;
     }
 

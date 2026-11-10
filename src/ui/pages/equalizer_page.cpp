@@ -183,17 +183,17 @@ void renderEqualizerPage(core::Canvas& canvas, const EqualizerPageView& view, co
         drawSliderTrack(canvas, theme, x, selected_band);
         drawGainFill(canvas, theme, x, gain, selected_band);
         canvas.fillRect(x + 2, kZeroY, kSliderW - 4, 1, selected_band ? theme.palette.focus_edge : rgba(118, 132, 152));
-        drawCenteredText(canvas, labels[static_cast<std::size_t>(index)], x + (kSliderW / 2), 118, selected_band ? theme.palette.text_primary : theme.palette.text_muted);
+        drawCenteredText(canvas, labels[static_cast<std::size_t>(index)], x + (kSliderW / 2), 110, selected_band ? theme.palette.text_primary : theme.palette.text_muted);
     }
 
-    canvas.fillRect(8, 142, 304, 16, theme.palette.panel2);
-    drawVerticalGlassFill(canvas, 9, 143, 302, 14, rgba(34, 40, 48), rgba(12, 15, 20), 130);
-    canvas.strokeRect(8, 142, 304, 16, theme.palette.divider, 1);
-    ::lofibox::ui::drawText(canvas, "PRESET", 14, 145, theme.palette.text_muted, 1);
+    canvas.fillRect(8, 127, 304, 14, theme.palette.panel2);
+    drawVerticalGlassFill(canvas, 9, 128, 302, 12, rgba(34, 40, 48), rgba(12, 15, 20), 130);
+    canvas.strokeRect(8, 127, 304, 14, theme.palette.divider, 1);
+    ::lofibox::ui::drawText(canvas, "PRESET", 14, 128, theme.palette.text_muted, 1);
     const auto preset = "< " + ::lofibox::ui::fitUpper(view.preset_name, 14) + " >";
-    drawCenteredText(canvas, preset, 174, 145, theme.palette.text_secondary);
-    ::lofibox::ui::drawText(canvas, "FX", 248, 145, theme.palette.text_muted, 1);
-    ::lofibox::ui::drawText(canvas, ::lofibox::ui::fitUpper(view.effect_name, 8), 268, 145, theme.palette.focus_edge, 1);
+    drawCenteredText(canvas, preset, 174, 128, theme.palette.text_secondary);
+    ::lofibox::ui::drawText(canvas, "FX", 248, 128, theme.palette.text_muted, 1);
+    ::lofibox::ui::drawText(canvas, ::lofibox::ui::fitUpper(view.effect_name, 8), 268, 128, theme.palette.focus_edge, 1);
 }
 
 } // namespace lofibox::ui::pages

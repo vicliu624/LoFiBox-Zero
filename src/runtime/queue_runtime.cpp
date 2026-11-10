@@ -3,6 +3,7 @@
 #include "runtime/queue_runtime.h"
 
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 namespace lofibox::runtime {
@@ -31,6 +32,11 @@ bool QueueRuntime::jump(int queue_index) const
 void QueueRuntime::clear() const noexcept
 {
     services_.queueCommands().clear();
+}
+
+void QueueRuntime::prepareForTrack(int track_id) const
+{
+    services_.queueCommands().prepareForTrack(track_id);
 }
 
 void QueueRuntime::cycleMainMenuPlaybackMode() const
@@ -65,16 +71,25 @@ void QueueRuntime::setRepeatOne(bool enabled) const noexcept
 
 QueueRuntimeSnapshot QueueRuntime::snapshot(std::uint64_t version) const
 {
-    const auto queue = services_.playbackStatus().queueSnapshot();
     const auto library = services_.libraryQueries();
+    const auto lock = library.lockState();
+    auto queue = services_.playbackStatus().queueSnapshot();
     QueueRuntimeSnapshot result{};
-    result.active_ids = queue.active_ids;
+    result.active_ids = std::move(queue.active_ids);
     result.active_index = queue.active_index;
     result.selected_index = queue.active_index;
     result.shuffle_enabled = queue.shuffle_enabled;
     result.repeat_all = queue.repeat_all;
     result.repeat_one = queue.repeat_one;
     result.version = version;
+    if (result.active_ids.empty()) return result;
+
+    // A full snapshot is shared by the GUI, TUI and external clients. Avoid
+    // one linear library search for every queue entry on each refresh.
+    std::unordered_map<int, const app::TrackRecord*> tracks;
+    tracks.reserve(library.model().tracks.size());
+    for (const auto& track : library.model().tracks) tracks.emplace(track.id, &track);
+    result.visible_items.reserve(result.active_ids.size());
 
     int queue_index = 0;
     for (const int track_id : result.active_ids) {
@@ -82,7 +97,8 @@ QueueRuntimeSnapshot QueueRuntime::snapshot(std::uint64_t version) const
         item.track_id = track_id;
         item.queue_index = queue_index;
         item.active = queue_index == result.active_index;
-        if (const auto* track = library.findTrack(track_id)) {
+        if (const auto found = tracks.find(track_id); found != tracks.end()) {
+            const auto* track = found->second;
             item.title = track->title;
             item.artist = track->artist;
             item.album = track->album;

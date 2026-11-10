@@ -17,7 +17,8 @@ public:
         const std::vector<std::filesystem::path>& media_roots,
         const app::MetadataProvider& metadata_provider,
         app::LibraryScanProgressCallback progress = {},
-        const app::LibraryModel* previous_model = nullptr) const;
+        const app::LibraryModel* previous_model = nullptr,
+        const std::vector<std::filesystem::path>& additional_files = {}) const;
 };
 
 } // namespace lofibox::library

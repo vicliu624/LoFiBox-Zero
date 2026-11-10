@@ -39,6 +39,7 @@ const RuntimeCommandServer& RuntimeHost::server() const noexcept
 
 void RuntimeHost::setRemoteSessionSnapshot(RemoteSessionSnapshot snapshot)
 {
+    const std::lock_guard lock{session_.stateMutex()};
     session_.remote().setSnapshot(std::move(snapshot));
 }
 
@@ -49,6 +50,7 @@ void RuntimeHost::tick(double delta_seconds)
 
 void RuntimeHost::resetEq()
 {
+    const std::lock_guard lock{session_.stateMutex()};
     session_.eq().reset();
 }
 
@@ -82,11 +84,19 @@ std::string RuntimeHost::externalTransportError() const
 
 bool RuntimeHost::shutdownRequested() const noexcept
 {
+    const std::lock_guard lock{session_.stateMutex()};
     return session_.settings().shutdownRequested();
+}
+
+std::chrono::seconds RuntimeHost::screenTimeout() const noexcept
+{
+    const std::lock_guard lock{session_.stateMutex()};
+    return session_.settings().screenTimeout();
 }
 
 bool RuntimeHost::reloadRequested() const noexcept
 {
+    const std::lock_guard lock{session_.stateMutex()};
     return session_.settings().reloadRequested();
 }
 

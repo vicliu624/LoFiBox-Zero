@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <cstdlib>
+#include <algorithm>
 #include <chrono>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -16,7 +19,9 @@
 #include "platform/host/runtime_paths.h"
 #include "platform/host/runtime_services_factory.h"
 #include "platform/host/single_instance_lock.h"
+#include "platform/host/system_media_key_handler.h"
 #include "platform/device/linux_framebuffer_platform.h"
+#include "platform/device/cardputer_rhythm_lights.h"
 #include "targets/cli_options.h"
 #if defined(LOFIBOX_HAVE_TUI)
 #include "tui/tui_app.h"
@@ -34,6 +39,58 @@ namespace {
 struct DeviceOptions {
     std::string framebuffer_path{"/dev/fb0"};
     std::string input_device_path{"/dev/input/by-path/platform-3f804000.i2c-event"};
+};
+
+class DevicePresenter final : public lofibox::platform::SurfacePresenter {
+public:
+    DevicePresenter(std::string framebuffer, std::string keyboard)
+        : framebuffer_(std::move(framebuffer), keyboard)
+    {
+        const char* enabled = std::getenv("LOFIBOX_RHYTHM_LIGHTS");
+        if (enabled && std::string_view{enabled} == "1") {
+            lights_ = std::make_unique<lofibox::platform::device::CardputerRhythmLights>(std::move(keyboard));
+        }
+    }
+    void bindPlayback(const lofibox::application::AppServiceRegistry& registry)
+    {
+        if (!lights_) return;
+        // Called and read on the GUI thread. The worker receives only a small
+        // value copy, never a reference into the app/runtime state.
+        playback_frame_ = [services = registry, this] {
+            lofibox::app::AudioVisualizationFrame frame;
+            bool playing;
+            {
+                const std::lock_guard lock{services.stateMutex()};
+                const auto& playback = services.playbackStatus().session();
+                frame = playback.visualization_frame;
+                playing = playback.status == lofibox::app::PlaybackStatus::Playing && playback.audio_active;
+            }
+            lights_->submit(frame, playing);
+        };
+    }
+    bool pump() override { return framebuffer_.pump(); }
+    std::vector<lofibox::app::InputEvent> drainInput() override
+    {
+        auto events = framebuffer_.drainInput();
+        std::erase_if(events, [this](const auto& event) { return system_keys_.handle(event); });
+        return events;
+    }
+    void present(const lofibox::core::Canvas& canvas) override
+    {
+        if (playback_frame_) playback_frame_();
+        framebuffer_.present(canvas);
+    }
+    void setIdleTimeout(std::chrono::seconds timeout) override
+    {
+        framebuffer_.setIdleTimeout(timeout);
+        if (!framebuffer_.renderEnabled() && lights_) lights_->submit({}, false);
+    }
+    bool renderEnabled() const noexcept override { return framebuffer_.renderEnabled(); }
+private:
+    lofibox::platform::device::LinuxFramebufferPlatform framebuffer_;
+    lofibox::platform::host::SystemMediaKeyHandler system_keys_;
+    std::unique_ptr<lofibox::platform::device::CardputerRhythmLights> lights_;
+    std::function<void()> playback_frame_;
 };
 
 std::string envOrDefault(const char* name, std::string fallback)
@@ -90,6 +147,7 @@ int main(int argc, char** argv)
         }
 
         auto services = lofibox::platform::host::createHostRuntimeServices();
+        services.ui.framebuffer_backlight = true;
         if (const auto direct_cli_exit = lofibox::cli::runDirectCliCommand(argc, argv, services, std::cout, std::cerr)) {
             return *direct_cli_exit;
         }
@@ -128,9 +186,15 @@ int main(int argc, char** argv)
             std::cerr << "Device startup skipped: " << instance_lock.message() << '\n';
             return 2;
         }
-        lofibox::platform::device::LinuxFramebufferPlatform device{
+        DevicePresenter device{
             std::move(options.framebuffer_path),
             std::move(options.input_device_path)};
+        on_start = [&device, start_services = std::move(on_start)]
+            (lofibox::runtime::RuntimeCommandClient& client,
+             const lofibox::application::AppServiceRegistry& registry) {
+                device.bindPlayback(registry);
+                if (start_services) start_services(client, registry);
+            };
         auto assets = lofibox::platform::host::loadLegacyAssets();
         lofibox::app::runLoFiBoxApp(
             device,

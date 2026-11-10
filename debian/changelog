@@ -1,3 +1,29 @@
+lofibox (0.3.8-4) UNRELEASED; urgency=medium
+
+  * Restore the framebuffer backlight on exit when the session's idle timer
+    blanked it, so the resident APPLaunch screen remains visible.
+
+ -- vicliu624 <vicliu@outlook.com>  Tue, 10 Nov 2026 20:00:00 +0800
+
+lofibox (0.3.8-3) UNRELEASED; urgency=medium
+
+  * Implement independent session exit and framebuffer idle-screen timers,
+    consume wake-key repeats, and suspend rendering while the screen is off.
+  * Share timer settings across GUI, CLI, TUI and WebUI, with atomic
+    validation and explicit framebuffer capability reporting.
+
+ -- vicliu624 <vicliu@outlook.com>  Tue, 10 Nov 2026 14:40:00 +0800
+
+lofibox (0.3.8-2) UNRELEASED; urgency=medium
+
+  * Namespace Cardputer executables, assets, helpers and plugins for the
+    CardputerZero Store installation policy; keep the Debian Wayland layout.
+  * Ship the verified framebuffer player, 48 kHz native MP3 path and
+    rightmost-spectrum keyboard lights with APPLaunch integration.
+  * Omit desktop-only integration and DWZ debug payload from the appliance.
+
+ -- vicliu624 <vicliu@outlook.com>  Tue, 10 Nov 2026 14:00:00 +0800
+
 lofibox (0.3.8-1) UNRELEASED; urgency=medium
 
   * New upstream release 0.3.8.

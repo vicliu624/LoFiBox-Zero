@@ -16,6 +16,8 @@ struct SettingsProjectionInput {
     bool remote_sources_available{false};
     int remote_source_type_count{0};
     std::string webui_url{};
+    std::string sleep_timer{"OFF"};
+    std::string screen_timeout{"OFF"};
 };
 
 [[nodiscard]] std::vector<std::pair<std::string, std::string>> buildSettingsProjectionRows(const SettingsProjectionInput& input);

@@ -3,41 +3,42 @@
 #include "app/library_navigation_service.h"
 
 #include "application/library_query_service.h"
+#include <unordered_map>
 
 namespace lofibox::app {
 namespace {
 
-int countTracksByArtist(const LibraryModel& library, const std::string& artist)
+std::vector<std::pair<std::string, std::string>> groupedRows(
+    const LibraryModel& library, const std::vector<std::string>& groups,
+    const std::string TrackRecord::* field)
 {
-    int count = 0;
+    std::unordered_map<std::string_view, int> counts;
+    counts.reserve(groups.size());
     for (const auto& track : library.tracks) {
-        if (track.artist == artist) {
-            ++count;
-        }
+        ++counts[track.*field];
     }
-    return count;
+    std::vector<std::pair<std::string, std::string>> rows;
+    rows.reserve(groups.size());
+    for (const auto& group : groups) {
+        const auto it = counts.find(group);
+        rows.emplace_back(group, std::to_string(it == counts.end() ? 0 : it->second));
+    }
+    return rows;
 }
 
-int countTracksByGenre(const LibraryModel& library, const std::string& genre)
+std::vector<std::pair<std::string, std::string>> trackRows(const LibraryModel& library, const std::vector<int>& ids)
 {
-    int count = 0;
-    for (const auto& track : library.tracks) {
-        if (track.genre == genre) {
-            ++count;
+    std::unordered_map<int, const TrackRecord*> tracks;
+    tracks.reserve(library.tracks.size());
+    for (const auto& track : library.tracks) tracks.emplace(track.id, &track);
+    std::vector<std::pair<std::string, std::string>> rows;
+    rows.reserve(ids.size());
+    for (int id : ids) {
+        if (const auto it = tracks.find(id); it != tracks.end()) {
+            rows.emplace_back(it->second->title, it->second->artist);
         }
     }
-    return count;
-}
-
-int countTracksByComposer(const LibraryModel& library, const std::string& composer)
-{
-    int count = 0;
-    for (const auto& track : library.tracks) {
-        if (track.composer == composer) {
-            ++count;
-        }
-    }
-    return count;
+    return rows;
 }
 
 } // namespace
@@ -74,22 +75,16 @@ std::optional<std::vector<std::pair<std::string, std::string>>> LibraryNavigatio
             {"COMPILATIONS", std::to_string(library.compilations.size())},
         };
     case AppPage::Artists:
-        for (const auto& artist : library.artists) rows.emplace_back(artist, std::to_string(countTracksByArtist(library, artist)));
-        return rows;
+        return groupedRows(library, library.artists, &TrackRecord::artist);
     case AppPage::Albums:
         for (const auto& album : visible_albums) rows.emplace_back(album.album, std::to_string(album.track_ids.size()));
         return rows;
     case AppPage::Songs:
-        for (const int id : context.songs.track_ids) {
-            if (const auto* track = ::lofibox::application::LibraryQueryService::findTrack(library, id)) rows.emplace_back(track->title, track->artist);
-        }
-        return rows;
+        return trackRows(library, context.songs.track_ids);
     case AppPage::Genres:
-        for (const auto& genre : library.genres) rows.emplace_back(genre, std::to_string(countTracksByGenre(library, genre)));
-        return rows;
+        return groupedRows(library, library.genres, &TrackRecord::genre);
     case AppPage::Composers:
-        for (const auto& composer : library.composers) rows.emplace_back(composer, std::to_string(countTracksByComposer(library, composer)));
-        return rows;
+        return groupedRows(library, library.composers, &TrackRecord::composer);
     case AppPage::Compilations:
         for (const auto& compilation : library.compilations) rows.emplace_back(compilation.album, std::to_string(compilation.track_ids.size()));
         return rows;
@@ -101,10 +96,7 @@ std::optional<std::vector<std::pair<std::string, std::string>>> LibraryNavigatio
             {"RECENTLY PLAYED", "AUTO"},
         };
     case AppPage::PlaylistDetail:
-        for (const int id : playlist_track_ids) {
-            if (const auto* track = ::lofibox::application::LibraryQueryService::findTrack(library, id)) rows.emplace_back(track->title, track->artist);
-        }
-        return rows;
+        return trackRows(library, playlist_track_ids);
     default:
         return std::nullopt;
     }

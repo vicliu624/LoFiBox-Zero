@@ -24,26 +24,32 @@ namespace {
 // --- Minimal JSON value extraction for flat command objects ---
 
 // Extract a JSON string value for a given key from a flat JSON object.
-// Returns the unescaped value, or empty string_view if not found.
+// Returns the escaped string contents; callers unescape owned payload fields.
 std::string_view extractJsonString(std::string_view body, std::string_view key)
 {
     // Search for "key":
     std::string search = "\"";
     search += key;
-    search += "\":";
+    search += '"';
     auto pos = body.find(search);
     if (pos == std::string_view::npos) return {};
 
     pos += search.size();
-    // Skip whitespace
+    // Whitespace is allowed on either side of the colon.
+    while (pos < body.size() && (body[pos] == ' ' || body[pos] == '\t' || body[pos] == '\n' || body[pos] == '\r')) ++pos;
+    if (pos >= body.size() || body[pos++] != ':') return {};
     while (pos < body.size() && (body[pos] == ' ' || body[pos] == '\t' || body[pos] == '\n' || body[pos] == '\r')) ++pos;
     if (pos >= body.size() || body[pos] != '"') return {};
 
     ++pos; // skip opening quote
-    auto end = body.find('"', pos);
-    if (end == std::string_view::npos) return {};
-
-    return body.substr(pos, end - pos);
+    for (auto end = pos; end < body.size(); ++end) {
+        if (body[end] == '\\') {
+            if (++end >= body.size()) return {};
+        } else if (body[end] == '"') {
+            return body.substr(pos, end - pos);
+        }
+    }
+    return {};
 }
 
 // Extract a JSON integer value for a given key.
@@ -62,23 +68,14 @@ int extractJsonInt(std::string_view body, std::string_view key, bool& found)
     while (pos < body.size() && (body[pos] == ' ' || body[pos] == '\t' || body[pos] == '\n' || body[pos] == '\r')) ++pos;
     if (pos >= body.size()) return 0;
 
-    // Handle negative numbers
-    bool negative = false;
-    if (body[pos] == '-') {
-        negative = true;
-        ++pos;
-    }
-
-    if (pos >= body.size() || body[pos] < '0' || body[pos] > '9') return 0;
-
     int value = 0;
-    while (pos < body.size() && body[pos] >= '0' && body[pos] <= '9') {
-        value = value * 10 + (body[pos] - '0');
-        ++pos;
-    }
-
+    const auto [end, error] = std::from_chars(body.data() + pos, body.data() + body.size(), value);
+    if (error != std::errc{}) return 0;
+    pos = static_cast<std::size_t>(end - body.data());
+    while (pos < body.size() && (body[pos] == ' ' || body[pos] == '\t' || body[pos] == '\n' || body[pos] == '\r')) ++pos;
+    if (pos >= body.size() || (body[pos] != ',' && body[pos] != '}')) return 0;
     found = true;
-    return negative ? -value : value;
+    return value;
 }
 
 // Minimal percent-decoding for URL path segments.
@@ -171,6 +168,11 @@ bool mapActionToCommand(std::string_view action, runtime::RuntimeCommand& comman
         command.payload = RuntimeCommandPayload::empty();
         return true;
     }
+    if (action == "EqEnable" || action == "EqDisable") {
+        command.kind = action == "EqEnable" ? RuntimeCommandKind::EqEnable : RuntimeCommandKind::EqDisable;
+        command.payload = RuntimeCommandPayload::empty();
+        return true;
+    }
     if (action == "AudioEffectCycle" || action == "RemixCycle") {
         command.kind = RuntimeCommandKind::AudioEffectCycle;
         command.payload = RuntimeCommandPayload::audioEffectCycle();
@@ -251,8 +253,8 @@ std::string WebUiHttpRouter::handleRequest(std::string_view method, std::string_
 
     // GET /api/runtime/snapshot: full state
     if (method == "GET" && path == "/api/runtime/snapshot") {
-        adapter_.querySnapshot();
-        std::string json = buildFullSnapshotJson(adapter_.lastSnapshot());
+        const auto snapshot = adapter_.querySnapshot();
+        std::string json = buildFullSnapshotJson(snapshot);
         std::string response = json::httpOk("application/json; charset=utf-8", json.size());
         response += json;
         return response;
@@ -432,6 +434,14 @@ bool WebUiHttpRouter::parseWebUiCommand(std::string_view json_body, runtime::Run
     }
 
     // Handle parameterised commands
+    if (action == "SetTimers") {
+        const auto sleep = unescapeJson(extractJsonString(json_body, "sleep_timer"));
+        const auto screen = unescapeJson(extractJsonString(json_body, "screen_timeout"));
+        if (sleep.empty() && screen.empty()) return false;
+        command.kind = RuntimeCommandKind::SettingsApplyLive;
+        command.payload = RuntimeCommandPayload::settingsApplyLive({}, {}, sleep, screen);
+        return true;
+    }
     if (action == "QueueJump") {
         bool found = false;
         int queue_index = extractJsonInt(json_body, "queue_index", found);
@@ -448,9 +458,9 @@ bool WebUiHttpRouter::parseWebUiCommand(std::string_view json_body, runtime::Run
         command.kind = RuntimeCommandKind::PlaybackStartTrack;
         command.payload = RuntimeCommandPayload::startTrack(
             track_id,
-            std::string{extractJsonString(json_body, "album")},
-            std::string{extractJsonString(json_body, "artist")},
-            std::string{extractJsonString(json_body, "genre")});
+            unescapeJson(extractJsonString(json_body, "album")),
+            unescapeJson(extractJsonString(json_body, "artist")),
+            unescapeJson(extractJsonString(json_body, "genre")));
         return true;
     }
 

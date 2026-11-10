@@ -8,36 +8,10 @@
 #include <cstdint>
 
 #include "ui/ui_primitives.h"
+#include "core/spectrum_display.h"
 
 namespace lofibox::ui::pages {
 namespace {
-
-[[nodiscard]] core::Color alphaBlend(core::Color dst, core::Color src, std::uint8_t opacity) noexcept
-{
-    const float src_alpha = (static_cast<float>(src.a) / 255.0f) * (static_cast<float>(opacity) / 255.0f);
-    const float dst_alpha = static_cast<float>(dst.a) / 255.0f;
-    const float out_alpha = src_alpha + (dst_alpha * (1.0f - src_alpha));
-    if (out_alpha <= 0.0f) {
-        return core::rgba(0, 0, 0, 0);
-    }
-
-    const auto blend = [&](std::uint8_t dst_c, std::uint8_t src_c) -> std::uint8_t {
-        const float out =
-            ((static_cast<float>(src_c) * src_alpha) + (static_cast<float>(dst_c) * dst_alpha * (1.0f - src_alpha))) / out_alpha;
-        return static_cast<std::uint8_t>(std::clamp(out, 0.0f, 255.0f));
-    };
-
-    return core::rgba(
-        blend(dst.r, src.r),
-        blend(dst.g, src.g),
-        blend(dst.b, src.b),
-        static_cast<std::uint8_t>(std::clamp(out_alpha * 255.0f, 0.0f, 255.0f)));
-}
-
-void blendPixel(core::Canvas& canvas, int x, int y, core::Color color, std::uint8_t opacity)
-{
-    canvas.setPixel(x, y, alphaBlend(canvas.pixel(x, y), color, opacity));
-}
 
 std::string formatDuration(int seconds)
 {
@@ -68,53 +42,44 @@ std::string formatDuration(int seconds)
     const int lower = std::clamp(static_cast<int>(std::floor(scaled)), 0, static_cast<int>(bands.size()) - 1);
     const int upper = std::clamp(lower + 1, 0, static_cast<int>(bands.size()) - 1);
     const float blend = scaled - static_cast<float>(lower);
-    return std::clamp(
-        (bands[static_cast<std::size_t>(lower)] * (1.0f - blend)) +
-            (bands[static_cast<std::size_t>(upper)] * blend),
-        0.0f,
-        1.0f);
+    const auto level = [&](int index) {
+        const float value = bands[static_cast<std::size_t>(index)];
+        return std::isfinite(value) ? std::clamp(value, 0.0f, 1.0f) : 0.0f;
+    };
+    return level(lower) * (1.0f - blend) + level(upper) * blend;
 }
 
 void renderTidalSpectrum(core::Canvas& canvas, const NowPlayingView& view, const UiTheme& theme)
 {
-    constexpr int kLeft = 16;
-    constexpr int kRight = 304;
-    constexpr int kBaseline = 160;
-    constexpr int kMaxHeight = 24;
-    constexpr int kColumnWidth = 4;
-    constexpr int kGap = 3;
+    if (!view.visualization.available || view.status != NowPlayingStatus::Playing) return;
+
+    constexpr int kLeft = 10;
+    constexpr int kRight = 310;
+    constexpr int kBaseline = core::kSpectrumBaseline;
+    constexpr int kMaxHeight = core::kSpectrumMaxHeight;
+    constexpr int kColumnWidth = 6;
+    constexpr int kGap = 4;
     constexpr int kStride = kColumnWidth + kGap;
     constexpr int kColumnCount = (kRight - kLeft) / kStride;
 
     for (int column = 0; column < kColumnCount; ++column) {
         const float position = static_cast<float>(column) / static_cast<float>(std::max(1, kColumnCount - 1));
-        const float energy = view.visualization.available ? spectrumEnergyForColumn(view.visualization.bands, column, kColumnCount) : 0.0f;
-        const float visible_energy = std::pow(std::clamp(energy * 1.65f, 0.0f, 1.0f), 0.52f);
-        const int height = view.visualization.available
-            ? std::clamp(static_cast<int>(std::round(1.0f + (visible_energy * static_cast<float>(kMaxHeight - 1)))), 1, kMaxHeight)
-            : 2;
+        const float energy = spectrumEnergyForColumn(view.visualization.bands, column, kColumnCount);
+        const int height = core::spectrumBarHeight(energy);
         const int x = kLeft + (column * kStride);
         const auto base_color = spectrumHue(position);
 
         for (int row = 0; row < height; ++row) {
-            const float vertical = static_cast<float>(row) / static_cast<float>(std::max(1, height - 1));
             const int y = kBaseline - row;
-            const auto column_color = ::lofibox::ui::mixColor(base_color, theme.palette.text_primary, 0.34f * vertical);
-            const std::uint8_t opacity = view.visualization.available
-                ? static_cast<std::uint8_t>(std::clamp(42.0f + (118.0f * vertical), 0.0f, 160.0f))
-                : static_cast<std::uint8_t>(36);
-            for (int pixel_x = 0; pixel_x < kColumnWidth; ++pixel_x) {
-                const float edge = static_cast<float>(std::min(pixel_x, kColumnWidth - 1 - pixel_x)) / 2.0f;
-                const std::uint8_t faded_opacity = static_cast<std::uint8_t>(static_cast<float>(opacity) * std::clamp(0.58f + edge, 0.58f, 1.0f));
-                blendPixel(canvas, x + pixel_x, y, column_color, faded_opacity);
-            }
-        }
-
-        for (int glow = 1; glow <= 3; ++glow) {
-            const int y = kBaseline + glow;
-            const auto glow_color = ::lofibox::ui::mixColor(base_color, theme.palette.background, 0.35f);
-            blendPixel(canvas, x + 1, y, glow_color, static_cast<std::uint8_t>(38 / glow));
-            blendPixel(canvas, x + 2, y, glow_color, static_cast<std::uint8_t>(38 / glow));
+            const float vertical = static_cast<float>(row) / static_cast<float>(kMaxHeight - 1);
+            const float tip = std::min(1.0f, static_cast<float>(height - row) / 5.0f);
+            const float opacity = (0.25f - 0.15f * vertical) * tip;
+            // This layer is drawn over the uniform panel before any foreground.
+            // Blend once per scanline, not per pixel; no overlay canvas or blur.
+            canvas.fillRect(x, y, kColumnWidth, 1,
+                ::lofibox::ui::mixColor(theme.palette.panel0, base_color, opacity * 0.55f));
+            canvas.fillRect(x + 1, y, kColumnWidth - 2, 1,
+                ::lofibox::ui::mixColor(theme.palette.panel0, base_color, opacity));
         }
     }
 }
@@ -128,6 +93,8 @@ void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view, cons
         ::lofibox::ui::drawText(canvas, "SELECT MUSIC TO PLAY", 122, 58, theme.palette.text_muted, 1);
         return;
     }
+
+    renderTidalSpectrum(canvas, view, theme);
 
     constexpr int kArtworkFrameX = 32;
     constexpr int kArtworkFrameY = 46;
@@ -170,13 +137,8 @@ void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view, cons
     ::lofibox::ui::drawText(canvas, formatDuration(static_cast<int>(view.elapsed_seconds)), 116, 102, theme.palette.text_secondary, 1);
     ::lofibox::ui::drawText(canvas, formatDuration(view.duration_seconds), 262, 102, theme.palette.text_secondary, 1);
 
-    const std::string play_label = view.status == NowPlayingStatus::Playing ? "PAUSE" : "PLAY";
-    ::lofibox::ui::drawText(canvas, "PREV", 110, 124, theme.palette.text_muted, 1);
-    ::lofibox::ui::drawText(canvas, play_label, 146, 124, theme.palette.text_primary, 1);
-    ::lofibox::ui::drawText(canvas, "NEXT", 192, 124, theme.palette.text_muted, 1);
-    ::lofibox::ui::drawText(canvas, view.shuffle_enabled ? "SHUF*" : "SHUF", 236, 124, view.shuffle_enabled ? theme.palette.progress : theme.palette.text_muted, 1);
-    const std::string repeat_label = view.repeat_one ? "ONE*" : (view.repeat_all ? "REP*" : "REP");
-    ::lofibox::ui::drawText(canvas, repeat_label, 278, 124, view.repeat_one || view.repeat_all ? theme.palette.progress : theme.palette.text_muted, 1);
+    const auto mode = view.repeat_one ? "ONE" : (view.repeat_all ? "REPEAT" : (view.shuffle_enabled ? "SHUFFLE" : "ORDER"));
+    ::lofibox::ui::drawText(canvas, mode, 32, 124, theme.palette.text_secondary, 1);
 
     if (view.effect_name != "OFF") {
         const auto remix_label = ::lofibox::ui::fitUpper(view.effect_name, 7);
@@ -185,7 +147,6 @@ void renderNowPlayingPage(core::Canvas& canvas, const NowPlayingView& view, cons
         ::lofibox::ui::drawText(canvas, remix_label, remix_x, 4, theme.palette.focus_edge, 1);
     }
 
-    renderTidalSpectrum(canvas, view, theme);
 }
 
 } // namespace lofibox::ui::pages

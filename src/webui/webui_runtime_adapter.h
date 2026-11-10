@@ -38,10 +38,10 @@ public:
     std::vector<runtime::RuntimeEvent> pollEvents();
 
     // Get the last cached snapshot without a new query.
-    const runtime::RuntimeSnapshot& lastSnapshot() const noexcept;
+    runtime::RuntimeSnapshot lastSnapshot() const;
 
     // Get the last error message, if any.
-    const std::string& lastError() const noexcept;
+    std::string lastError() const;
 
     // Check if the runtime connection is healthy.
     bool isConnected() const noexcept;
@@ -52,6 +52,7 @@ private:
     runtime::RuntimeSnapshot current_snapshot_{};
     std::string last_error_{};
     bool connected_{false};
+    mutable std::mutex mutex_{};
 };
 
 } // namespace lofibox::webui

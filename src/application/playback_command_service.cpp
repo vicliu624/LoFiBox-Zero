@@ -87,6 +87,7 @@ bool PlaybackCommandService::startTrack(int track_id, const RemoteTrackStarter& 
     }
     const auto& current = playback_.session();
     if (current.current_track_id == track_id) {
+        if (current.audio_active) playback_.prepareQueueForTrack(library_, track_id);
         if (current.status == app::PlaybackStatus::Playing && current.audio_active) {
             return true;
         }
@@ -136,11 +137,13 @@ bool PlaybackCommandService::resume() const
 {
     const auto& before = playback_.session();
     if (before.status == app::PlaybackStatus::Paused && before.current_track_id && !before.audio_active) {
-        if (const auto* track = library_.findTrack(*before.current_track_id);
-            track != nullptr && isAtOrBeyondKnownEnd(before, *track)) {
-            return startTrack(*before.current_track_id);
+        const auto* track = library_.findTrack(*before.current_track_id);
+        if (track == nullptr || !track->remote) {
+            if (track != nullptr && isAtOrBeyondKnownEnd(before, *track)) {
+                return startTrack(*before.current_track_id);
+            }
+            return playback_.seek(library_, before.elapsed_seconds);
         }
-        return playback_.seek(library_, before.elapsed_seconds);
     }
     playback_.resume();
     const auto& after = playback_.session();

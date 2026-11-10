@@ -48,6 +48,14 @@ enum class InputKey {
     Right,
     Up,
     Down,
+    Escape,
+    MediaPrevious,
+    MediaNext,
+    VolumeDown,
+    VolumeUp,
+    VolumeMute,
+    BrightnessDown,
+    BrightnessUp,
 };
 
 struct InputEvent {
@@ -57,6 +65,7 @@ struct InputEvent {
     std::string text{};
     int x{};
     int y{};
+    bool repeated{false};
 
     InputEvent() = default;
 

@@ -26,11 +26,12 @@ public:
     PythonMutagenTagWriter()
     {
         python_path_ = resolvePythonPath();
+        unavailable_reason_ = unavailableReason();
     }
 
     [[nodiscard]] bool available() const override
     {
-        return unavailableReason().empty();
+        return unavailable_reason_.empty();
     }
 
     [[nodiscard]] std::string displayName() const override
@@ -41,7 +42,7 @@ public:
     bool write(const fs::path& path, const app::TagWriteRequest& request) const override
     {
         if (!available()) {
-            logRuntime(RuntimeLogLevel::Warn, "tagwriter", "Tag writer unavailable: " + unavailableReason() + " for " + pathUtf8String(path));
+            logRuntime(RuntimeLogLevel::Warn, "tagwriter", "Tag writer unavailable: " + unavailable_reason_ + " for " + pathUtf8String(path));
             return false;
         }
         const bool ok = writeTagPayload(*python_path_, path, request);
@@ -65,6 +66,7 @@ private:
     }
 
     std::optional<fs::path> python_path_{};
+    std::string unavailable_reason_{};
 };
 
 } // namespace

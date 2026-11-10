@@ -45,6 +45,7 @@ public:
     [[nodiscard]] std::string externalTransportError() const;
 
     [[nodiscard]] bool shutdownRequested() const noexcept;
+    [[nodiscard]] std::chrono::seconds screenTimeout() const noexcept;
     [[nodiscard]] bool reloadRequested() const noexcept;
 
 private:

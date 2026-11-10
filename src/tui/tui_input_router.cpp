@@ -36,10 +36,9 @@ void eraseLastUtf8(std::string& value)
     if (value.empty()) {
         return;
     }
-    value.pop_back();
-    while (!value.empty() && (static_cast<unsigned char>(value.back()) & 0xC0U) == 0x80U) {
-        value.pop_back();
-    }
+    auto begin = value.size() - 1;
+    while (begin > 0 && (static_cast<unsigned char>(value[begin]) & 0xC0U) == 0x80U) --begin;
+    value.erase(begin);
 }
 
 TuiInputAction routeTextInput(TuiModel& model, const TuiKeyEvent& event)

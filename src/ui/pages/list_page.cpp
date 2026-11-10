@@ -71,7 +71,8 @@ void drawEmptyRow(core::Canvas& canvas, const UiTheme& theme, std::string_view l
 
 void drawListPositionIndicator(core::Canvas& canvas, const UiTheme& theme, int selected, int scroll, int item_count)
 {
-    if (item_count <= theme.spacing.max_visible_rows) {
+    const int visible_rows = core::visibleListRows(theme.spacing.list_top, theme.spacing.list_row_height, theme.spacing.max_visible_rows);
+    if (item_count <= visible_rows) {
         return;
     }
 
@@ -80,11 +81,11 @@ void drawListPositionIndicator(core::Canvas& canvas, const UiTheme& theme, int s
 
     constexpr int track_x = core::kDisplayWidth - 7;
     const int track_y = theme.spacing.list_top;
-    const int track_h = (theme.spacing.list_row_height * theme.spacing.max_visible_rows) - 2;
+    const int track_h = (theme.spacing.list_row_height * visible_rows) - 2;
     constexpr int thumb_min_h = 10;
 
-    const int thumb_h = std::max(thumb_min_h, (track_h * theme.spacing.max_visible_rows) / item_count);
-    const int max_scroll = std::max(1, item_count - theme.spacing.max_visible_rows);
+    const int thumb_h = std::max(thumb_min_h, (track_h * visible_rows) / item_count);
+    const int max_scroll = std::max(1, item_count - visible_rows);
     const int clamped_scroll = std::clamp(scroll, 0, max_scroll);
     const int thumb_y = track_y + ((track_h - thumb_h) * clamped_scroll / max_scroll);
     ::lofibox::ui::drawGlassScrollbar(canvas, theme, track_x - 2, track_y, 6, track_h, thumb_y, thumb_h);
@@ -145,17 +146,20 @@ void renderListPage(core::Canvas& canvas, const ListPageView& view, const UiThem
         return;
     }
 
-    const int item_count = static_cast<int>(view.rows.size());
-    const int start = std::clamp(view.scroll, 0, std::max(0, item_count - theme.spacing.max_visible_rows));
-    const int end = std::min(item_count, start + theme.spacing.max_visible_rows);
+    const int item_count = view.total_rows >= 0 ? view.total_rows : static_cast<int>(view.rows.size());
+    const int visible_rows = core::visibleListRows(theme.spacing.list_top, theme.spacing.list_row_height, theme.spacing.max_visible_rows);
+    const int start = std::clamp(view.scroll, 0, std::max(0, item_count - visible_rows));
+    const int end = std::min(item_count, start + visible_rows);
     for (int index = start; index < end; ++index) {
+        const int row = index - view.row_offset;
+        if (row < 0 || row >= static_cast<int>(view.rows.size())) continue;
         drawListRowAt(
             canvas,
             theme,
             theme.spacing.list_top,
             index - start,
-            view.rows[static_cast<std::size_t>(index)].first,
-            view.rows[static_cast<std::size_t>(index)].second,
+            view.rows[static_cast<std::size_t>(row)].first,
+            view.rows[static_cast<std::size_t>(row)].second,
             index == view.selected);
     }
     drawListPositionIndicator(canvas, theme, view.selected, start, item_count);

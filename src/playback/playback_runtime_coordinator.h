@@ -25,6 +25,7 @@ public:
     [[nodiscard]] bool startBackend(const std::filesystem::path& path, PlaybackSession& session);
     [[nodiscard]] bool startBackendUri(const std::string& uri, PlaybackSession& session);
     [[nodiscard]] bool seekBackend(const std::filesystem::path& path, double seconds, PlaybackSession& session);
+    [[nodiscard]] bool seekBackendUri(double seconds, PlaybackSession& session);
     void pause(PlaybackSession& session) noexcept;
     void resume(PlaybackSession& session) noexcept;
     void stop(PlaybackSession& session) noexcept;
@@ -33,6 +34,10 @@ public:
     void tick(PlaybackSession& session, const QueueState& queue, const LibraryController& library_controller, double delta_seconds, const PlayIndexCallback& play_index);
 
 private:
+    // Retain the actual input only inside playback; snapshots contain the
+    // separately redacted URI. Needed for stream seek and stop/EOF replay.
+    std::string active_uri_{};
+    bool stream_ended_{false};
     PlaybackSessionClock clock_{};
     audio::AudioPipelineController audio_pipeline_{};
     PlaybackCompletionPolicy completion_policy_{};

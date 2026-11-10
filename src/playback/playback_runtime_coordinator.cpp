@@ -86,18 +86,24 @@ void PlaybackRuntimeCoordinator::beginTrack(PlaybackSession& session) const noex
 
 bool PlaybackRuntimeCoordinator::startBackend(const std::filesystem::path& path, PlaybackSession& session)
 {
+    active_uri_.clear();
+    stream_ended_ = false;
     session.audio_active = audio_pipeline_.startFile(path, 0.0);
     return session.audio_active;
 }
 
 bool PlaybackRuntimeCoordinator::startBackendUri(const std::string& uri, PlaybackSession& session)
 {
+    active_uri_ = uri;
+    stream_ended_ = false;
     session.audio_active = audio_pipeline_.startUri(uri, 0.0);
     return session.audio_active;
 }
 
 bool PlaybackRuntimeCoordinator::seekBackend(const std::filesystem::path& path, double seconds, PlaybackSession& session)
 {
+    active_uri_.clear();
+    stream_ended_ = false;
     session.elapsed_seconds = std::max(0.0, seconds);
     resetFinishPending(session);
     session.audio_active = audio_pipeline_.startFile(path, session.elapsed_seconds);
@@ -109,6 +115,19 @@ bool PlaybackRuntimeCoordinator::seekBackend(const std::filesystem::path& path, 
     session.visualization_pending = false;
     session.visualization_frame = {};
     return false;
+}
+
+bool PlaybackRuntimeCoordinator::seekBackendUri(double seconds, PlaybackSession& session)
+{
+    if (active_uri_.empty() || !std::isfinite(seconds)) return false;
+    session.elapsed_seconds = std::max(0.0, seconds);
+    resetFinishPending(session);
+    stream_ended_ = false;
+    session.audio_active = audio_pipeline_.startUri(active_uri_, session.elapsed_seconds);
+    session.status = session.audio_active ? PlaybackStatus::Playing : PlaybackStatus::Paused;
+    session.visualization_pending = false;
+    session.visualization_frame = {};
+    return session.audio_active;
 }
 
 void PlaybackRuntimeCoordinator::pause(PlaybackSession& session) noexcept
@@ -125,6 +144,15 @@ void PlaybackRuntimeCoordinator::resume(PlaybackSession& session) noexcept
         return;
     }
     if (!session.audio_active) {
+        if (!active_uri_.empty()) {
+            const double offset = session.current_stream_seekable && !stream_ended_ ? session.elapsed_seconds : 0.0;
+            try {
+                (void)seekBackendUri(offset, session);
+            } catch (...) {
+                session.audio_active = false;
+                session.status = PlaybackStatus::Paused;
+            }
+        }
         session.visualization_pending = false;
         session.visualization_frame = {};
         return;
@@ -153,6 +181,7 @@ void PlaybackRuntimeCoordinator::resume(PlaybackSession& session) noexcept
 void PlaybackRuntimeCoordinator::stop(PlaybackSession& session) noexcept
 {
     audio_pipeline_.stop();
+    stream_ended_ = false;
     session.status = PlaybackStatus::Paused;
     session.audio_active = false;
     session.elapsed_seconds = 0.0;
@@ -202,6 +231,12 @@ void PlaybackRuntimeCoordinator::tick(
             session.status = PlaybackStatus::Paused;
             session.visualization_pending = false;
             session.visualization_frame = {};
+            return;
+        }
+        stream_ended_ = !active_uri_.empty();
+        if (stream_ended_ && !session.current_track_id && !session.current_stream_live
+            && (session.repeat_one || session.repeat_all)) {
+            (void)seekBackendUri(0.0, session);
             return;
         }
         if (advanceAfterFinish(queue, session, play_index)) {

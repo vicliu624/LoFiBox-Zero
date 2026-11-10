@@ -42,6 +42,7 @@ LoFiBoxApp::~LoFiBoxApp() = default;
 
 void LoFiBoxApp::update()
 {
+    const std::lock_guard lock{app_host_.registry().stateMutex()};
     const auto now = clock::now();
     const double delta_seconds = std::chrono::duration<double>(now - last_runtime_tick_).count();
     last_runtime_tick_ = now;
@@ -51,22 +52,30 @@ void LoFiBoxApp::update()
 
 void LoFiBoxApp::handleInput(const InputEvent& event)
 {
+    const std::lock_guard lock{app_host_.registry().stateMutex()};
     context_->handleInput(event);
 }
 
 void LoFiBoxApp::render(core::Canvas& canvas) const
 {
+    const std::lock_guard lock{app_host_.registry().stateMutex()};
     context_->render(canvas);
 }
 
 AppDebugSnapshot LoFiBoxApp::snapshot() const
 {
+    const std::lock_guard lock{app_host_.registry().stateMutex()};
     return context_->snapshot();
 }
 
 bool LoFiBoxApp::runtimeShutdownRequested() const noexcept
 {
     return runtime_host_.shutdownRequested();
+}
+
+std::chrono::seconds LoFiBoxApp::screenTimeout() const noexcept
+{
+    return runtime_host_.screenTimeout();
 }
 
 } // namespace lofibox::app

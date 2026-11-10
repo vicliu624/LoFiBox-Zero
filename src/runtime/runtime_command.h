@@ -52,6 +52,7 @@ enum class RuntimeCommandKind {
     LibraryRefresh,
     RuntimeShutdown,
     RuntimeReload,
+    PlaybackOpenInput,
 };
 
 enum class RuntimeQueryKind {
@@ -74,6 +75,10 @@ struct PlaybackStartTrackPayload {
 
 struct PlaybackSeekPayload {
     double seconds{0.0};
+};
+
+struct PlaybackOpenInputPayload {
+    std::string input{};
 };
 
 struct QueueStepPayload {
@@ -120,6 +125,7 @@ struct SettingsApplyLivePayload {
     std::string output_mode{};
     std::string network_policy{};
     std::string sleep_timer{};
+    std::string screen_timeout{};
 };
 
 struct RemotePlayResolvedStreamPayload {
@@ -141,6 +147,7 @@ struct RemotePlayResolvedLibraryTrackPayload {
 
 using RuntimeCommandData = std::variant<
     EmptyPayload,
+    PlaybackOpenInputPayload,
     PlaybackStartTrackPayload,
     PlaybackSeekPayload,
     QueueStepPayload,
@@ -160,6 +167,7 @@ struct RuntimeCommandPayload {
     RuntimeCommandData data{EmptyPayload{}};
 
     [[nodiscard]] static RuntimeCommandPayload empty() { return {}; }
+    [[nodiscard]] static RuntimeCommandPayload openInput(std::string input) { return {{PlaybackOpenInputPayload{std::move(input)}}}; }
     [[nodiscard]] static RuntimeCommandPayload startTrack(int track_id,
         std::string album = {}, std::string artist = {}, std::string genre = {})
     { return {{PlaybackStartTrackPayload{track_id, std::move(album), std::move(artist), std::move(genre)}}}; }
@@ -179,9 +187,9 @@ struct RuntimeCommandPayload {
     {
         return {{AudioEffectCyclePayload{std::move(plugin_id), delta}}};
     }
-    [[nodiscard]] static RuntimeCommandPayload settingsApplyLive(std::string output_mode, std::string network_policy, std::string sleep_timer)
+    [[nodiscard]] static RuntimeCommandPayload settingsApplyLive(std::string output_mode, std::string network_policy, std::string sleep_timer, std::string screen_timeout = {})
     {
-        return {{SettingsApplyLivePayload{std::move(output_mode), std::move(network_policy), std::move(sleep_timer)}}};
+        return {{SettingsApplyLivePayload{std::move(output_mode), std::move(network_policy), std::move(sleep_timer), std::move(screen_timeout)}}};
     }
     [[nodiscard]] static RuntimeCommandPayload remoteResolvedStream(app::ResolvedRemoteStream stream, app::RemoteTrack track, std::string source, RemoteSessionSnapshot snapshot)
     {

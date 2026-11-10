@@ -85,6 +85,14 @@ int createAnonymousFile(std::size_t size)
 [[nodiscard]] std::vector<app::InputEvent> translateKeysym(xkb_keysym_t sym)
 {
     switch (sym) {
+    case XKB_KEY_Escape:
+        return {app::InputEvent{app::InputKey::Escape, "ESC", '\0'}};
+    case XKB_KEY_Help:
+        return {app::InputEvent{app::InputKey::F1, "HELP", '\0'}};
+    case XKB_KEY_XF86AudioPrev:
+        return {app::InputEvent{app::InputKey::MediaPrevious, "PREV", '\0'}};
+    case XKB_KEY_XF86AudioNext:
+        return {app::InputEvent{app::InputKey::MediaNext, "NEXT", '\0'}};
     case XKB_KEY_BackSpace:
         return {app::InputEvent{app::InputKey::Backspace, "BACK", '\0'}};
     case XKB_KEY_Delete:

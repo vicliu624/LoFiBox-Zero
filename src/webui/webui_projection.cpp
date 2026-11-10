@@ -208,6 +208,8 @@ void appendSettingsFields(std::ostringstream& out, const runtime::SettingsRuntim
     appendString(out, "output_mode", s.output_mode);
     separator(out); appendString(out, "network_policy", s.network_policy);
     separator(out); appendString(out, "sleep_timer", s.sleep_timer);
+    separator(out); appendString(out, "screen_timeout", s.screen_timeout);
+    separator(out); appendBool(out, "screen_timeout_supported", s.screen_timeout_supported);
 }
 
 void appendDiagnosticsFields(std::ostringstream& out, const runtime::DiagnosticsRuntimeSnapshot& d)
@@ -437,11 +439,11 @@ std::string buildEventJson(const runtime::RuntimeEvent& event)
     closeObject(out);
 
     // Include visualization bands for real-time spectrum
-    if (event.snapshot.visualization.available) {
+    {
         separator(out); openObject(out, "visualization");
-        appendBool(out, "available", true);
+        appendBool(out, "available", event.snapshot.visualization.available);
         separator(out); openArray(out, "bands");
-        for (std::size_t i = 0; i < event.snapshot.visualization.bands.size(); ++i) {
+        for (std::size_t i = 0; event.snapshot.visualization.available && i < event.snapshot.visualization.bands.size(); ++i) {
             if (i > 0) out << ',';
             out << event.snapshot.visualization.bands[i];
         }
@@ -453,23 +455,34 @@ std::string buildEventJson(const runtime::RuntimeEvent& event)
     appendEqFields(out, event.snapshot.eq);
     closeObject(out);
 
-    // Include lyrics lines for real-time sync
-    if (event.snapshot.lyrics.available) {
-        separator(out); openObject(out, "lyrics");
-        appendBool(out, "available", true);
-        separator(out); appendInt(out, "current_index", event.snapshot.lyrics.current_index);
-        separator(out); openArray(out, "lines");
-        for (std::size_t i = 0; i < event.snapshot.lyrics.visible_lines.size(); ++i) {
-            if (i > 0) out << ',';
-            const auto& line = event.snapshot.lyrics.visible_lines[i];
-            out << '{';
-            appendInt(out, "index", line.index);
-            separator(out); appendDouble(out, "timestamp_seconds", line.timestamp_seconds);
-            separator(out); appendString(out, "text", line.text);
-            separator(out); appendBool(out, "current", line.current);
-            out << '}';
-        }
-        closeArray(out);
+    // Unavailable state clears the previous track's lyrics immediately.
+    separator(out); openObject(out, "lyrics");
+    appendLyricsFields(out, event.snapshot.lyrics);
+    closeObject(out);
+
+    // Queue payloads can be large; transmit them only when the queue changes
+    // or the stream sends its initial snapshot, not on every spectrum frame.
+    if (event.kind == runtime::RuntimeEventKind::QueueChanged || event.kind == runtime::RuntimeEventKind::RuntimeSnapshot) {
+        separator(out); openObject(out, "queue");
+        appendQueueFields(out, event.snapshot.queue);
+        closeObject(out);
+    }
+    if (event.kind == runtime::RuntimeEventKind::SettingsChanged || event.kind == runtime::RuntimeEventKind::RuntimeSnapshot) {
+        separator(out); openObject(out, "settings");
+        appendSettingsFields(out, event.snapshot.settings);
+        closeObject(out);
+    }
+    if (event.kind == runtime::RuntimeEventKind::RemoteChanged || event.kind == runtime::RuntimeEventKind::RuntimeSnapshot) {
+        separator(out); openObject(out, "remote");
+        appendRemoteFields(out, event.snapshot.remote);
+        closeObject(out);
+        separator(out); openObject(out, "sources");
+        appendSourcesFields(out, event.snapshot.sources);
+        closeObject(out);
+    }
+    if (event.kind == runtime::RuntimeEventKind::DiagnosticsChanged || event.kind == runtime::RuntimeEventKind::RuntimeSnapshot) {
+        separator(out); openObject(out, "diagnostics");
+        appendDiagnosticsFields(out, event.snapshot.diagnostics);
         closeObject(out);
     }
 

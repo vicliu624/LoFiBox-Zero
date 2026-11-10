@@ -7,6 +7,7 @@
 
 #include "app/lofibox_app.h"
 #include "core/display_profile.h"
+#include "core/frame_deadline.h"
 
 namespace lofibox::app {
 
@@ -40,15 +41,15 @@ void runLoFiBoxApp(
         }
 
         app.update();
-        app.render(canvas);
-        presenter.present(canvas);
-
-        next_frame += kFrameTime;
-        std::this_thread::sleep_until(next_frame);
-
-        if (clock::now() > next_frame + std::chrono::milliseconds(250)) {
-            next_frame = clock::now();
+        if (app.runtimeShutdownRequested()) break;
+        presenter.setIdleTimeout(app.screenTimeout());
+        if (presenter.renderEnabled()) {
+            app.render(canvas);
+            presenter.present(canvas);
         }
+
+        next_frame = core::nextFrameDeadline(next_frame, clock::now(), kFrameTime);
+        std::this_thread::sleep_until(next_frame);
     }
 }
 
