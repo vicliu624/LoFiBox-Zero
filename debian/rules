@@ -11,9 +11,9 @@ endif
 ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
 export CC=$(DEB_HOST_GNU_TYPE)-gcc
 export CXX=$(DEB_HOST_GNU_TYPE)-g++
-export PKG_CONFIG=/usr/bin/pkgconf
+export PKG_CONFIG=/usr/bin/pkg-config
 export PKG_CONFIG_LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig:/usr/share/pkgconfig
-CROSS_CMAKE_ARGS = -DPKG_CONFIG_EXECUTABLE=/usr/bin/pkgconf -DPKGCONFIG_EXECUTABLE=/usr/bin/pkgconf
+CROSS_CMAKE_ARGS = -DPKG_CONFIG_EXECUTABLE=/usr/bin/pkg-config -DPKGCONFIG_EXECUTABLE=/usr/bin/pkg-config
 endif
 
 ifneq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
