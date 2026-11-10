@@ -123,5 +123,7 @@ embedded cover and lyrics loaded. The separate XDG profile was then removed
 from the launcher's runtime environment; normal configuration hashes matched
 the before-recording snapshot, and normal-profile playback was restored.
 
-The remaining publication gates are matching published GPL source and the
-Store PR's actual CI/review state. Store maintainer approval remains external.
+This internal capture is validation evidence. The user will provide the final
+Store demonstration video separately. Publication waits for that video,
+matching published GPL source and the Store PR's actual CI/review state.
+Store maintainer approval remains external.
