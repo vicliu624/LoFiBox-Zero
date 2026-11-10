@@ -11,7 +11,7 @@ Build-Depends:
  libwayland-bin <!pkg.lofibox.cardputer>,
  libwayland-dev <!pkg.lofibox.cardputer>,
  libxkbcommon-dev,
- pkgconf:native,
+ pkg-config:native | pkgconf:native,
  wayland-protocols <!pkg.lofibox.cardputer>
 Standards-Version: 4.7.0
 Homepage: https://github.com/vicliu624/LoFiBox-Zero
