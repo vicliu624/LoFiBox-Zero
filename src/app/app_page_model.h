@@ -9,6 +9,7 @@
 
 #include "app/app_page.h"
 #include "app/app_state.h"
+#include "app/runtime_preferences.h"
 #include "core/display_profile.h"
 
 namespace lofibox::app {
@@ -25,6 +26,9 @@ struct AppPageModelInput {
     std::string webui_url{};
     std::optional<std::vector<std::pair<std::string, std::string>>> source_manager_rows{};
     std::optional<std::vector<std::pair<std::string, std::string>>> page_rows{};
+    std::uint32_t preference_flags{RuntimePreferences::kDefaults};
+    bool device_lights{false};
+    bool preferences_error{false};
 };
 
 struct AppPageModel {

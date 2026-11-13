@@ -922,7 +922,7 @@ function renderMore(){
     '<div class="more-row"><span class="key">Output Mode</span><span class="val">'+esc(s.output_mode||'DEFAULT')+'</span></div>'
     +'<div class="more-row"><span class="key">Network Policy</span><span class="val">'+esc(s.network_policy||'DEFAULT')+'</span></div>'
     +'<div class="more-row"><label class="key" for="sleep-timer">Stop &amp; Exit</label><select id="sleep-timer" aria-label="Stop playback and exit timer" onchange="setTimerSetting(\'sleep_timer\',this.value)">'+timerOptions(s.sleep_timer,['OFF','15M','30M','45M','60M','90M','120M'])+'</select></div>'
-    +(s.screen_timeout_supported?'<div class="more-row"><label class="key" for="screen-timer">Idle Screen Off</label><select id="screen-timer" aria-label="Idle screen timeout" onchange="setTimerSetting(\'screen_timeout\',this.value)">'+timerOptions(s.screen_timeout,['OFF','30S','1M','2M','5M','10M'])+'</select></div>':'');
+    +(s.screen_timeout_supported?'<div class="more-row"><label class="key" for="screen-timer">Idle Screen Off</label><select id="screen-timer" aria-label="Idle screen timeout" onchange="setTimerSetting(\'screen_timeout\',this.value)">'+timerOptions(s.screen_timeout,['OFF','10S','30S','1M','2M','5M','10M'])+'</select></div>':'');
   }
   const key=JSON.stringify([state.sources,state.remote,state.diagnostics]);
   if(key===_moreKey)return;

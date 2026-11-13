@@ -56,6 +56,7 @@ void RuntimeHost::resetEq()
 
 bool RuntimeHost::startExternalTransport(const std::filesystem::path& socket_path)
 {
+    const std::lock_guard lock{external_mutex_};
     stopExternalTransport();
     external_server_ = std::make_unique<UnixSocketRuntimeCommandServer>(server_, socket_path);
     if (external_server_->start()) {
@@ -66,6 +67,7 @@ bool RuntimeHost::startExternalTransport(const std::filesystem::path& socket_pat
 
 void RuntimeHost::stopExternalTransport() noexcept
 {
+    const std::lock_guard lock{external_mutex_};
     if (external_server_) {
         external_server_->stop();
         external_server_.reset();
@@ -74,11 +76,13 @@ void RuntimeHost::stopExternalTransport() noexcept
 
 std::string RuntimeHost::externalTransportPath() const
 {
+    const std::lock_guard lock{external_mutex_};
     return external_server_ ? external_server_->socketPath().string() : std::string{};
 }
 
 std::string RuntimeHost::externalTransportError() const
 {
+    const std::lock_guard lock{external_mutex_};
     return external_server_ ? external_server_->lastError() : std::string{};
 }
 

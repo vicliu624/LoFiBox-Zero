@@ -9,6 +9,7 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
 #if defined(__linux__)
 #include <sys/wait.h>
 #endif
@@ -50,6 +51,19 @@ int main()
     assert(std::chrono::steady_clock::now() - started < std::chrono::seconds{1});
     // A cancelled operation must not leak its cancellation into later work.
     assert(captureProcessOutput(shell, {"-c", "printf 'after cancellation'"}) == "after cancellation");
+    // Network policy cancellation also works without an enclosing stop token,
+    // both while stdout is open and after a helper closes stdout before exiting.
+    for (const char* script : {"sleep 60", "exec 1>&- 2>&-; sleep 60"}) {
+        std::atomic_bool offline{false};
+        std::jthread disconnect([&] { std::this_thread::sleep_for(std::chrono::milliseconds{50}); offline = true; });
+        const auto began = std::chrono::steady_clock::now();
+        {
+            const lofibox::core::OperationCancellationGuard guard{[&] { return offline.load(); }};
+            assert(!captureProcessOutput(shell, {"-c", script}));
+        }
+        assert(std::chrono::steady_clock::now() - began < std::chrono::seconds{1});
+        assert(!lofibox::core::operationCancelled());
+    }
     int status{};
     assert(::waitpid(-1, &status, WNOHANG) == -1);
 #endif

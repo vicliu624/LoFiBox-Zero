@@ -31,7 +31,9 @@ int main()
         if (framebuffer) {
             context.navigationState().list_selection.selected = row("SCREEN OFF");
             context.handleInput(app::InputEvent{app::InputKey::Character, "6", '6'});
-            assert(settings().screen_timeout == "30S" && settings().sleep_timer == "30M");
+            assert(settings().screen_timeout == "10S" && settings().sleep_timer == "30M");
+            context.handleInput(app::InputEvent{app::InputKey::Character, "6", '6'});
+            assert(settings().screen_timeout == "30S");
         }
         auto result = runtime.client().dispatch(runtime::RuntimeCommand{runtime::RuntimeCommandKind::SettingsApplyLive,
             runtime::RuntimeCommandPayload::settingsApplyLive({}, {}, "OFF", framebuffer ? "1M" : "OFF")});

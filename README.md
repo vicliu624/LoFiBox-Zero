@@ -138,12 +138,12 @@ LOFIBOX_WEBUI=1 LOFIBOX_WEBUI_BIND=0.0.0.0 LOFIBOX_WEBUI_PORT=8765 \
 ./build/wayland/lofibox-wayland
 ```
 
-The Linux WebUI code is compiled by default on Linux builds. It is intentionally
-not started by the generic `lofibox`, `lofibox-wayland`, or `lofibox-x11`
-commands unless `--webui` or `LOFIBOX_WEBUI=1` is supplied. The Cardputer Zero
-APPLaunch wrapper is the appliance launch profile, so it enables WebUI by
-default and Settings shows the resulting address as `http://<device-ip>:8765`
-unless a caller overrides the bind address or port.
+The Linux WebUI code is compiled by default on Linux builds. On a new profile,
+generic desktop commands start it only with `--webui` or `LOFIBOX_WEBUI=1`;
+the Cardputer APPLaunch wrapper enables it by default. The persistent Settings
+**WEBUI** switch overrides this startup default after the first saved choice.
+**WEB ADDRESS** shows `http://<device-ip>:8765` unless the bind address or port
+is overridden. Turning WebUI off closes its server and existing connections.
 
 Build the direct Linux X11 desktop-application target:
 
@@ -291,8 +291,10 @@ the built-in hardware cannot produce RGB colors. Silence, pause, stop and normal
 exit turn the music indications off.
 Shift/Fn/Sym indications take priority over the music pattern.
 
-The Cardputer APPLaunch wrapper enables the spectrum-following lights by default;
-set `LOFIBOX_RHYTHM_LIGHTS=0` to disable it. The stock LED-mode interface is used;
+The Cardputer APPLaunch wrapper enables the spectrum-following lights on a new
+profile; `LOFIBOX_RHYTHM_LIGHTS=0` seeds a disabled default. After a saved choice,
+Settings **LEDS** controls music indications. **LED ANIMATION** off uses steady
+playing indicators without animation polling. The stock LED-mode interface is used;
 smooth breathing is **not implemented** and requires no firmware experiment
 to use this pattern.
 The Debian Wayland runtime does not access the
@@ -311,6 +313,32 @@ queue of stale animation frames. Input and rendering never perform the light
 controller's I2C operations. The experimental brightness probes are validation
 scripts only and are not part of the installed player.
 
+## Power And Optional Interfaces
+
+Settings provides persistent **WEBUI**, **CLI / TUI**, **SPECTRUM**, **LEDS** and
+**LED ANIMATION** switches. CLI / TUI controls the shared external runtime
+server; turning it off disconnects remote command clients while the GUI keeps
+its in-process controls. Standalone library/metadata commands remain installed.
+Only the current GUI page is rendered; unused GUI pages do not each run a render
+loop. SPECTRUM controls the GUI visualization. Audio visualization computation
+stops when no enabled GUI, music LED or external interface needs its frames.
+
+**LONG BATTERY** temporarily suspends both external interfaces, spectrum,
+music lights, Creator analysis and online scraping. Static pages refresh twice
+per second, with immediate redraws for input and wake; input polling and audio
+processing retain their normal cadence. Disabling the mode restores the saved
+individual choices. These switches are stored in
+`$XDG_CONFIG_HOME/lofibox/runtime-preferences.conf` (normally
+`~/.config/lofibox/runtime-preferences.conf`).
+
+Internet reachability is checked on a background worker and read from memory
+by the GUI. Without a default route, online scraping stops; when the route
+exists but the Internet is unreachable, bounded probes back off instead of
+repeated track lookups. In-flight online helpers are cancelled and reaped.
+Local tags, embedded/directory artwork and cached results remain available.
+The current track can resume enrichment when connectivity returns. Reachability
+changes are detected asynchronously, rather than synchronously blocking input.
+
 ## Sleep And Screen Timers
 
 In Settings, select **SLEEP TIMER** and press Enter or the open/change icon
@@ -319,7 +347,7 @@ At expiry, LoFiBox stops playback and exits to its launcher. It does not power
 off the device. Select OFF to cancel, or another duration to restart the countdown.
 
 The separate **SCREEN OFF** setting on the framebuffer build cycles OFF,
-30 seconds, 1, 2, 5 and 10 minutes of keyboard inactivity. Music continues while
+10 seconds, 30 seconds, 1, 2, 5 and 10 minutes of keyboard inactivity. Music continues while
 the backlight is off; drawing and framebuffer copies stop, and the music LEDs
 go dark. Any physical key wakes the display at its previous brightness. That
 wake press, including held repeats, is consumed before playback/navigation

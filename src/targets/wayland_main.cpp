@@ -24,6 +24,7 @@
 #include "webui/webui_config.h"
 #include "webui/webui_runtime_adapter.h"
 #include "webui/webui_server.h"
+#include "targets/webui_starter.h"
 #endif
 
 int main(int argc, char** argv)
@@ -52,28 +53,7 @@ int main(int argc, char** argv)
 #if defined(LOFIBOX_HAVE_WEBUI)
         lofibox::webui::WebUiConfig webui_config{};
         lofibox::webui::parseWebUiFromArgs(argc, argv, webui_config);
-        if (webui_config.enabled) {
-            services.ui.webui_url = lofibox::webui::displayUrlForWebUi(webui_config);
-            auto webui_ctx = std::make_shared<
-                std::pair<std::unique_ptr<lofibox::webui::WebUiRuntimeAdapter>,
-                          std::unique_ptr<lofibox::webui::WebUiServer>>>();
-            auto lib_provider = std::make_shared<lofibox::platform::host::LibraryQueryProviderAdapter>(
-                services.metadata.artwork_provider,
-                lofibox::platform::host::runtime_paths::appCacheDir());
-            auto enrich = std::make_shared<lofibox::platform::host::LibraryEnrichProviderAdapter>(services.cache.cache_manager);
-            auto active_theme = services.ui.theme;
-            on_start = [cfg = std::move(webui_config), webui_ctx, lib_provider, enrich, active_theme]
-                       (lofibox::runtime::RuntimeCommandClient& client,
-                        const ::lofibox::application::AppServiceRegistry& registry) mutable {
-                lib_provider->bind(registry.libraryQueries());
-                webui_ctx->first = std::make_unique<lofibox::webui::WebUiRuntimeAdapter>(client);
-                webui_ctx->second = std::make_unique<lofibox::webui::WebUiServer>(std::move(cfg), *webui_ctx->first);
-                webui_ctx->second->setLibraryQueryProvider(lib_provider.get());
-                webui_ctx->second->setLibraryEnrichProvider(enrich.get());
-                webui_ctx->second->setTheme(active_theme.get());
-                webui_ctx->second->start();
-            };
-        }
+        on_start = lofibox::targets::makeWebUiStarter(webui_config, services);
 #endif
 
         auto instance_lock = lofibox::platform::host::SingleInstanceLock::acquire();

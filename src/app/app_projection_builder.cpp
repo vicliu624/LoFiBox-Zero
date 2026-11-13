@@ -151,7 +151,7 @@ ui::pages::NowPlayingView buildNowPlayingProjection(const AppRenderTarget& targe
         playback.repeat_one,
         playback.current_artwork ? &*playback.current_artwork : nullptr,
         target.eqRuntimeSnapshot().effect_name,
-        toUiSpectrumFrame(playback.visualization_frame)};
+        target.spectrumEnabled() ? toUiSpectrumFrame(playback.visualization_frame) : ui::SpectrumFrame{}};
 }
 
 ui::pages::LyricsPageView buildLyricsProjection(const AppRenderTarget& target)
@@ -168,7 +168,7 @@ ui::pages::LyricsPageView buildLyricsProjection(const AppRenderTarget& target)
         toUiPlaybackStatus(playback.status),
         playback.lyrics_lookup_pending,
         toUiLyricsContent(playback.current_lyrics),
-        toUiSpectrumFrame(playback.visualization_frame)};
+        target.spectrumEnabled() ? toUiSpectrumFrame(playback.visualization_frame) : ui::SpectrumFrame{}};
 }
 
 ui::pages::ListPageView buildListProjection(const AppRenderTarget& target)

@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "app/app_debug_snapshot.h"
 #include "app/app_page.h"
@@ -31,7 +32,8 @@ class AppRuntimeContext;
 
 namespace lofibox::app {
 
-// Callback invoked by the constructor to start optional subsystems.
+// Idempotent callback: invoked at startup, then on the auxiliary worker when
+// preferences change. Stop/release disabled subsystems before returning.
 // Receives the RuntimeCommandClient and AppServiceRegistry so callers can
 // construct adapters that need both runtime commands and service queries.
 using AppStarter = std::function<void(lofibox::runtime::RuntimeCommandClient&, const ::lofibox::application::AppServiceRegistry&)>;
@@ -54,6 +56,7 @@ public:
     [[nodiscard]] AppDebugSnapshot snapshot() const;
     [[nodiscard]] bool runtimeShutdownRequested() const noexcept;
     [[nodiscard]] std::chrono::seconds screenTimeout() const noexcept;
+    [[nodiscard]] bool batterySaverEnabled() const noexcept;
 
 private:
     using clock = std::chrono::steady_clock;
@@ -64,6 +67,8 @@ private:
     std::unique_ptr<AppRuntimeContext> context_{};
     clock::time_point last_runtime_tick_{clock::now()};
     AppStarter subsystems_{}; // kept alive to hold resources captured by the starter callback
+    // Destroy and join before callbacks, runtime and registry are released.
+    std::jthread auxiliary_worker_{};
 };
 
 } // namespace lofibox::app

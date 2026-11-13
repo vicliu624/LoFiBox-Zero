@@ -451,7 +451,12 @@ void RuntimeSessionFacade::tick(double delta_seconds)
         return;
     }
     playback_.update(delta_seconds);
-    creator_.update(services_, delta_seconds);
+    const auto preferences = services_.runtimeServices().ui.preferences;
+    const bool analyze = !preferences || preferences->effective(app::RuntimeFeature::WebUi)
+        || preferences->effective(app::RuntimeFeature::ExternalControl);
+    if (analyze) creator_.update(services_, delta_seconds);
+    else if (!creator_suspended_) creator_.reset();
+    creator_suspended_ = !analyze;
 }
 
 RuntimeSnapshot RuntimeSessionFacade::snapshot(std::uint64_t version) const

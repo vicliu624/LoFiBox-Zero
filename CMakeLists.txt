@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.24)
 
-project(LoFiBoxZero VERSION 0.3.8 LANGUAGES C CXX)
+project(LoFiBoxZero VERSION 0.3.9 LANGUAGES C CXX)
 
 if(DEFINED CMAKE_EXPORT_NO_PACKAGE_REGISTRY)
     set(_lofibox_cmake_export_no_package_registry "${CMAKE_EXPORT_NO_PACKAGE_REGISTRY}")
@@ -213,6 +213,7 @@ add_library(lofibox_zero_host_runtime STATIC
     src/platform/host/cover_art_archive_client.cpp
     src/platform/host/ffprobe_metadata_reader.cpp
     src/platform/host/host_runtime_service_providers.cpp
+    src/platform/host/runtime_preferences_store.cpp
     src/platform/host/lyrics_provider.cpp
     src/platform/host/lyrics_pipeline_components.cpp
     src/platform/host/lyrics_source_clients.cpp
@@ -734,6 +735,15 @@ if(BUILD_TESTING)
     target_include_directories(lofibox_frame_deadline_smoke PRIVATE "${PROJECT_SOURCE_DIR}/src")
     add_test(NAME lofibox_frame_deadline_smoke COMMAND lofibox_frame_deadline_smoke)
 
+    add_executable(lofibox_canvas_copy_smoke tests/canvas_copy_smoke.cpp)
+    target_link_libraries(lofibox_canvas_copy_smoke PRIVATE lofibox_zero_core)
+    add_test(NAME lofibox_canvas_copy_smoke COMMAND lofibox_canvas_copy_smoke)
+
+    add_executable(lofibox_runtime_preferences_smoke tests/runtime_preferences_smoke.cpp)
+    target_link_libraries(lofibox_runtime_preferences_smoke PRIVATE lofibox_zero_host_runtime)
+    add_test(NAME lofibox_runtime_preferences_smoke COMMAND lofibox_runtime_preferences_smoke)
+    set_tests_properties(lofibox_runtime_preferences_smoke PROPERTIES TIMEOUT 10)
+
     add_executable(lofibox_app_smoke tests/hello_app_smoke.cpp)
     target_link_libraries(lofibox_app_smoke PRIVATE lofibox_zero_core)
     add_test(NAME lofibox_app_smoke COMMAND lofibox_app_smoke)
@@ -1188,6 +1198,16 @@ if(BUILD_TESTING)
     add_test(NAME lofibox_helper_script_path_smoke COMMAND lofibox_helper_script_path_smoke)
 
     if(TARGET lofibox_webui)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            add_executable(lofibox_optional_interfaces_smoke tests/optional_interfaces_smoke.cpp)
+            target_link_libraries(lofibox_optional_interfaces_smoke PRIVATE lofibox_webui lofibox_zero_host_runtime)
+            add_test(NAME lofibox_optional_interfaces_smoke COMMAND lofibox_optional_interfaces_smoke)
+            set_tests_properties(lofibox_optional_interfaces_smoke PROPERTIES TIMEOUT 45)
+            add_executable(lofibox_offline_enrichment_smoke tests/offline_enrichment_smoke.cpp)
+            target_link_libraries(lofibox_offline_enrichment_smoke PRIVATE lofibox_zero_host_runtime)
+            add_test(NAME lofibox_offline_enrichment_smoke COMMAND lofibox_offline_enrichment_smoke)
+            set_tests_properties(lofibox_offline_enrichment_smoke PROPERTIES TIMEOUT 12)
+        endif()
         add_executable(lofibox_webui_smoke tests/webui_smoke.cpp)
         target_link_libraries(lofibox_webui_smoke PRIVATE lofibox_webui)
         add_test(NAME lofibox_webui_smoke COMMAND lofibox_webui_smoke)

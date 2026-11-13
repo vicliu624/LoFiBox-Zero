@@ -98,6 +98,11 @@ int main()
 {
     try {
         auto services = app::withNullRuntimeServices();
+        struct Online final : app::ConnectivityProvider {
+            bool connected() const override { return true; }
+            std::string displayName() const override { return "TEST"; }
+        };
+        services.connectivity.provider = std::make_shared<Online>();
         const auto metadata = std::make_shared<GatedMetadata>();
         const auto artwork = std::make_shared<GatedArtwork>();
         const auto audio = std::make_shared<TestAudio>();

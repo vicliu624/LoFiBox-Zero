@@ -67,6 +67,13 @@ int main()
 {
     TestRuntimeApp test_app{};
     auto& app = test_app.app;
+    const auto selectRow = [](lofibox::app::AppRuntimeContext& target, const char* name) {
+        const auto rows = target.pageModel().rows;
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            if (rows[i].first == name) { target.navigationState().list_selection.selected = static_cast<int>(i); return; }
+        }
+        throw std::runtime_error("missing Settings row");
+    };
 
     app.update();
     for (int tick = 0; tick < 500; ++tick) {
@@ -93,7 +100,7 @@ int main()
         return 1;
     }
 
-    if (snapshot.visible_count != 7) {
+    if (snapshot.visible_count != 12) {
         std::cerr << "Expected Settings rows to include one Remote Setup entry instead of leaking remote fields.\n";
         return 1;
     }
@@ -113,11 +120,11 @@ int main()
         }
         webui_app.openSettingsPage();
         auto webui_rows = webui_app.pageModel().rows;
-        if (webui_rows.size() != 8U
-            || webui_rows[5].first != "WEBUI"
-            || webui_rows[5].second != "http://localhost:8765"
-            || webui_rows[6].first != "REMOTE SETUP"
-            || webui_rows[7].first != "ABOUT") {
+        if (webui_rows.size() != 13U
+            || webui_rows[9].first != "WEB ADDRESS"
+            || webui_rows[9].second != "http://localhost:8765"
+            || webui_rows[11].first != "REMOTE SETUP"
+            || webui_rows.back().first != "ABOUT") {
             std::cerr << "Expected online Settings to show the configured WebUI address before Remote Setup.\n";
             return 1;
         }
@@ -126,12 +133,13 @@ int main()
         webui_app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
         webui_app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
         webui_app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
+        selectRow(webui_app, "WEB ADDRESS");
         webui_app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
         if (webui_app.snapshot().current_page != lofibox::app::AppPage::Settings) {
             std::cerr << "Expected WebUI address row to remain read-only.\n";
             return 1;
         }
-        webui_app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
+        selectRow(webui_app, "REMOTE SETUP");
         webui_app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
         if (webui_app.snapshot().current_page != lofibox::app::AppPage::RemoteSetup) {
             std::cerr << "Expected Remote Setup to still open after the optional WebUI row shifts its index.\n";
@@ -153,10 +161,10 @@ int main()
         }
         webui_app.openSettingsPage();
         auto webui_rows = webui_app.pageModel().rows;
-        if (webui_rows.size() != 8U
+        if (webui_rows.size() != 13U
             || webui_rows[0].second != "OFFLINE"
-            || webui_rows[5].first != "WEBUI"
-            || webui_rows[5].second != "http://<device-ip>:8765") {
+            || webui_rows[9].first != "WEB ADDRESS"
+            || webui_rows[9].second != "http://<device-ip>:8765") {
             std::cerr << "Expected Settings to show the started WebUI address even when the network probe is offline.\n";
             return 1;
         }
@@ -188,6 +196,7 @@ int main()
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
+    selectRow(app, "REMOTE SETUP");
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
     snapshot = app.snapshot();
     if (snapshot.current_page != lofibox::app::AppPage::RemoteSetup) {
@@ -259,6 +268,7 @@ int main()
     for (int i = 0; i < 6; ++i) {
         app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Down, "DOWN", '\0'});
     }
+    selectRow(app, "ABOUT");
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});
     snapshot = app.snapshot();
     if (snapshot.current_page != lofibox::app::AppPage::About) {

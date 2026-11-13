@@ -82,6 +82,7 @@ public:
         if ((needs_core_metadata || needs_release_identifiers)
             && !entry.online_metadata_attempted) {
             logRuntime(RuntimeLogLevel::Info, "metadata", "Online metadata lookup started for " + pathUtf8String(path));
+            const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
             const auto enrichment = enrichment_.resolve(path, entry.metadata, entry.online_metadata_attempted);
             if (core::operationCancelled()) return entry.metadata;
             if (!enrichment.attempted) {

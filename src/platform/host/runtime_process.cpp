@@ -547,7 +547,7 @@ std::optional<std::string> captureProcessOutput(const fs::path& executable, cons
     bool cancelled = false;
     while (true) {
         if (core::operationCancelled()) { cancelled = true; break; }
-        if (core::current_operation_token.stop_possible()) {
+        if (core::current_operation_token.stop_possible() || core::OperationCancellationGuard::active()) {
             pollfd pending{pipe_fds[0], POLLIN, 0};
             const int ready = ::poll(&pending, 1, 20);
             if (ready < 0 && errno == EINTR) continue;
@@ -563,7 +563,8 @@ std::optional<std::string> captureProcessOutput(const fs::path& executable, cons
     int status = 0;
     if (cancelled) ::kill(-child, SIGKILL);
     while (true) {
-        const auto waited = waitpid(child, &status, core::current_operation_token.stop_possible() ? WNOHANG : 0);
+        const auto waited = waitpid(child, &status,
+            (core::current_operation_token.stop_possible() || core::OperationCancellationGuard::active()) ? WNOHANG : 0);
         if (waited == child) break;
         if (waited < 0 && errno != EINTR) return std::nullopt;
         if (core::operationCancelled()) { cancelled = true; ::kill(-child, SIGKILL); }

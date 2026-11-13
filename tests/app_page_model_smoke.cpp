@@ -14,32 +14,32 @@ int main()
     input.settings.backlight_index = 2;
     const auto settings_model = lofibox::app::buildAppPageModel(input);
     if (settings_model.title != "SETTINGS"
-        || settings_model.rows.size() != 8
+        || settings_model.rows.size() != 13
         || settings_model.rows[0].second != "ONLINE"
         || settings_model.rows[3].first != "SCREEN OFF"
         || settings_model.rows[3].second != "OFF"
         || settings_model.rows[4].second != "3"
-        || settings_model.rows[6].first != "REMOTE SETUP"
-        || settings_model.rows[6].second != "15 TYPES") {
+        || settings_model.rows[11].first != "REMOTE SETUP"
+        || settings_model.rows[11].second != "15 TYPES") {
         std::cerr << "Expected Settings page model to own settings rows.\n";
         return 1;
     }
 
     input.webui_url = "http://localhost:8765";
     const auto webui_settings_model = lofibox::app::buildAppPageModel(input);
-    if (webui_settings_model.rows.size() != 9
-        || webui_settings_model.rows[6].first != "WEBUI"
-        || webui_settings_model.rows[6].second != "http://localhost:8765"
-        || webui_settings_model.rows[7].first != "REMOTE SETUP"
-        || webui_settings_model.rows[8].first != "ABOUT") {
+    if (webui_settings_model.rows.size() != 14
+        || webui_settings_model.rows[9] != std::pair<std::string, std::string>{"WEBUI", "ON"}
+        || webui_settings_model.rows[10].second != "http://localhost:8765"
+        || webui_settings_model.rows[12].first != "REMOTE SETUP"
+        || webui_settings_model.rows.back().first != "ABOUT") {
         std::cerr << "Expected Settings page model to expose the started WebUI address.\n";
         return 1;
     }
     input.network_connected = false;
     const auto offline_webui_settings_model = lofibox::app::buildAppPageModel(input);
-    if (offline_webui_settings_model.rows.size() != 9
+    if (offline_webui_settings_model.rows.size() != 14
         || offline_webui_settings_model.rows[0].second != "OFFLINE"
-        || offline_webui_settings_model.rows[6].first != "WEBUI") {
+        || offline_webui_settings_model.rows[10].first != "WEB ADDRESS") {
         std::cerr << "Expected Settings page model to keep showing the local WebUI address even when connectivity is offline.\n";
         return 1;
     }

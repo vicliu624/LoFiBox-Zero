@@ -558,6 +558,11 @@ const ui::UiTheme& AppRuntimeContext::theme() const noexcept
     return theme_;
 }
 
+bool AppRuntimeContext::spectrumEnabled() const noexcept
+{
+    return appServices().runtimeServices().ui.preferences->effective(RuntimeFeature::Spectrum);
+}
+
 AppPageModel AppRuntimeContext::pageModel() const
 {
     const auto page = currentPage();
@@ -614,7 +619,10 @@ AppPageModel AppRuntimeContext::pageModel() const
         state_.metadata_service.display_name,
         services.runtimeServices().ui.webui_url,
         buildSourceManagerRows(state_.remote_profiles, remote::RemoteSourceRegistry{}.manifests()),
-        page_rows.empty() ? std::optional<std::vector<std::pair<std::string, std::string>>>{} : std::make_optional(std::move(page_rows))});
+        page_rows.empty() ? std::optional<std::vector<std::pair<std::string, std::string>>>{} : std::make_optional(std::move(page_rows)),
+        services.runtimeServices().ui.preferences->configured(),
+        services.runtimeServices().ui.framebuffer_backlight,
+        services.runtimeServices().ui.preferences->saveFailed()});
     const auto& spacing = theme_.spacing;
     model.max_visible_rows = core::visibleListRows(spacing.list_top, spacing.list_row_height, spacing.max_visible_rows);
     return model;

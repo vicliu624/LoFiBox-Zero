@@ -93,6 +93,7 @@ public:
     void showMainMenuPage() override;
     [[nodiscard]] AppPageModel pageModel() const override;
     [[nodiscard]] const ui::UiTheme& theme() const noexcept override;
+    [[nodiscard]] bool spectrumEnabled() const noexcept override;
     void moveMainMenuSelection(int delta) override;
     void resetMainMenuSelection() noexcept override;
     void moveSelection(int delta) override;

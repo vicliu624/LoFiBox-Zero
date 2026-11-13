@@ -1,3 +1,13 @@
+lofibox (0.3.9-1) UNRELEASED; urgency=medium
+
+  * Add persistent optional-interface, spectrum and LED controls, and a battery
+    saver that suspends optional analysis and limits static page redraws.
+  * Cache Internet reachability, cancel unavailable online enrichment, preserve
+    local/cache facts, and add a 10-second framebuffer screen timeout.
+  * Optimize clipped canvas copies and fills without changing rendered pixels.
+
+ -- vicliu624 <vicliu@outlook.com>  Fri, 13 Nov 2026 23:25:00 +0800
+
 lofibox (0.3.8-4) UNRELEASED; urgency=medium
 
   * Restore the framebuffer backlight on exit when the session's idle timer

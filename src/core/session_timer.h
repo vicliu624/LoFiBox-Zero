@@ -27,8 +27,8 @@ inline std::optional<std::chrono::seconds> parseTimerDuration(std::string_view t
 
 inline constexpr std::array<std::string_view, 7> kSleepTimerChoices{
     "OFF", "15M", "30M", "45M", "60M", "90M", "120M"};
-inline constexpr std::array<std::string_view, 6> kScreenTimeoutChoices{
-    "OFF", "30S", "1M", "2M", "5M", "10M"};
+inline constexpr std::array<std::string_view, 7> kScreenTimeoutChoices{
+    "OFF", "10S", "30S", "1M", "2M", "5M", "10M"};
 
 template<std::size_t N>
 inline std::string_view nextTimerChoice(std::string_view current, const std::array<std::string_view, N>& choices)

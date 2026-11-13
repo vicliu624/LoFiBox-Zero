@@ -242,6 +242,11 @@ void commandConfirmListPage(AppCommandTarget& target)
         const auto model = target.pageModel();
         if (selected >= 0 && selected < static_cast<int>(model.rows.size())) {
             const auto& [name, value] = model.rows[static_cast<std::size_t>(selected)];
+            if (const auto feature = preferenceForRow(name)) {
+                if (name != "WEBUI" || value != "UNAVAILABLE")
+                    (void)target.appServices().runtimeServices().ui.preferences->toggle(*feature);
+                return;
+            }
             if (name == "SLEEP TIMER" || name == "SCREEN OFF") {
                 const auto next = name == "SLEEP TIMER"
                     ? core::nextTimerChoice(value, core::kSleepTimerChoices)

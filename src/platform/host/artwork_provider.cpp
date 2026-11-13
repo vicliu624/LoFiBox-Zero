@@ -113,6 +113,7 @@ public:
         }
 
         if (can_try_online_artwork) {
+            const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
             bool online_hit = false;
             if (!entry.release_mbid.empty()) {
                 online_hit = online_artwork_.fetchFrontCover(entry.release_mbid, cache_path);
@@ -184,6 +185,7 @@ public:
         if (fs::exists(missing_marker, ec) && !ec && !can_try_remote_artwork && !can_try_online_artwork) {
             return std::nullopt;
         }
+        const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
         if (can_try_remote_artwork
             && downloadUrlToPngFile(curl_path_, extractor_, std::string{remote_artwork_url}, cache_path)) {
             fs::remove(missing_marker, ec);

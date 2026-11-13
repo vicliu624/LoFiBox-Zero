@@ -500,6 +500,7 @@ private:
             return entry.lyrics;
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
         app::TrackMetadata lyrics_metadata = metadata;
         app::TrackIdentity identity = accepted_identity.found ? accepted_identity : entry.identity;
         if (identity.found) {

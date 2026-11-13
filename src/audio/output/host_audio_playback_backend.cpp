@@ -42,6 +42,16 @@ namespace lofibox::platform::host {
 namespace {
 using namespace runtime_detail;
 
+bool visualizationNeeded(const std::shared_ptr<app::RuntimePreferences>& preferences)
+{
+    if (!preferences) return true;
+    const auto flags = preferences->configured();
+    using F = app::RuntimeFeature;
+    const auto on = [flags](F feature) { return app::RuntimePreferences::effective(flags, feature); };
+    return on(F::Spectrum) || on(F::WebUi) || on(F::ExternalControl)
+        || (on(F::Leds) && on(F::LedAnimation));
+}
+
 struct AudioExecutable {
     fs::path path{};
     bool windows_interop{false};
@@ -498,6 +508,8 @@ fs::path resolveNativeMp3Decoder()
 
 class RealtimePcmPlaybackPipeline {
 public:
+    explicit RealtimePcmPlaybackPipeline(std::shared_ptr<app::RuntimePreferences> preferences = {})
+        : preferences_(std::move(preferences)) {}
     ~RealtimePcmPlaybackPipeline()
     {
         stop();
@@ -940,7 +952,13 @@ private:
         std::memcpy(pcm_samples_.data(), carry.data(), full_bytes);
         const std::size_t frame_count = pcm_samples_.size() / static_cast<std::size_t>(kChannels);
         dsp_.processInterleaved(pcm_samples_.data(), frame_count, kChannels, kSampleRate);
-        publishVisualization(pcm_samples_);
+        if (visualizationNeeded(preferences_)) {
+            publishVisualization(pcm_samples_);
+        } else {
+            visualization_window_.clear();
+            const std::lock_guard lock{frame_mutex_};
+            frame_ = {};
+        }
 
         clip_stats_counter_ += frame_count;
         if (clip_stats_counter_ >= static_cast<std::size_t>(kSampleRate) * 5) {
@@ -1098,6 +1116,7 @@ private:
     static constexpr std::size_t kVisualizationWindowSize{4096};
 
     audio::dsp::RealtimeDspEngine dsp_{};
+    std::shared_ptr<app::RuntimePreferences> preferences_;
     RunningPipeProcess decoder_process_{};
     RunningInputProcess sink_process_{};
     // Controls signal/read-state races with worker-owned waitpid/close calls.
@@ -1127,8 +1146,9 @@ private:
 
 class ExternalAudioPlaybackBackend final : public app::AudioPlaybackBackend {
 public:
-    ExternalAudioPlaybackBackend()
-        : executable_(resolveAudioExecutable())
+    explicit ExternalAudioPlaybackBackend(std::shared_ptr<app::RuntimePreferences> preferences = {})
+        : preferences_(std::move(preferences))
+        , executable_(resolveAudioExecutable())
         , analyzer_executable_(resolveAnalyzerExecutable())
 #if defined(__linux__)
         , pcm_sink_executable_(resolvePcmOutputSink(executable_))
@@ -1252,7 +1272,7 @@ public:
             // A preceding explicit stop can leave all three pipelines retiring.
             // Make room before spawning another decoder/sink pair.
             reclaimRetiredPcmPipelines();
-            auto next_pipeline = std::make_unique<RealtimePcmPlaybackPipeline>();
+            auto next_pipeline = std::make_unique<RealtimePcmPlaybackPipeline>(preferences_);
             const bool ok = next_pipeline->startWithoutStoppingCurrent(
                 analyzer_executable_,
                 pcm_sink_executable_,
@@ -1311,9 +1331,9 @@ public:
         analyzer_started_ = false;
         pending_analyzer_input_ = ok ? analyzer_input : std::string{};
         pending_analyzer_start_seconds_ = start_seconds;
-        playback_started_confirmed_ = ok && analyzer_executable_.path.empty() && !network_playback_;
+        playback_started_confirmed_ = ok && (analyzer_executable_.path.empty() || !visualizationNeeded(preferences_)) && !network_playback_;
         process_started_ = ok ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        if (ok && !network_playback_) {
+        if (ok && !network_playback_ && visualizationNeeded(preferences_)) {
             analyzer_.start(analyzer_executable_, analyzer_input, start_seconds);
             analyzer_started_ = !analyzer_executable_.path.empty();
         } else {
@@ -1423,6 +1443,12 @@ public:
             analyzer_.stop();
             return app::AudioPlaybackState::Finished;
         }
+        if (!visualizationNeeded(preferences_)) {
+            if (analyzer_started_) { analyzer_.stop(); analyzer_started_ = false; }
+            if (!network_playback_) playback_started_confirmed_ = true;
+        } else if (playback_started_confirmed_ && !paused_ && process_.active) {
+            startAnalyzerIfNeeded();
+        }
         if (paused_ && process_.active) {
             return app::AudioPlaybackState::Paused;
         }
@@ -1439,7 +1465,7 @@ public:
                     return app::AudioPlaybackState::Starting;
                 }
                 startAnalyzerIfNeeded();
-                if (analyzer_executable_.path.empty()
+                if (!visualizationNeeded(preferences_) || analyzer_executable_.path.empty()
                     || analyzer_.currentFrame().available
                     || elapsed >= kNetworkPlaybackUiStartDelay + kNetworkAnalyzerWarmupLimit) {
                     playback_started_confirmed_ = true;
@@ -1527,13 +1553,16 @@ private:
 
     void startAnalyzerIfNeeded()
     {
-        if (analyzer_started_ || analyzer_executable_.path.empty() || pending_analyzer_input_.empty()) {
+        if (analyzer_started_ || !visualizationNeeded(preferences_) || analyzer_executable_.path.empty() || pending_analyzer_input_.empty()) {
             return;
         }
-        analyzer_.start(analyzer_executable_, pending_analyzer_input_, pending_analyzer_start_seconds_);
+        const double elapsed = playback_started_confirmed_ && process_started_ != std::chrono::steady_clock::time_point{}
+            ? std::chrono::duration<double>(std::chrono::steady_clock::now() - process_started_).count() : 0.0;
+        analyzer_.start(analyzer_executable_, pending_analyzer_input_, pending_analyzer_start_seconds_ + elapsed);
         analyzer_started_ = true;
     }
 
+    std::shared_ptr<app::RuntimePreferences> preferences_;
     AudioExecutable executable_{};
     AudioExecutable analyzer_executable_{};
 #if defined(__linux__)
@@ -1558,9 +1587,9 @@ private:
 
 } // namespace
 
-std::shared_ptr<app::AudioPlaybackBackend> createHostAudioPlaybackBackend()
+std::shared_ptr<app::AudioPlaybackBackend> createHostAudioPlaybackBackend(std::shared_ptr<app::RuntimePreferences> preferences)
 {
-    return std::make_shared<ExternalAudioPlaybackBackend>();
+    return std::make_shared<ExternalAudioPlaybackBackend>(std::move(preferences));
 }
 
 } // namespace lofibox::platform::host

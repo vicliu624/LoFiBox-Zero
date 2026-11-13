@@ -182,3 +182,116 @@ during all scenarios and physical panel latency still require appropriate
 observation. Source-free breathing firmware qualification, the reproduced CLI
 path-opening defect, unfinished playlist editing/queue interactions and real
 remote-service integrations remain separate outstanding work.
+
+## 2026-11-13: persistent controls and battery mode (0.3.8-5)
+
+This follow-up implements Settings switches for WebUI, the shared external
+CLI/TUI runtime server, GUI spectrum, music LEDs, LED animation, and long battery
+mode. Preferences use an atomic replacement file under the XDG configuration
+directory. Battery mode overrides the individual choices without discarding
+them. Its static page redraws run at 2 Hz; input, playback and timer handling
+retain their 33-ms loop. Input and wake force an immediate redraw. There is no
+additional decoder for music lights, and PCM pacing/output buffering is unchanged.
+
+Unused GUI pages do not each run a renderer. The main measured difference from
+the official Music player is LoFiBox's continuously rendered visualization.
+Official Music's static playback page measured 5.72% of one core in an earlier
+15-second observation, whereas LoFiBox's dynamic page measured 35.52% in an
+earlier 30-second observation. These are different presentation features and
+measurement windows, not a feature-identical benchmark.
+
+After the user's reboot, ordinary APPLaunch startup and the existing library's
+Sum 41 `Pieces` were used for the following approximately 30-second samples.
+Values include the player and its audio descendants. One full CPU core is 100%;
+the board has four cores. RSS sums can count shared pages more than once.
+
+| State | Mean CPU, one core | Maximum CPU, one core | Median summed RSS |
+|---|---:|---:|---:|
+| Original 0.3.8-4, dynamic Now Playing | 36.76% | 45.37% | 24.95 MiB |
+| Candidate, dynamic Now Playing after startup | 32.83% | 37.60% | 22.35 MiB |
+| Candidate, long battery, visible static player | 9.08% | 14.46% | 22.47 MiB |
+| Candidate, long battery with screen blank | 7.67% | 9.77% | 22.62 MiB |
+| User's final all-features-OFF state, battery mode ON | 9.24% | 11.97% | 24.73 MiB |
+
+The normal-page observation is about 11% lower CPU than the old version, and
+battery mode is about 72% lower than the candidate's normal dynamic page. These
+are sampled results rather than guaranteed battery-runtime or latency figures.
+Separate initial/track-change samples contained ffprobe helpers and higher
+transient CPU/RSS; those intervals are retained in the private evidence rather
+than presented as stable playback. Short periodic reachability probes can also
+appear among descendants. Battery mode pauses online enrichment, while local
+tags, directory/embedded covers, cached lyrics and connectivity status remain.
+
+The user's final configuration was `lofibox-preferences-v1 32`: all five optional
+features OFF and battery mode ON. A separate 20-second system-wide observation
+measured 12.19% total four-core CPU. The player itself used 2.65% of one core,
+the native MP3 decoder 4.70%, and pw-cat 1.95%. APPLaunch used 5.25%, PipeWire
+5.10%, and pipewire-pulse 5.00%, each on the single-core scale. The player tree's
+9.24% mean corresponds to about 2.31% of total CPU capacity. Available system
+memory was about 135 MiB. A five-second check observed zero swap-ins, swap-outs
+and major page faults; allocated historical swap is not evidence of active paging.
+
+Live checks through the real framebuffer/input path verified:
+
+- WebUI OFF closed its listening port while the GUI/runtime remained alive;
+  CLI/TUI OFF removed its Unix listening socket while WebUI remained available.
+  Each could be restarted, and battery mode closed both.
+- Stable normal descriptors were 14. Battery mode had 12 descriptors and six
+  threads, compared with eight threads before the mode change. A later reopened
+  normal session returned ten consecutive descriptor samples of 14. A just-served
+  connection can temporarily add a worker, so thread/FD samples require settling.
+- The GUI spectrum could be hidden independently. LED OFF and steady mode were
+  exercised; the default animation still follows the accepted rightmost spectrum
+  column. Keyboard modifier indications retain priority.
+- The new GUI **10S** screen choice blanked backlight brightness from 100 to 0
+  after 11.5 seconds without stopping the player. Space woke to brightness 100
+  and was consumed: subsequent runtime status remained PLAYING/ACTIVE.
+- A 13-second API stop-and-exit timer with a 10-second idle screen timeout first
+  blanked the display, then exited normally, restored brightness 100, and reaped
+  the three sampled child processes. Reopening through the installed APPLaunch
+  icon showed both session timers OFF.
+- Saving WebUI OFF, exiting and reopening preserved OFF despite the launcher's
+  `LOFIBOX_WEBUI=1` default. All-feature restoration was tested before the user
+  selected the final all-OFF configuration; that user configuration is preserved.
+
+The original 0.3.8-4 headphone issue did not reproduce: the user confirmed correct
+headphone/speaker routing after reboot and two hotplug cycles. No audio-routing
+change was needed for those results. On 0.3.8-5 the user again confirmed normal
+picture, sound, smooth playback and headphone switching. ALSA jack/DAPM state,
+not the sometimes-stale PulseAudio active-port label, was used for routing checks.
+
+Internet status is now cached on a background worker instead of parsing the
+route file on GUI reads. Route loss is checked approximately once per second;
+bounded metadata-host probes run every 30 seconds online or 15 seconds offline.
+Once offline is detected, online process capture is cancelled, descendants are
+killed/reaped, and failed network work is not cached as a completed metadata miss.
+Current-track enrichment can resume on connectivity recovery. The direct CLI
+and WebUI enrichment paths use the same cancellation policy; local/cache reads
+remain available. Detection is asynchronous, not an instantaneous WAN guarantee.
+
+Validation passed 121 framebuffer-profile and 118 Wayland-profile release
+tests, including live PCM visualization disable/restore without pitch, sample
+count or playback-clock changes. Focused coverage includes 20 interface
+stop/start cycles with exact FD recovery, offline cancellation/recovery, worker
+shutdown, steady LED behavior, preferences persistence, and cancellation after
+a helper closes stdout before exiting. Canvas copying/filling also passed an
+independent pixel reference plus ASan/UBSan; the full Now Playing render was
+byte-identical before/after the copy optimization.
+
+The final resource-only adjustment adds 10S to the WebUI dropdown as well as the
+GUI. Six affected WebUI/timer/interface tests passed for each profile after that
+adjustment. The final Wayland package connected to Weston headless, rendered
+33 commits, answered a runtime query and exited normally. The ARM executable
+also loaded under QEMU with Debian 12 libraries. The device's current music
+session and saved all-OFF preferences are preserved while this resource update
+is installed; its embedded WebUI dropdown loads on the next application start.
+
+Final private candidate artifacts (not replacements for the published 0.3.8-4):
+
+- `lofibox-cardputer-zero_0.3.8-5_arm64.deb`: SHA-256
+  `45685968cf120ec2ec18430b6c5e882eb3fca2e863b52c17fe79232a1514bca2`.
+- `lofibox_0.3.8-5_amd64.deb`: SHA-256
+  `cba7cd8d5215687c92f0b642f043bc2c9f29ef756aa2f78da07dc93b259d3b82`.
+
+Private raw samples, screenshots and control results are under
+`.tmp/candidate-0.3.8-5`. The existing Store PR/release assets are unchanged.

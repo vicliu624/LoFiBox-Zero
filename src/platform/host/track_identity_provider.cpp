@@ -83,6 +83,7 @@ public:
             return {};
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
         app::TrackIdentity identity{};
         if (acoustid_.available()) {
             identity = acoustid_.lookup(path, seed_metadata);
@@ -146,6 +147,7 @@ public:
             return {};
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
         app::TrackIdentity identity{};
         if (acoustid_.available() && !stream_uri.empty()) {
             identity = acoustid_.lookupInput(stream_uri, pathUtf8String(lookup_path), seed_metadata);

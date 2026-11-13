@@ -21,6 +21,7 @@
 #include <utility>
 
 #include "app/library_enrich_provider.h"
+#include "app/runtime_services.h"
 #include "cache/cache_manager.h"
 #include "platform/host/runtime_enrichment_client_helpers.h"
 #include "platform/host/runtime_host_internal.h"
@@ -99,8 +100,10 @@ void respectWikipediaRateLimit()
 class LibraryEnrichProviderAdapter final : public app::LibraryEnrichProvider {
 public:
     LibraryEnrichProviderAdapter(
-            std::shared_ptr<lofibox::cache::CacheManager> cache) noexcept
-        : cache_(std::move(cache))
+            std::shared_ptr<lofibox::cache::CacheManager> cache,
+            std::shared_ptr<app::ConnectivityProvider> connectivity = {},
+            std::shared_ptr<app::RuntimePreferences> preferences = {}) noexcept
+        : cache_(std::move(cache)), connectivity_(std::move(connectivity)), preferences_(std::move(preferences))
     {
 #if defined(_WIN32)
         curl_path_ = rt::resolveExecutablePath(L"CURL_PATH", L"curl.exe");
@@ -123,6 +126,8 @@ public:
             return info;
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !onlineAllowed(); }};
+        if (core::operationCancelled()) return std::nullopt;
         // Wikipedia lookup
         respectWikipediaRateLimit();
         const auto url = wikipediaUrlForTitle(artist_name);
@@ -159,6 +164,8 @@ public:
             return info;
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !onlineAllowed(); }};
+        if (core::operationCancelled()) return std::nullopt;
         // Wikipedia page title: "Album Name (Artist Name album)"
         std::string title;
         title.reserve(album_name.size() + artist_name.size() + 16);
@@ -185,7 +192,14 @@ public:
     }
 
 private:
+    bool onlineAllowed() const
+    {
+        return (!connectivity_ || connectivity_->connected())
+            && (!preferences_ || !preferences_->effective(app::RuntimeFeature::BatterySaver));
+    }
     std::shared_ptr<lofibox::cache::CacheManager> cache_;
+    std::shared_ptr<app::ConnectivityProvider> connectivity_;
+    std::shared_ptr<app::RuntimePreferences> preferences_;
     std::optional<std::filesystem::path> curl_path_{};
 };
 

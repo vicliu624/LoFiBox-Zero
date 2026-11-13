@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "app/audio_visualization.h"
+#include "app/runtime_preferences.h"
 #include "app/remote_profile_store.h"
 #include "app/remote_media_services.h"
 #include "cache/cache_manager.h"
@@ -232,6 +233,7 @@ struct UiServices {
     std::shared_ptr<ui::UiTheme> theme{};
     std::string webui_url{};
     bool framebuffer_backlight{false};
+    std::shared_ptr<RuntimePreferences> preferences{};
 };
 
 struct PluginServices {

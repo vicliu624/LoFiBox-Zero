@@ -56,6 +56,7 @@ private:
     RuntimeCommandServer server_;
     InProcessRuntimeCommandClient client_;
     std::unique_ptr<UnixSocketRuntimeCommandServer> external_server_{};
+    mutable std::recursive_mutex external_mutex_{};
 };
 
 } // namespace lofibox::runtime

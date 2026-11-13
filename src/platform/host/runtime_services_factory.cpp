@@ -113,6 +113,7 @@ app::RuntimeServices createHostRuntimeServices()
 {
     auto context = createHostRuntimeServiceContext();
     app::RuntimeServices services{};
+    services.ui.preferences = context.preferences;
     services.connectivity = createHostConnectivityServices(context);
     services.metadata = createHostMetadataServices(context);
     services.playback = createHostPlaybackServices(context);

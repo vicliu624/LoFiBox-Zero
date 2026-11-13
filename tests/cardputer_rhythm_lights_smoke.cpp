@@ -104,4 +104,35 @@ int main()
     assert(std::chrono::steady_clock::now() - started < 3s);
     assert((outputs.back() == State{}));
     assert(outputs.size() < 10);
+    {
+        std::mutex mode_mutex;
+        std::condition_variable mode_changed;
+        std::vector<State> states;
+        platform::device::CardputerRhythmLights lights{"unused", [&](const State& state) {
+            const std::lock_guard lock{mode_mutex}; states.push_back(state); mode_changed.notify_all(); return true;
+        }};
+        lights.submit({}, true, platform::device::RhythmLightMode::Steady);
+        {
+            std::unique_lock lock{mode_mutex};
+            assert(mode_changed.wait_for(lock, 1s, [&] { return !states.empty(); }));
+            assert((states.back() == State{true, true, true}));
+        }
+        std::this_thread::sleep_for(150ms);
+        { const std::lock_guard lock{mode_mutex}; assert(states.size() == 1); } // no steady-mode polling writes
+        lights.submit({}, true, platform::device::RhythmLightMode::Off);
+        {
+            std::unique_lock lock{mode_mutex};
+            assert(mode_changed.wait_for(lock, 1s, [&] { return states.size() > 1 && states.back() == State{}; }));
+        }
+        lights.submit(frameForHeight(50), true);
+        {
+            std::unique_lock lock{mode_mutex};
+            assert(mode_changed.wait_for(lock, 1s, [&] { return states.size() > 2; }));
+        }
+        lights.submit(frameForHeight(60), true);
+        {
+            std::unique_lock lock{mode_mutex};
+            assert(mode_changed.wait_for(lock, 1s, [&] { return states.back() == State{true, true, true}; }));
+        }
+    }
 }

@@ -81,18 +81,32 @@ int main(int argc, char** argv)
         for (const bool native : {true, false}) {
             fs::remove(report);
             setenv("LOFIBOX_MP3_DECODER_PATH", native ? argv[1] : "", 1);
-            auto backend = lofibox::platform::host::createHostAudioPlaybackBackend();
+            auto preferences = std::make_shared<lofibox::app::RuntimePreferences>();
+            auto backend = lofibox::platform::host::createHostAudioPlaybackBackend(preferences);
             require(backend && backend->available(), "product backend unavailable");
             const auto started = std::chrono::steady_clock::now();
             require(backend->playFile(mp3, 0), "failed to start product backend");
             double position{};
+            bool suppressed = false, restored = false, saw_blank = false, saw_restored = false;
             while (!fs::exists(report)) {
                 if (const auto value = backend->positionSeconds()) position = *value;
+                if (!suppressed && position > 0.3) {
+                    preferences->toggle(lofibox::app::RuntimeFeature::BatterySaver);
+                    suppressed = true;
+                }
+                if (suppressed && !restored && !backend->visualizationFrame().available) saw_blank = true;
+                if (!restored && position > 0.9) {
+                    require(saw_blank, "disabled visualizations continued publishing frames");
+                    preferences->toggle(lofibox::app::RuntimeFeature::BatterySaver);
+                    restored = true;
+                }
+                if (restored && backend->visualizationFrame().available) saw_restored = true;
                 require(std::chrono::steady_clock::now() - started < 9s, "PCM sink did not reach EOF");
                 std::this_thread::sleep_for(5ms);
             }
             if (const auto value = backend->positionSeconds()) position = *value;
             backend->stop(); backend.reset();
+            require(saw_blank && saw_restored, "live visualization disable/restore failed");
             int rate{}, channels{}; std::size_t bytes{}, crossings{};
             std::ifstream{report} >> rate >> channels >> bytes >> crossings;
             require(rate == 48000 && channels == 2, "sink PCM format differs from product contract");

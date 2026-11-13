@@ -46,6 +46,9 @@ private:
     std::stop_source active_cancellation_{};
     bool stopping_{false};
     std::uint64_t generation_{0};
+    std::function<void()> retry_online_{}; // GUI thread only; latest track wins.
+    bool online_allowed_{false};
+    int retry_track_id_{0};
 };
 
 } // namespace lofibox::app

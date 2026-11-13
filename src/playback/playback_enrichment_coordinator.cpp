@@ -10,6 +10,7 @@
 #include "cache/cache_manager.h"
 #include "metadata/metadata_merge_policy.h"
 #include "core/operation_cancellation.h"
+#include "app/scraping_policy.h"
 
 namespace lofibox::app {
 namespace {
@@ -75,6 +76,9 @@ void PlaybackEnrichmentCoordinator::setServices(RuntimeServices services)
 
 void PlaybackEnrichmentCoordinator::request(const TrackRecord& track)
 {
+    retry_online_ = [this, track] { request(track); };
+    retry_track_id_ = track.id;
+    online_allowed_ = onlineScrapingAllowed(services_);
     const auto services_snapshot = services_;
     const int track_id = track.id;
     const std::filesystem::path path = track.path;
@@ -103,6 +107,10 @@ void PlaybackEnrichmentCoordinator::request(const TrackRecord& track)
         const auto local_seed = mergeLyricsSeed(seed_metadata, local.metadata);
         publish(std::move(local));
 
+        const core::OperationCancellationGuard online_guard{[&services_snapshot] {
+            return !onlineScrapingAllowed(services_snapshot);
+        }};
+
         PlaybackEnrichmentResult result{};
         result.track_id = track_id;
         result.path = path;
@@ -129,8 +137,15 @@ void PlaybackEnrichmentCoordinator::requestRemote(
     bool cache_remote_facts)
 {
     if (!remoteTrackNeedsLocalMetadataGovernance(remote_track)) {
+        retry_online_ = {};
         return;
     }
+
+    retry_online_ = [this, profile, remote_track, track_id, stream_uri, cache_remote_facts] {
+        requestRemote(profile, remote_track, track_id, stream_uri, cache_remote_facts);
+    };
+    retry_track_id_ = track_id;
+    online_allowed_ = onlineScrapingAllowed(services_);
 
     const auto services_snapshot = services_;
     const std::filesystem::path lookup_path = remoteTrackSyntheticLookupPath(profile, remote_track);
@@ -139,6 +154,9 @@ void PlaybackEnrichmentCoordinator::requestRemote(
     const std::uint64_t generation = ++generation_;
 
     enqueue([this, services_snapshot, profile, remote_track, track_id, stream_uri = std::move(stream_uri), lookup_path, seed_metadata, stable_cache_key, cache_remote_facts, generation](std::stop_token token) {
+        const core::OperationCancellationGuard online_guard{[&services_snapshot] {
+            return !onlineScrapingAllowed(services_snapshot);
+        }};
         PlaybackEnrichmentResult result{};
         result.track_id = track_id;
         result.path = lookup_path;
@@ -196,6 +214,14 @@ void PlaybackEnrichmentCoordinator::requestRemote(
 
 void PlaybackEnrichmentCoordinator::applyPending(LibraryController& library_controller, PlaybackSession& session)
 {
+    const bool online = onlineScrapingAllowed(services_);
+    if (online && !online_allowed_ && retry_online_ && session.current_track_id == retry_track_id_
+        && session.status != PlaybackStatus::Empty) {
+        // Copy before invoking: request() replaces this callback.
+        const auto retry = retry_online_;
+        retry();
+    }
+    online_allowed_ = online;
     std::vector<PlaybackEnrichmentResult> results{};
     {
         std::lock_guard lock(mutex_);
@@ -277,7 +303,7 @@ void PlaybackEnrichmentCoordinator::applyPending(LibraryController& library_cont
             session.current_artwork = std::move(result.artwork);
         }
         if (result.complete) {
-            session.current_lyrics = std::move(result.lyrics);
+            if (result.lyrics.plain || result.lyrics.synced) session.current_lyrics = std::move(result.lyrics);
             session.lyrics_lookup_pending = false;
         }
     }

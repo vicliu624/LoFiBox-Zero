@@ -3,6 +3,7 @@
 #include "core/canvas.h"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace lofibox::core {
 
@@ -43,17 +44,16 @@ void Canvas::fillRect(int x, int y, int width, int height, Color color) noexcept
 
     const int start_x = std::max(0, x);
     const int start_y = std::max(0, y);
-    const int end_x = std::min(width_, x + width);
-    const int end_y = std::min(height_, y + height);
+    const auto end_x = std::min<std::int64_t>(width_, std::int64_t{x} + width);
+    const auto end_y = std::min<std::int64_t>(height_, std::int64_t{y} + height);
 
     if (start_x >= end_x || start_y >= end_y) {
         return;
     }
 
     for (int py = start_y; py < end_y; ++py) {
-        for (int px = start_x; px < end_x; ++px) {
-            setPixel(px, py, color);
-        }
+        auto* row = pixels_.data() + static_cast<std::size_t>(py) * width_ + start_x;
+        std::fill_n(row, static_cast<std::size_t>(end_x - start_x), color);
     }
 }
 
@@ -111,10 +111,30 @@ void Canvas::strokeRect(int x, int y, int width, int height, Color color, int th
 
 void Canvas::blit(const Canvas& source, int x, int y) noexcept
 {
-    for (int py = 0; py < source.height(); ++py) {
-        for (int px = 0; px < source.width(); ++px) {
-            setPixel(x + px, y + py, source.pixel(px, py));
+    const auto left = std::max<std::int64_t>(0, x);
+    const auto top = std::max<std::int64_t>(0, y);
+    const auto right = std::min<std::int64_t>(width_, std::int64_t{x} + source.width_);
+    const auto bottom = std::min<std::int64_t>(height_, std::int64_t{y} + source.height_);
+    if (left >= right || top >= bottom) return;
+
+    // Retain the existing row-major behavior for the unusual self-blit case.
+    // Normal page layers are distinct canvases and can copy whole clipped rows.
+    if (this == &source) {
+        for (auto py = top; py < bottom; ++py) {
+            for (auto px = left; px < right; ++px) {
+                pixels_[static_cast<std::size_t>(py) * width_ + px] =
+                    pixels_[static_cast<std::size_t>(py - y) * width_ + (px - x)];
+            }
         }
+        return;
+    }
+
+    const auto count = static_cast<std::size_t>(right - left);
+    for (auto py = top; py < bottom; ++py) {
+        const auto* from = source.pixels_.data()
+            + static_cast<std::size_t>(py - y) * source.width_ + (left - x);
+        auto* to = pixels_.data() + static_cast<std::size_t>(py) * width_ + left;
+        std::copy_n(from, count, to);
     }
 }
 

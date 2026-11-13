@@ -15,6 +15,7 @@
 namespace lofibox::platform::device {
 
 using RhythmLightState = std::array<bool, 3>;
+enum class RhythmLightMode { Off, Steady, Music };
 
 class RhythmLightPattern {
 public:
@@ -32,7 +33,8 @@ public:
     using Output = std::function<bool(const RhythmLightState&)>;
     explicit CardputerRhythmLights(std::string keyboard_device, Output output = {});
     ~CardputerRhythmLights();
-    void submit(const app::AudioVisualizationFrame& frame, bool playing);
+    void submit(const app::AudioVisualizationFrame& frame, bool playing,
+                RhythmLightMode mode = RhythmLightMode::Music);
 private:
     void run(std::stop_token stop);
     Output output_;
@@ -40,6 +42,7 @@ private:
     std::condition_variable_any changed_;
     app::AudioVisualizationFrame latest_{};
     bool playing_{};
+    RhythmLightMode mode_{RhythmLightMode::Music};
     std::jthread worker_;
 };
 

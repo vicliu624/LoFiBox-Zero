@@ -219,13 +219,17 @@ CardputerRhythmLights::~CardputerRhythmLights()
     changed_.notify_all();
 }
 
-void CardputerRhythmLights::submit(const app::AudioVisualizationFrame& frame, bool playing)
+void CardputerRhythmLights::submit(const app::AudioVisualizationFrame& frame, bool playing, RhythmLightMode mode)
 {
     const std::lock_guard lock{mutex_};
+    const bool wanted = playing && mode != RhythmLightMode::Off
+        && (mode == RhythmLightMode::Steady || frame.available);
+    const bool changed = wanted != playing_ || mode != mode_;
     latest_ = frame;
-    playing_ = playing && frame.available;
+    playing_ = wanted;
+    mode_ = mode;
     if (!worker_.joinable() && playing_) worker_ = std::jthread([this](std::stop_token stop) { run(stop); });
-    changed_.notify_all();
+    if (changed) changed_.notify_all();
 }
 
 void CardputerRhythmLights::run(std::stop_token stop)
@@ -237,17 +241,23 @@ void CardputerRhythmLights::run(std::stop_token stop)
         while (!stop.stop_requested()) {
             app::AudioVisualizationFrame frame;
             bool playing;
+            RhythmLightMode mode;
             {
                 std::unique_lock lock{mutex_};
                 if (!playing_ && !changed_.wait(lock, stop, [this] { return playing_; })) break;
-                frame = latest_; playing = playing_;
+                frame = latest_; playing = playing_; mode = mode_;
             }
             const auto now = clock::now();
-            const auto state = pattern.advance(frame, playing, std::chrono::duration<double>(now - previous).count());
+            const auto state = mode == RhythmLightMode::Steady
+                ? RhythmLightState{playing, playing, playing}
+                : pattern.advance(frame, playing, std::chrono::duration<double>(now - previous).count());
+            if (mode != RhythmLightMode::Music) (void)pattern.advance({}, false, 0.0);
             previous = now;
             if (!output_(state)) break;
             std::unique_lock lock{mutex_};
-            changed_.wait_until(lock, stop, now + std::chrono::milliseconds{50}, [this, playing] { return playing_ != playing; });
+            const auto changed = [this, playing, mode] { return playing_ != playing || mode_ != mode; };
+            if (mode == RhythmLightMode::Steady) changed_.wait(lock, stop, changed);
+            else changed_.wait_until(lock, stop, now + std::chrono::milliseconds{50}, changed);
             if (!playing_ && playing) {
                 lock.unlock();
                 (void)pattern.advance({}, false, 0.0);

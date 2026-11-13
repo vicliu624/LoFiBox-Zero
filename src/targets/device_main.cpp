@@ -32,6 +32,7 @@
 #include "webui/webui_config.h"
 #include "webui/webui_runtime_adapter.h"
 #include "webui/webui_server.h"
+#include "targets/webui_starter.h"
 #endif
 
 namespace {
@@ -43,13 +44,13 @@ struct DeviceOptions {
 
 class DevicePresenter final : public lofibox::platform::SurfacePresenter {
 public:
-    DevicePresenter(std::string framebuffer, std::string keyboard)
+    DevicePresenter(std::string framebuffer, std::string keyboard,
+                    std::shared_ptr<lofibox::app::RuntimePreferences> preferences)
         : framebuffer_(std::move(framebuffer), keyboard)
     {
         const char* enabled = std::getenv("LOFIBOX_RHYTHM_LIGHTS");
-        if (enabled && std::string_view{enabled} == "1") {
-            lights_ = std::make_unique<lofibox::platform::device::CardputerRhythmLights>(std::move(keyboard));
-        }
+        preferences->configureLedsDefault(enabled && std::string_view{enabled} == "1");
+        lights_ = std::make_unique<lofibox::platform::device::CardputerRhythmLights>(std::move(keyboard));
     }
     void bindPlayback(const lofibox::application::AppServiceRegistry& registry)
     {
@@ -65,7 +66,12 @@ public:
                 frame = playback.visualization_frame;
                 playing = playback.status == lofibox::app::PlaybackStatus::Playing && playback.audio_active;
             }
-            lights_->submit(frame, playing);
+            const auto& preferences = services.runtimeServices().ui.preferences;
+            using Feature = lofibox::app::RuntimeFeature;
+            using Mode = lofibox::platform::device::RhythmLightMode;
+            const auto mode = !preferences->effective(Feature::Leds) ? Mode::Off
+                : preferences->effective(Feature::LedAnimation) ? Mode::Music : Mode::Steady;
+            lights_->submit(frame, playing, mode);
         };
     }
     bool pump() override { return framebuffer_.pump(); }
@@ -156,28 +162,7 @@ int main(int argc, char** argv)
 #if defined(LOFIBOX_HAVE_WEBUI)
         lofibox::webui::WebUiConfig webui_config{};
         lofibox::webui::parseWebUiFromArgs(argc, argv, webui_config);
-        if (webui_config.enabled) {
-            services.ui.webui_url = lofibox::webui::displayUrlForWebUi(webui_config);
-            auto webui_ctx = std::make_shared<
-                std::pair<std::unique_ptr<lofibox::webui::WebUiRuntimeAdapter>,
-                          std::unique_ptr<lofibox::webui::WebUiServer>>>();
-            auto lib_provider = std::make_shared<lofibox::platform::host::LibraryQueryProviderAdapter>(
-                services.metadata.artwork_provider,
-                lofibox::platform::host::runtime_paths::appCacheDir());
-            auto enrich = std::make_shared<lofibox::platform::host::LibraryEnrichProviderAdapter>(services.cache.cache_manager);
-            auto active_theme = services.ui.theme;
-            on_start = [cfg = std::move(webui_config), webui_ctx, lib_provider, enrich, active_theme]
-                       (lofibox::runtime::RuntimeCommandClient& client,
-                        const ::lofibox::application::AppServiceRegistry& registry) mutable {
-                lib_provider->bind(registry.libraryQueries());
-                webui_ctx->first = std::make_unique<lofibox::webui::WebUiRuntimeAdapter>(client);
-                webui_ctx->second = std::make_unique<lofibox::webui::WebUiServer>(std::move(cfg), *webui_ctx->first);
-                webui_ctx->second->setLibraryQueryProvider(lib_provider.get());
-                webui_ctx->second->setLibraryEnrichProvider(enrich.get());
-                webui_ctx->second->setTheme(active_theme.get());
-                webui_ctx->second->start();
-            };
-        }
+        on_start = lofibox::targets::makeWebUiStarter(webui_config, services);
 #endif
 
         const DeviceOptions options = parseOptions(argc, argv);
@@ -188,11 +173,11 @@ int main(int argc, char** argv)
         }
         DevicePresenter device{
             std::move(options.framebuffer_path),
-            std::move(options.input_device_path)};
-        on_start = [&device, start_services = std::move(on_start)]
+            std::move(options.input_device_path), services.ui.preferences};
+        on_start = [&device, start_services = std::move(on_start), bound = false]
             (lofibox::runtime::RuntimeCommandClient& client,
-             const lofibox::application::AppServiceRegistry& registry) {
-                device.bindPlayback(registry);
+             const lofibox::application::AppServiceRegistry& registry) mutable {
+                if (!bound) { device.bindPlayback(registry); bound = true; }
                 if (start_services) start_services(client, registry);
             };
         auto assets = lofibox::platform::host::loadLegacyAssets();

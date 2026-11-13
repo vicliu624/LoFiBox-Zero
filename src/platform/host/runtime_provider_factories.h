@@ -27,7 +27,8 @@ std::shared_ptr<app::LyricsProvider> createHostLyricsProvider(
     std::shared_ptr<app::TagWriter> tag_writer,
     std::shared_ptr<app::TrackIdentityProvider> track_identity_provider);
 std::shared_ptr<app::TagWriter> createHostTagWriter();
-std::shared_ptr<app::AudioPlaybackBackend> createHostAudioPlaybackBackend();
+std::shared_ptr<app::AudioPlaybackBackend> createHostAudioPlaybackBackend(
+    std::shared_ptr<app::RuntimePreferences> preferences = {});
 std::shared_ptr<app::ConnectivityProvider> createHostConnectivityProvider();
 std::shared_ptr<app::RemoteSourceProvider> createHostRemoteSourceProvider();
 std::shared_ptr<app::RemoteCatalogProvider> createHostRemoteCatalogProvider();

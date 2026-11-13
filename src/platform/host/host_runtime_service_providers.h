@@ -10,6 +10,7 @@
 namespace lofibox::platform::host {
 
 struct HostRuntimeServiceContext {
+    std::shared_ptr<app::RuntimePreferences> preferences{};
     std::shared_ptr<runtime_detail::SharedRuntimeCache> cache{};
     app::ConnectivityServices connectivity{};
     std::shared_ptr<app::TagWriter> tag_writer{};

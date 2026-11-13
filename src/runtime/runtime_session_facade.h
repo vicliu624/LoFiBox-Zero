@@ -55,6 +55,7 @@ private:
     RemoteSessionRuntime remote_;
     SettingsRuntime settings_;
     CreatorAnalysisRuntime creator_;
+    bool creator_suspended_{false};
     RuntimeSnapshotAssembler snapshots_{};
 };
 
