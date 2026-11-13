@@ -24,7 +24,7 @@ public:
     void tick(double delta_seconds);
 
 private:
-    mutable std::mutex mutex_{};
+    std::recursive_mutex& mutex_;
     RuntimeSessionFacade& session_;
     RuntimeCommandDispatcher commands_;
     RuntimeQueryDispatcher queries_;

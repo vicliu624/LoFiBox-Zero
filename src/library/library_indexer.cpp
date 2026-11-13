@@ -12,9 +12,10 @@ app::LibraryModel LibraryIndexer::rebuild(
     const std::vector<std::filesystem::path>& media_roots,
     const app::MetadataProvider& metadata_provider,
     app::LibraryScanProgressCallback progress,
-    const app::LibraryModel* previous_model) const
+    const app::LibraryModel* previous_model,
+    const std::vector<std::filesystem::path>& additional_files) const
 {
-    return app::scanLibrary(media_roots, metadata_provider, std::move(progress), previous_model);
+    return app::scanLibrary(media_roots, metadata_provider, std::move(progress), previous_model, additional_files);
 }
 
 } // namespace lofibox::library

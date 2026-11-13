@@ -6,6 +6,7 @@
 #include <cctype>
 #include <string>
 #include <utility>
+#include "core/session_timer.h"
 
 namespace lofibox::tui {
 namespace {
@@ -37,6 +38,17 @@ std::optional<runtime::RuntimeCommand> commandPaletteRuntimeCommand(std::string_
         return std::nullopt;
     }
     const auto command = normalize(text);
+    for (const auto prefix : {std::string_view{"sleep "}, std::string_view{"screen "}}) {
+        if (!command.starts_with(prefix)) continue;
+        auto duration = command.substr(prefix.size());
+        std::transform(duration.begin(), duration.end(), duration.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::toupper(ch));
+        });
+        if (!core::parseTimerDuration(duration)) return std::nullopt;
+        return makeCommand(runtime::RuntimeCommandKind::SettingsApplyLive,
+            runtime::RuntimeCommandPayload::settingsApplyLive({}, {},
+                prefix == "sleep " ? duration : std::string{}, prefix == "screen " ? duration : std::string{}));
+    }
     if (command == "play") return makeCommand(runtime::RuntimeCommandKind::PlaybackPlay);
     if (command == "pause") return makeCommand(runtime::RuntimeCommandKind::PlaybackPause);
     if (command == "resume") return makeCommand(runtime::RuntimeCommandKind::PlaybackResume);

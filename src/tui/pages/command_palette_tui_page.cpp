@@ -12,6 +12,7 @@ std::vector<std::string> commandPalettePageLines(const TuiModel& model, const Tu
         widgets::fitText("Command Palette", layout.size.width),
         widgets::fitText(": " + model.command_buffer, layout.size.width),
         widgets::fitText("Allowed: play, pause, next, remote reconnect, eq reset", layout.size.width),
+        widgets::fitText("Timers: sleep 30m / sleep off; screen 1m / screen off", layout.size.width),
         widgets::fitText("Shell commands are not accepted.", layout.size.width),
     };
 }

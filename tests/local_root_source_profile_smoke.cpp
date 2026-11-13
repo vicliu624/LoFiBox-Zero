@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <cassert>
+#include <chrono>
+#include <thread>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -177,11 +179,13 @@ int main()
 
     {
         lofibox::app::LoFiBoxApp app{{}, {}, services};
-        for (int tick = 0; tick < 500; ++tick) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (std::chrono::steady_clock::now() < deadline) {
             app.update();
             if (app.snapshot().library_ready) {
                 break;
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         const auto snapshot = app.snapshot();
         assert(snapshot.library_ready);

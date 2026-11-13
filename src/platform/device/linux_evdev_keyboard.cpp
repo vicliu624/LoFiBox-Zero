@@ -102,6 +102,26 @@ constexpr std::uint32_t kEvdevKeycodeOffset = 8U;
 [[nodiscard]] std::optional<app::InputEvent> translateSpecialKey(std::uint32_t keycode)
 {
     switch (keycode) {
+    case KEY_ESC:
+        return app::InputEvent{app::InputKey::Escape, "ESC", '\0'};
+    case KEY_HELP:
+        return app::InputEvent{app::InputKey::F1, "FN+H", '\0'};
+    case KEY_PLAYPAUSE:
+        return app::InputEvent{app::InputKey::MediaPlayPause, "FN+Q", '\0'};
+    case KEY_PREVIOUSSONG:
+        return app::InputEvent{app::InputKey::MediaPrevious, "FN+W", '\0'};
+    case KEY_NEXTSONG:
+        return app::InputEvent{app::InputKey::MediaNext, "FN+E", '\0'};
+    case KEY_VOLUMEDOWN:
+        return app::InputEvent{app::InputKey::VolumeDown, "FN+S", '\0'};
+    case KEY_VOLUMEUP:
+        return app::InputEvent{app::InputKey::VolumeUp, "FN+D", '\0'};
+    case KEY_MUTE:
+        return app::InputEvent{app::InputKey::VolumeMute, "FN+A", '\0'};
+    case KEY_BRIGHTNESSDOWN:
+        return app::InputEvent{app::InputKey::BrightnessDown, "FN+U", '\0'};
+    case KEY_BRIGHTNESSUP:
+        return app::InputEvent{app::InputKey::BrightnessUp, "FN+I", '\0'};
     case KEY_BACKSPACE:
         return app::InputEvent{app::InputKey::Backspace, "BACK", '\0'};
     case KEY_DELETE:
@@ -291,8 +311,9 @@ struct LinuxEvdevKeyboard::Impl {
         }
     }
 
-    [[nodiscard]] std::vector<app::InputEvent> drainInput()
+    [[nodiscard]] std::vector<app::InputEvent> drainInput(bool wake_only)
     {
+        input_activity_ = false;
         std::vector<app::InputEvent> drained{};
         if (fd < 0) {
             return drained;
@@ -324,12 +345,27 @@ struct LinuxEvdevKeyboard::Impl {
             const std::uint32_t keycode = static_cast<std::uint32_t>(event.code);
             const int value = event.value;
 
+            if (value == 1 || value == 2) input_activity_ = true;
+            if (keycode <= KEY_MAX && (wake_only || wake_keys_[keycode])) {
+                wake_keys_[keycode] = value != 0;
+                updateXkbState(state, keycode, value);
+                if (keycode == KEY_ESC) esc_press_time_ = {};
+                continue;
+            }
+
             if (keycode == KEY_ESC) {
                 if (value == 1) {
                     esc_press_time_ = std::chrono::steady_clock::now();
                 } else if (value == 0) {
+                    // Resolve a short press on release so holding ESC to return
+                    // to the launcher cannot also navigate/cancel a page first.
+                    if (esc_press_time_ != std::chrono::steady_clock::time_point{}
+                        && std::chrono::steady_clock::now() - esc_press_time_ < std::chrono::seconds{2}) {
+                        drained.push_back(app::InputEvent{app::InputKey::Escape, "ESC", '\0'});
+                    }
                     esc_press_time_ = {};
                 }
+                continue;
             }
 
             if (value == 0) {
@@ -344,16 +380,19 @@ struct LinuxEvdevKeyboard::Impl {
             if (const auto special = translateSpecialKey(keycode)) {
                 updateXkbState(state, keycode, value);
                 drained.push_back(*special);
+                drained.back().repeated = value == 2;
                 continue;
             }
 
             if (const auto custom = lookupCustomCharacter(keycode)) {
                 drained.push_back(makeCharacterEvent(*custom));
+                drained.back().repeated = value == 2;
                 continue;
             }
 
             if (const auto ascii = translateAscii(state, keycode)) {
                 drained.push_back(makeCharacterEvent(*ascii));
+                drained.back().repeated = value == 2;
             }
         }
 
@@ -367,6 +406,8 @@ struct LinuxEvdevKeyboard::Impl {
     xkb_keymap* keymap{};
     xkb_state* state{};
     std::chrono::steady_clock::time_point esc_press_time_{};
+    std::array<bool, KEY_MAX + 1> wake_keys_{};
+    bool input_activity_{};
 };
 
 LinuxEvdevKeyboard::LinuxEvdevKeyboard(std::string device_path, std::string xkb_layout)
@@ -390,9 +431,14 @@ std::chrono::milliseconds LinuxEvdevKeyboard::escHeldDuration() const noexcept
         std::chrono::steady_clock::now() - impl_->esc_press_time_);
 }
 
-std::vector<app::InputEvent> LinuxEvdevKeyboard::drainInput()
+std::vector<app::InputEvent> LinuxEvdevKeyboard::drainInput(bool wake_only)
 {
-    return impl_->drainInput();
+    return impl_->drainInput(wake_only);
+}
+
+bool LinuxEvdevKeyboard::inputActivity() const noexcept
+{
+    return impl_ && impl_->input_activity_;
 }
 
 } // namespace lofibox::platform::device

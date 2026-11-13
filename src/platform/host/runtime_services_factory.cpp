@@ -57,7 +57,7 @@ std::vector<std::filesystem::path> pluginSearchDirs()
     dirs.push_back(runtime_detail::projectRoot() / "data" / "plugins");
     dirs.push_back(runtime_paths::appDataDir() / "plugins");
 #if !defined(_WIN32)
-    dirs.emplace_back("/usr/share/lofibox/plugins");
+    dirs.emplace_back(LOFIBOX_SYSTEM_PLUGIN_DIR);
 #endif
     return dirs;
 }
@@ -113,6 +113,7 @@ app::RuntimeServices createHostRuntimeServices()
 {
     auto context = createHostRuntimeServiceContext();
     app::RuntimeServices services{};
+    services.ui.preferences = context.preferences;
     services.connectivity = createHostConnectivityServices(context);
     services.metadata = createHostMetadataServices(context);
     services.playback = createHostPlaybackServices(context);

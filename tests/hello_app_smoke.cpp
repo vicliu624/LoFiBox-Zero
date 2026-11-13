@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <cstddef>
+#include <chrono>
 #include <iostream>
+#include <thread>
 #include <unordered_set>
 
 #include "app/lofibox_app.h"
@@ -21,7 +23,12 @@ int main()
     app.render(canvas);
     const auto first_loading_pixels = canvas.pixels();
 
-    app.update();
+    const auto startup_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (app.snapshot().current_page != lofibox::app::AppPage::MainMenu
+           && std::chrono::steady_clock::now() < startup_deadline) {
+        app.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
     const auto root_snapshot = app.snapshot();
     if (root_snapshot.current_page != lofibox::app::AppPage::MainMenu) {
         std::cerr << "Expected app to transition from Boot to Main Menu.\n";

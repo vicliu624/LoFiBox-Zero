@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <filesystem>
+#include <chrono>
+#include <thread>
 #include <fstream>
 #include <iostream>
 
@@ -32,11 +34,17 @@ int main()
 
     lofibox::app::LoFiBoxApp app{{root}};
     app.update();
-    for (int tick = 0; tick < 500; ++tick) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (std::chrono::steady_clock::now() < deadline) {
         app.update();
         if (app.snapshot().library_ready) {
             break;
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (!app.snapshot().library_ready) {
+        std::cerr << "Expected help-modal setup scan to complete within its deadline.\n";
+        return 1;
     }
 
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::Enter, "OK", '\0'});

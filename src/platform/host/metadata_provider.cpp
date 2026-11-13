@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "platform/host/runtime_provider_factories.h"
+#include "core/operation_cancellation.h"
 
 #include <filesystem>
 #include <memory>
@@ -47,11 +48,8 @@ public:
         }
 
         const auto key = cacheKeyForPath(path);
-        auto& entry = cache_->entries[key];
-        if (!entry.online_metadata_attempted && fs::exists(metadataCachePath(*cache_, key))) {
-            entry = loadMetadataCache(*cache_, key);
-            logRuntime(RuntimeLogLevel::Debug, "metadata", "Metadata cache loaded for " + pathUtf8String(path));
-        }
+        CacheEntrySession session{*cache_, key};
+        auto& entry = session.entry;
         logRuntime(RuntimeLogLevel::Debug, "metadata", "Read metadata for " + pathUtf8String(path));
 
         const auto embedded = embedded_reader_.read(path);
@@ -84,7 +82,9 @@ public:
         if ((needs_core_metadata || needs_release_identifiers)
             && !entry.online_metadata_attempted) {
             logRuntime(RuntimeLogLevel::Info, "metadata", "Online metadata lookup started for " + pathUtf8String(path));
+            const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
             const auto enrichment = enrichment_.resolve(path, entry.metadata, entry.online_metadata_attempted);
+            if (core::operationCancelled()) return entry.metadata;
             if (!enrichment.attempted) {
                 logRuntime(RuntimeLogLevel::Warn, "metadata", "Online metadata skipped for " + pathUtf8String(path) + ": " + enrichment.skipped_reason);
                 return entry.metadata;
@@ -100,7 +100,7 @@ public:
             if (!online.release_group_mbid.empty()) entry.release_group_mbid = online.release_group_mbid;
 
             entry.online_metadata_attempted = true;
-            storeMetadataCache(*cache_, key, entry);
+            session.persist();
             logRuntime(
                 online.found ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn,
                 "metadata",

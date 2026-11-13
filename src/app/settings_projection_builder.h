@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "app/runtime_preferences.h"
 
 namespace lofibox::app {
 
@@ -16,6 +17,11 @@ struct SettingsProjectionInput {
     bool remote_sources_available{false};
     int remote_source_type_count{0};
     std::string webui_url{};
+    std::string sleep_timer{"OFF"};
+    std::string screen_timeout{"OFF"};
+    std::uint32_t preference_flags{RuntimePreferences::kDefaults};
+    bool device_lights{false};
+    bool preferences_error{false};
 };
 
 [[nodiscard]] std::vector<std::pair<std::string, std::string>> buildSettingsProjectionRows(const SettingsProjectionInput& input);

@@ -85,6 +85,11 @@ app::LibraryOpenResult LibraryOpenActionService::openSelectedListItem(app::AppPa
     case app::AppPage::PlaylistDetail: {
         const auto ids = controller_.playlistTrackIds();
         if (selected >= 0 && selected < static_cast<int>(ids.size())) {
+            // Capture exactly the displayed smart-playlist order before a
+            // play-count/history update can reorder it. This establishes the
+            // shared playback context, including for remote library items.
+            controller_.list_context_.songs = {
+                app::SongsMode::All, controller_.list_context_.playlist.name, ids};
             return {app::LibraryOpenResult::Kind::StartTrack, app::AppPage::NowPlaying, ids[static_cast<std::size_t>(selected)]};
         }
         return {};

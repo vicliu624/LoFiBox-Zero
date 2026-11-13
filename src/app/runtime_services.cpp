@@ -100,6 +100,7 @@ std::shared_ptr<T> makeNullShared()
 
 RuntimeServices withNullRuntimeServices(RuntimeServices services)
 {
+    if (!services.ui.preferences) services.ui.preferences = std::make_shared<RuntimePreferences>();
     if (!services.connectivity.provider) {
         services.connectivity.provider = makeNullShared<NullConnectivityProvider>();
     }

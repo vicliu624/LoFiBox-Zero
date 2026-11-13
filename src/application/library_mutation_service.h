@@ -22,6 +22,7 @@ public:
     LibraryMutationService(app::LibraryController& controller, const app::RuntimeServices& services) noexcept;
 
     void startLoading() const noexcept;
+    [[nodiscard]] int registerLocalFile(const std::filesystem::path& path) const;
     void markConfiguredLibraryStale() const noexcept;
     void refreshLibrary(const std::vector<std::filesystem::path>& media_roots, const app::MetadataProvider& metadata_provider) const;
     [[nodiscard]] bool refreshLibrary(const std::vector<std::filesystem::path>& media_roots) const;

@@ -9,6 +9,8 @@
 #include "app/remote_media_contract.h"
 #include "cache/cache_manager.h"
 #include "metadata/metadata_merge_policy.h"
+#include "core/operation_cancellation.h"
+#include "app/scraping_policy.h"
 
 namespace lofibox::app {
 namespace {
@@ -28,10 +30,42 @@ TrackMetadata mergeLyricsSeed(TrackMetadata seed_metadata, const TrackMetadata& 
 
 PlaybackEnrichmentCoordinator::~PlaybackEnrichmentCoordinator()
 {
-    for (auto& thread : threads_) {
-        if (thread.joinable()) {
-            thread.join();
+    {
+        const std::lock_guard lock{mutex_};
+        stopping_ = true;
+        pending_job_ = {};
+        active_cancellation_.request_stop();
+    }
+    work_ready_.notify_one();
+    if (worker_.joinable()) worker_.join();
+}
+
+void PlaybackEnrichmentCoordinator::enqueue(std::function<void(std::stop_token)> job)
+{
+    const std::lock_guard lock{mutex_};
+    active_cancellation_.request_stop();
+    pending_job_ = std::move(job); // Keep only the newest requested track.
+    if (!worker_.joinable()) worker_ = std::thread([this] { runWorker(); });
+    work_ready_.notify_one();
+}
+
+void PlaybackEnrichmentCoordinator::runWorker()
+{
+    while (true) {
+        std::function<void(std::stop_token)> job;
+        std::stop_token token;
+        {
+            std::unique_lock lock{mutex_};
+            work_ready_.wait(lock, [this] { return stopping_ || static_cast<bool>(pending_job_); });
+            if (stopping_) return;
+            job = std::move(pending_job_);
+            pending_job_ = {};
+            active_cancellation_ = std::stop_source{};
+            token = active_cancellation_.get_token();
         }
+        const core::OperationCancellationScope cancellation{token};
+        try { job(token); }
+        catch (...) { /* A failed background task must not terminate the worker. */ }
     }
 }
 
@@ -42,25 +76,52 @@ void PlaybackEnrichmentCoordinator::setServices(RuntimeServices services)
 
 void PlaybackEnrichmentCoordinator::request(const TrackRecord& track)
 {
+    retry_online_ = [this, track] { request(track); };
+    retry_track_id_ = track.id;
+    online_allowed_ = onlineScrapingAllowed(services_);
     const auto services_snapshot = services_;
     const int track_id = track.id;
     const std::filesystem::path path = track.path;
     const TrackMetadata seed_metadata = metadataFromTrack(track);
     const std::uint64_t generation = ++generation_;
 
-    threads_.emplace_back([this, services_snapshot, track_id, path, seed_metadata, generation]() {
+    enqueue([this, services_snapshot, track_id, path, seed_metadata, generation](std::stop_token token) {
+        const auto publish = [this, token](PlaybackEnrichmentResult result) {
+            if (token.stop_requested()) return;
+            const std::lock_guard lock{mutex_};
+            if (token.stop_requested()) return;
+            if (pending_results_.size() >= 8) pending_results_.erase(pending_results_.begin());
+            pending_results_.push_back(std::move(result));
+        };
+        PlaybackEnrichmentResult local{};
+        local.track_id = track_id;
+        local.path = path;
+        local.generation = generation;
+        local.complete = false;
+        try {
+            local.metadata = services_snapshot.metadata.metadata_provider->read(path, MetadataReadMode::LocalOnly);
+            if (token.stop_requested()) return;
+            local.artwork = services_snapshot.metadata.artwork_provider->read(path, ArtworkReadMode::LocalOnly);
+        } catch (...) { /* Publish available local facts even when a provider fails. */ }
+        if (token.stop_requested()) return;
+        const auto local_seed = mergeLyricsSeed(seed_metadata, local.metadata);
+        publish(std::move(local));
+
         PlaybackEnrichmentResult result{};
         result.track_id = track_id;
         result.path = path;
         result.generation = generation;
-        result.metadata = services_snapshot.metadata.metadata_provider->read(path, MetadataReadMode::AllowOnline);
+        try {
+            result.metadata = services_snapshot.metadata.metadata_provider->read(path, MetadataReadMode::AllowOnline);
+            if (token.stop_requested()) return;
+            const auto lyrics_metadata = mergeLyricsSeed(local_seed, result.metadata);
+            result.artwork = services_snapshot.metadata.artwork_provider->read(path);
+            if (token.stop_requested()) return;
+            result.lyrics = services_snapshot.metadata.lyrics_provider->fetch(path, lyrics_metadata);
+        } catch (...) { /* Keep available facts; an enrichment failure must not stop playback. */ }
+        if (token.stop_requested()) return;
 
-        const auto lyrics_metadata = mergeLyricsSeed(seed_metadata, result.metadata);
-        result.artwork = services_snapshot.metadata.artwork_provider->read(path);
-        result.lyrics = services_snapshot.metadata.lyrics_provider->fetch(path, lyrics_metadata);
-
-        std::lock_guard lock(mutex_);
-        pending_results_.push_back(std::move(result));
+        publish(std::move(result));
     });
 }
 
@@ -72,8 +133,15 @@ void PlaybackEnrichmentCoordinator::requestRemote(
     bool cache_remote_facts)
 {
     if (!remoteTrackNeedsLocalMetadataGovernance(remote_track)) {
+        retry_online_ = {};
         return;
     }
+
+    retry_online_ = [this, profile, remote_track, track_id, stream_uri, cache_remote_facts] {
+        requestRemote(profile, remote_track, track_id, stream_uri, cache_remote_facts);
+    };
+    retry_track_id_ = track_id;
+    online_allowed_ = onlineScrapingAllowed(services_);
 
     const auto services_snapshot = services_;
     const std::filesystem::path lookup_path = remoteTrackSyntheticLookupPath(profile, remote_track);
@@ -81,7 +149,7 @@ void PlaybackEnrichmentCoordinator::requestRemote(
     const std::string stable_cache_key = remoteMediaCacheKey(profile, remote_track.id);
     const std::uint64_t generation = ++generation_;
 
-    threads_.emplace_back([this, services_snapshot, profile, remote_track, track_id, stream_uri = std::move(stream_uri), lookup_path, seed_metadata, stable_cache_key, cache_remote_facts, generation]() {
+    enqueue([this, services_snapshot, profile, remote_track, track_id, stream_uri = std::move(stream_uri), lookup_path, seed_metadata, stable_cache_key, cache_remote_facts, generation](std::stop_token token) {
         PlaybackEnrichmentResult result{};
         result.track_id = track_id;
         result.path = lookup_path;
@@ -91,6 +159,7 @@ void PlaybackEnrichmentCoordinator::requestRemote(
         result.remote_track = remote_track;
         result.cache_remote_facts = cache_remote_facts;
 
+        try {
         if (services_snapshot.metadata.track_identity_provider
             && services_snapshot.metadata.track_identity_provider->available()) {
             const auto identity = services_snapshot.metadata.track_identity_provider->resolveRemoteStream(
@@ -107,6 +176,7 @@ void PlaybackEnrichmentCoordinator::requestRemote(
             }
         }
 
+        if (token.stop_requested()) return;
         if (services_snapshot.metadata.lyrics_provider) {
             const auto lyrics_metadata = mergeLyricsSeed(seed_metadata, result.metadata);
             result.lyrics = services_snapshot.metadata.lyrics_provider->fetchRemoteIdentity(
@@ -116,6 +186,7 @@ void PlaybackEnrichmentCoordinator::requestRemote(
                 result.identity);
         }
 
+        if (token.stop_requested()) return;
         if (services_snapshot.metadata.artwork_provider
             && services_snapshot.metadata.artwork_provider->available()) {
             result.artwork = services_snapshot.metadata.artwork_provider->readRemoteIdentity(
@@ -125,13 +196,25 @@ void PlaybackEnrichmentCoordinator::requestRemote(
                 remote_track.artwork_url);
         }
 
+        } catch (...) { /* Preserve partial facts on a provider failure. */ }
+        if (token.stop_requested()) return;
         std::lock_guard lock(mutex_);
+        if (token.stop_requested()) return;
+        if (pending_results_.size() >= 8) pending_results_.erase(pending_results_.begin());
         pending_results_.push_back(std::move(result));
     });
 }
 
 void PlaybackEnrichmentCoordinator::applyPending(LibraryController& library_controller, PlaybackSession& session)
 {
+    const bool online = onlineScrapingAllowed(services_);
+    if (online && !online_allowed_ && retry_online_ && session.current_track_id == retry_track_id_
+        && session.status != PlaybackStatus::Empty) {
+        // Copy before invoking: request() replaces this callback.
+        const auto retry = retry_online_;
+        retry();
+    }
+    online_allowed_ = online;
     std::vector<PlaybackEnrichmentResult> results{};
     {
         std::lock_guard lock(mutex_);
@@ -212,8 +295,10 @@ void PlaybackEnrichmentCoordinator::applyPending(LibraryController& library_cont
         if (result.artwork) {
             session.current_artwork = std::move(result.artwork);
         }
-        session.current_lyrics = std::move(result.lyrics);
-        session.lyrics_lookup_pending = false;
+        if (result.complete) {
+            if (result.lyrics.plain || result.lyrics.synced) session.current_lyrics = std::move(result.lyrics);
+            session.lyrics_lookup_pending = false;
+        }
     }
 }
 
@@ -231,6 +316,10 @@ TrackMetadata PlaybackEnrichmentCoordinator::metadataFromTrack(const TrackRecord
 
 void PlaybackEnrichmentCoordinator::applyMetadataToTrack(TrackRecord& track, const TrackMetadata& metadata)
 {
+    if (track.pending_local_title && metadata.title && !metadata.title->empty()) {
+        track.title = *metadata.title;
+        track.pending_local_title = false;
+    }
     const ::lofibox::metadata::MetadataMergePolicy merge_policy{};
     merge_policy.mergeIntoTrack(track, metadata);
 }

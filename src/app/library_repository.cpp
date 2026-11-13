@@ -6,6 +6,7 @@
 #include "library/library_indexer.h"
 
 #include <utility>
+#include <algorithm>
 
 namespace lofibox::app {
 
@@ -76,7 +77,8 @@ void LibraryRepository::rescan(
 LibraryModel LibraryRepository::rebuildModel(
     const std::vector<std::filesystem::path>& media_roots,
     const MetadataProvider& metadata_provider,
-    LibraryScanProgressCallback progress) const
+    LibraryScanProgressCallback progress,
+    const std::vector<TrackRecord>& explicit_tracks) const
 {
     // A stored model is a stable snapshot owned by the scan worker.  Passing
     // the live UI model into that worker would race with remote-library
@@ -87,7 +89,15 @@ LibraryModel LibraryRepository::rebuildModel(
         persisted = index_store_->load();
         previous_model = &persisted;
     }
-    return library::LibraryIndexer{}.rebuild(media_roots, metadata_provider, std::move(progress), previous_model);
+    std::vector<std::filesystem::path> additional_files;
+    for (const auto& track : explicit_tracks) {
+        additional_files.push_back(track.path);
+        const auto same = std::find_if(persisted.tracks.begin(), persisted.tracks.end(), [&](const auto& item) { return !item.remote && item.path == track.path; });
+        if (same != persisted.tracks.end()) *same = track;
+        else persisted.tracks.push_back(track);
+    }
+    if (!explicit_tracks.empty()) previous_model = &persisted;
+    return library::LibraryIndexer{}.rebuild(media_roots, metadata_provider, std::move(progress), previous_model, additional_files);
 }
 
 void LibraryRepository::applyRescanModel(LibraryModel next)

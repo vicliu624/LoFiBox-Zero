@@ -5,6 +5,7 @@
 #include <array>
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <filesystem>
 #include <initializer_list>
 #include <optional>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "cli/cli_format.h"
+#include "core/playback_input.h"
 #include "runtime/runtime_command.h"
 #include "runtime/runtime_result.h"
 #include "runtime/runtime_snapshot.h"
@@ -58,21 +60,35 @@ bool isRuntimeCommand(std::string_view command) noexcept
 ParsedRuntimeArgs parseArgs(int argc, char** argv)
 {
     ParsedRuntimeArgs args{};
+    bool positional_only = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view current{argv[index]};
+        if (positional_only) { args.positional.push_back(current); continue; }
+        if (current == "--") { positional_only = true; continue; }
         if (current == "--runtime-socket" && (index + 1) < argc) {
             args.socket_path = argv[++index];
+            continue;
+        }
+        if (current.rfind("--runtime-socket=", 0) == 0) {
+            args.socket_path = std::string{current.substr(17)};
             continue;
         }
         if (current.rfind("--", 0) == 0) {
             const auto eq = current.find('=');
             if (eq != std::string_view::npos) {
                 args.options.push_back({std::string{current.substr(2, eq - 2)}, std::string{current.substr(eq + 1)}});
-            } else if ((index + 1) < argc && std::string_view{argv[index + 1]}.rfind("-", 0) != 0) {
+            } else if (current != "--json" && current != "--porcelain" && current != "--quiet"
+                && current != "--help" && current != "--schema" && current != "--pause"
+                && current != "--resume" && current != "--toggle" && current != "--next"
+                && current != "--prev" && current != "--stop"
+                && (index + 1) < argc && std::string_view{argv[index + 1]}.rfind("--", 0) != 0) {
                 args.options.push_back({std::string{current.substr(2)}, argv[index + 1]});
                 ++index;
             } else {
-                args.options.push_back({std::string{current.substr(2)}, "true"});
+                const bool boolean = current == "--json" || current == "--porcelain" || current == "--quiet"
+                    || current == "--help" || current == "--schema" || current == "--pause" || current == "--resume"
+                    || current == "--toggle" || current == "--next" || current == "--prev" || current == "--stop";
+                args.options.push_back({std::string{current.substr(2)}, boolean ? "true" : ""});
             }
             continue;
         }
@@ -121,7 +137,9 @@ lofibox::runtime::RuntimeCommand command(lofibox::runtime::RuntimeCommandKind ki
 std::optional<int> parseInt(std::string_view value)
 {
     try {
-        return std::stoi(std::string{value});
+        std::size_t consumed{};
+        const int parsed = std::stoi(std::string{value}, &consumed);
+        return consumed == value.size() ? std::optional<int>{parsed} : std::nullopt;
     } catch (...) {
         return std::nullopt;
     }
@@ -130,7 +148,9 @@ std::optional<int> parseInt(std::string_view value)
 std::optional<double> parseDouble(std::string_view value)
 {
     try {
-        return std::stod(std::string{value});
+        std::size_t consumed{};
+        const double parsed = std::stod(std::string{value}, &consumed);
+        return consumed == value.size() && std::isfinite(parsed) ? std::optional<double>{parsed} : std::nullopt;
     } catch (...) {
         return std::nullopt;
     }
@@ -156,7 +176,8 @@ std::optional<double> parseDuration(std::string_view value)
         if (!minutes || !seconds) {
             return std::nullopt;
         }
-        return (*minutes * 60.0) + *seconds;
+        const double total = (*minutes * 60.0) + *seconds;
+        return std::isfinite(total) ? std::optional<double>{total} : std::nullopt;
     }
     (void)relative;
     return parseDouble(value);
@@ -295,6 +316,7 @@ CliFields settingsFields(const lofibox::runtime::SettingsRuntimeSnapshot& settin
         {"output", settings.output_mode},
         {"network", settings.network_policy},
         {"sleep", settings.sleep_timer},
+        {"screen_timeout", settings.screen_timeout},
         {"version", std::to_string(settings.version)},
     };
 }
@@ -810,6 +832,31 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(
     }
     const auto first = p[0];
     if (first == "play") {
+        int selectors = p.size() > 1 ? 1 : 0;
+        if (optionPresent(args, "item") && !optionPresent(args, "source")) ++selectors;
+        for (const auto& option : args.options) {
+            if (option.name == "json" || option.name == "porcelain" || option.name == "quiet" || option.name == "fields") continue;
+            if (option.name == "item") continue; // --source and --item form one selector.
+            if (option.name != "pause" && option.name != "resume" && option.name != "toggle" && option.name != "next"
+                && option.name != "prev" && option.name != "stop" && option.name != "source" && option.name != "id"
+                && option.name != "seek" && option.name != "shuffle" && option.name != "repeat") {
+                parse_error = invalidArgument("Unknown play option.", "--" + option.name, "play option", "lofibox play --help");
+                return std::nullopt;
+            }
+            ++selectors;
+        }
+        if (selectors > 1 || p.size() > 2) {
+            parse_error = invalidArgument("Choose one playback action or one input.", "play", "one path, URL or action", "lofibox play [<path-or-url>|--id <track-id>]");
+            return std::nullopt;
+        }
+        if (p.size() == 2) {
+            const auto input = core::normalizePlaybackInput(std::string{p[1]});
+            if (!input) {
+                parse_error = invalidArgument("Input must be an existing supported audio file or a supported stream URL.", "input", "audio file or stream URL", "lofibox play <path-or-url>");
+                return std::nullopt;
+            }
+            return command(lofibox::runtime::RuntimeCommandKind::PlaybackOpenInput, lofibox::runtime::RuntimeCommandPayload::openInput(input->value));
+        }
         if (optionPresent(args, "pause")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackPause);
         if (optionPresent(args, "resume")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackResume);
         if (optionPresent(args, "toggle")) return command(lofibox::runtime::RuntimeCommandKind::PlaybackToggle);
@@ -841,7 +888,7 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(
         }
         if (const auto id = optionValue(args, "id")) {
             const auto track_id = parseInt(*id);
-            if (!track_id) {
+            if (!track_id || *track_id <= 0) {
                 parse_error = invalidArgument(
                     "play --id requires a numeric track id.",
                     "--id",
@@ -881,6 +928,8 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(
             if (*repeat == "all") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll, lofibox::runtime::RuntimeCommandPayload::enabled(true));
             if (*repeat == "one") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatOne, lofibox::runtime::RuntimeCommandPayload::enabled(true));
             if (*repeat == "off") return command(lofibox::runtime::RuntimeCommandKind::PlaybackSetRepeatAll, lofibox::runtime::RuntimeCommandPayload::enabled(false));
+            parse_error = invalidArgument("play --repeat requires off, all or one.", "--repeat", "off|all|one", "lofibox play --repeat off|all|one");
+            return std::nullopt;
         }
         return command(lofibox::runtime::RuntimeCommandKind::PlaybackPlay);
     }
@@ -982,7 +1031,8 @@ std::optional<lofibox::runtime::RuntimeCommand> buildCommand(
             const auto output = p.size() >= 4 ? std::string{p[3]} : std::string{};
             const auto network = p.size() >= 5 ? std::string{p[4]} : std::string{};
             const auto sleep = p.size() >= 6 ? std::string{p[5]} : std::string{};
-            return command(lofibox::runtime::RuntimeCommandKind::SettingsApplyLive, lofibox::runtime::RuntimeCommandPayload::settingsApplyLive(output, network, sleep));
+            const auto screen = p.size() >= 7 ? std::string{p[6]} : std::string{};
+            return command(lofibox::runtime::RuntimeCommandKind::SettingsApplyLive, lofibox::runtime::RuntimeCommandPayload::settingsApplyLive(output, network, sleep, screen));
         }
     }
     return std::nullopt;
@@ -1021,7 +1071,7 @@ std::optional<lofibox::runtime::RuntimeQuery> buildQuery(const ParsedRuntimeArgs
     if (p[1] == "remote") {
         return lofibox::runtime::RuntimeQuery{lofibox::runtime::RuntimeQueryKind::RemoteSessionSnapshot, lofibox::runtime::CommandOrigin::RuntimeCli, correlation("remote")};
     }
-    if (p[1] == "settings") {
+    if (p[1] == "settings" && p.size() == 2U) {
         return lofibox::runtime::RuntimeQuery{lofibox::runtime::RuntimeQueryKind::SettingsSnapshot, lofibox::runtime::CommandOrigin::RuntimeCli, correlation("settings")};
     }
     return std::nullopt;
@@ -1131,8 +1181,23 @@ std::optional<int> runRuntimeCliCommand(int argc, char** argv, std::ostream& out
     if (!result.accepted) {
         return static_cast<int>(CliExitCode::Usage);
     }
-    if (!result.applied && command_value->kind == lofibox::runtime::RuntimeCommandKind::PlaybackPlay) {
-        return static_cast<int>(CliExitCode::Playback);
+    if (!result.applied) {
+        using Kind = lofibox::runtime::RuntimeCommandKind;
+        switch (command_value->kind) {
+        case Kind::PlaybackPlay:
+        case Kind::PlaybackOpenInput:
+        case Kind::PlaybackStartTrack:
+        case Kind::PlaybackResume:
+        case Kind::PlaybackToggle:
+        case Kind::PlaybackSeek:
+        case Kind::QueueStep:
+        case Kind::QueueJump:
+        case Kind::RemoteResolveAndStartTrack:
+        case Kind::RemoteStartActiveStream:
+            return static_cast<int>(CliExitCode::Playback);
+        default:
+            return static_cast<int>(CliExitCode::Usage);
+        }
     }
     return 0;
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "app/library_scanner.h"
+#include "core/playback_input.h"
 
 #include <algorithm>
 #include <cctype>
@@ -175,14 +176,7 @@ bool fingerprintMatches(const TrackRecord& track, const LocalFileFingerprint& fi
 
 bool isAudioCandidate(const fs::path& path)
 {
-    if (!path.has_extension()) {
-        return false;
-    }
-
-    std::string extension = upperText(path.extension().string());
-    static const std::unordered_set<std::string> kSupported{
-        ".MP3", ".WAV", ".AAC", ".FLAC", ".OGG", ".OPUS", ".ALAC", ".APE", ".AIFF"};
-    return kSupported.contains(extension);
+    return core::supportedAudioFile(path);
 }
 
 int progressCount(std::size_t value) noexcept
@@ -368,7 +362,8 @@ LibraryModel scanLibrary(
     const std::vector<fs::path>& requested_roots,
     const MetadataProvider& metadata_provider,
     LibraryScanProgressCallback progress,
-    const LibraryModel* previous_model)
+    const LibraryModel* previous_model,
+    const std::vector<fs::path>& additional_files)
 {
     LibraryModel model{};
     const auto roots = defaultRoots(requested_roots);
@@ -416,6 +411,18 @@ LibraryModel scanLibrary(
         publishProgress(progress, progress_snapshot);
     }
 
+    if (!additional_files.empty()) {
+        std::unordered_set<std::string> seen_files;
+        for (const auto& path : files) seen_files.insert(normalizedPathKey(normalizeFilesystemPath(path)));
+        for (const auto& path : additional_files) {
+            std::error_code ec;
+            if (isAudioCandidate(path) && fs::is_regular_file(path, ec) && !ec) {
+                const auto normalized = normalizeFilesystemPath(path);
+                if (seen_files.insert(normalizedPathKey(normalized)).second) files.push_back(normalized);
+            }
+        }
+    }
+    progress_snapshot.files_discovered = progressCount(files.size());
     progress_snapshot.phase = LibraryScanPhase::ReadingMetadata;
     progress_snapshot.files_total = progressCount(files.size());
     progress_snapshot.files_processed = 0;
@@ -448,6 +455,7 @@ LibraryModel scanLibrary(
         track.path = path;
         const auto metadata = metadata_provider.read(path, MetadataReadMode::LocalOnly);
         track.title = preferMetadataOrFallback(metadata.title, pathUtf8String(path.stem()));
+        track.pending_local_title = false;
         track.album = preferMetadataOrFallback(metadata.album, pathUtf8String(path.parent_path().filename()));
         track.artist = preferMetadataOrFallback(metadata.artist, pathUtf8String(path.parent_path().parent_path().filename()));
         track.genre = preferMetadataOrFallback(metadata.genre, std::string(kUnknownMetadata));

@@ -83,6 +83,13 @@ int main()
         return 1;
     }
 
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::MediaPlayPause, "", '\0'});
+    snapshot = app.snapshot();
+    if (snapshot.playback_status != lofibox::app::PlaybackStatus::Playing || !snapshot.current_track_id) {
+        std::cerr << "Expected dedicated media key to start playback from an idle menu.\n";
+        return 1;
+    }
+    app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F3, "F3", '\0'});
     app.handleInput(lofibox::app::InputEvent{lofibox::app::InputKey::F2, "F2", '\0'});
     snapshot = app.snapshot();
     if (snapshot.playback_status != lofibox::app::PlaybackStatus::Playing || !snapshot.current_track_id) {

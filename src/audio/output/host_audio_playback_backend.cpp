@@ -25,10 +25,13 @@
 #include <vector>
 
 #if defined(__linux__)
+#include <csignal>
 #include <unistd.h>
 #endif
 
 #include "audio/dsp/realtime_dsp_engine.h"
+#include "audio/pcm_format.h"
+#include "core/playback_input.h"
 #include "platform/host/media_runtime_capabilities.h"
 #include "platform/host/png_canvas_loader.h"
 #include "platform/host/runtime_logger.h"
@@ -38,6 +41,16 @@ namespace fs = std::filesystem;
 namespace lofibox::platform::host {
 namespace {
 using namespace runtime_detail;
+
+bool visualizationNeeded(const std::shared_ptr<app::RuntimePreferences>& preferences)
+{
+    if (!preferences) return true;
+    const auto flags = preferences->configured();
+    using F = app::RuntimeFeature;
+    const auto on = [flags](F feature) { return app::RuntimePreferences::effective(flags, feature); };
+    return on(F::Spectrum) || on(F::WebUi) || on(F::ExternalControl)
+        || (on(F::Leds) && on(F::LedAnimation));
+}
 
 struct AudioExecutable {
     fs::path path{};
@@ -475,8 +488,28 @@ private:
 };
 
 #if defined(__linux__)
+fs::path resolveNativeMp3Decoder()
+{
+    const auto executable = [](const fs::path& path) {
+        std::error_code error;
+        return fs::is_regular_file(path, error) && !error && ::access(path.c_str(), X_OK) == 0;
+    };
+    if (const char* configured = std::getenv("LOFIBOX_MP3_DECODER_PATH")) {
+        const fs::path path{configured};
+        return !path.empty() && executable(path) ? path : fs::path{};
+    }
+    const auto installed = fs::path{LOFIBOX_INSTALLED_HELPER_DIR} / "lofibox-mp3-decoder";
+    if (executable(installed)) return installed;
+    std::error_code error;
+    const auto self = fs::read_symlink("/proc/self/exe", error);
+    const auto sibling = self.parent_path() / "lofibox-mp3-decoder";
+    return !error && executable(sibling) ? sibling : fs::path{};
+}
+
 class RealtimePcmPlaybackPipeline {
 public:
+    explicit RealtimePcmPlaybackPipeline(std::shared_ptr<app::RuntimePreferences> preferences = {})
+        : preferences_(std::move(preferences)) {}
     ~RealtimePcmPlaybackPipeline()
     {
         stop();
@@ -503,7 +536,8 @@ public:
         const PcmOutputSink& sink,
         const std::string& input,
         double start_seconds,
-        const audio::dsp::DspChainProfile& profile)
+        const audio::dsp::DspChainProfile& profile,
+        const fs::path& native_mp3_decoder = {})
     {
         if (decoder.path.empty() || sink.path.empty() || input.empty()) {
             return false;
@@ -653,7 +687,17 @@ public:
         decoder_args.emplace_back("f32le");
         decoder_args.emplace_back("-");
 
-        if (!spawnPipeProcess(decoder_process_, decoder.path, decoder_args)) {
+        bool spawned = false;
+        if (!native_mp3_decoder.empty() && !is_network && !decoder.windows_interop) {
+            auto extension = fs::u8path(input).extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) { return std::tolower(ch); });
+            if (extension == ".mp3") {
+                std::vector<std::string> native_args{"--input", input, "--start", std::to_string(std::max(0.0, start_seconds)), "--", decoder.path.string()};
+                native_args.insert(native_args.end(), decoder_args.begin(), decoder_args.end());
+                spawned = spawnPipeProcess(decoder_process_, native_mp3_decoder, native_args);
+            }
+        }
+        if (!spawned && !spawnPipeProcess(decoder_process_, decoder.path, decoder_args)) {
             stopInputProcess(sink_process_);
             markFailed();
             return false;
@@ -669,6 +713,8 @@ public:
 
     void pause()
     {
+        const std::unique_lock processes{process_mutex_, std::try_to_lock};
+        if (!processes || stop_requested_) return;
         {
             std::lock_guard lock(state_mutex_);
             if (paused_ || finished_ || failed_) {
@@ -682,6 +728,8 @@ public:
 
     void resume()
     {
+        const std::unique_lock processes{process_mutex_, std::try_to_lock};
+        if (!processes || stop_requested_) return;
         {
             std::lock_guard lock(state_mutex_);
             if (!paused_ || finished_ || failed_) {
@@ -702,14 +750,23 @@ public:
     void requestStop()
     {
         stop_requested_ = true;
-        stopPipeProcess(decoder_process_);
-        stopInputProcess(sink_process_);
+        // Only the audio worker reaps children and closes their descriptors.
+        // A competing cleanup already holds this lock; never wait for it here.
+        const std::unique_lock processes{process_mutex_, std::try_to_lock};
+        if (!processes) return;
+        requestChildStop(sink_process_.active ? sink_process_.pid : -1);
+        requestChildStop(decoder_process_.active ? decoder_process_.pid : -1);
     }
 
     void waitForStop()
     {
         if (worker_.joinable()) {
             worker_.join();
+        } else {
+            // Also cover a partial start that never transferred ownership.
+            const std::lock_guard processes{process_mutex_};
+            stopInputProcess(sink_process_);
+            stopPipeProcess(decoder_process_);
         }
         worker_done_ = false;
         {
@@ -798,6 +855,37 @@ public:
     }
 
 private:
+    static void requestChildStop(pid_t pid)
+    {
+        if (pid <= 0) return;
+        kill(-pid, SIGTERM);
+        kill(pid, SIGTERM);
+        // A paused decoder/sink cannot handle TERM until it is continued.
+        kill(-pid, SIGCONT);
+        kill(pid, SIGCONT);
+    }
+
+    bool decoderRunning()
+    {
+        const std::lock_guard processes{process_mutex_};
+        return pipeProcessRunning(decoder_process_);
+    }
+
+    bool sinkRunning()
+    {
+        const std::lock_guard processes{process_mutex_};
+        return inputProcessRunning(sink_process_);
+    }
+
+    void releaseProcesses()
+    {
+        const std::lock_guard processes{process_mutex_};
+        requestChildStop(sink_process_.active ? sink_process_.pid : -1);
+        requestChildStop(decoder_process_.active ? decoder_process_.pid : -1);
+        stopInputProcess(sink_process_);
+        stopPipeProcess(decoder_process_);
+    }
+
     void run()
     {
         struct WorkerDoneGuard {
@@ -814,10 +902,10 @@ private:
         while (!stop_requested_) {
             const int read_bytes = readPipeProcess(decoder_process_, buffer.data(), static_cast<int>(buffer.size()));
             if (read_bytes < 0) {
-                if (!pipeProcessRunning(decoder_process_)) {
+                if (!decoderRunning()) {
                     break;
                 }
-                if (!inputProcessRunning(sink_process_)) {
+                if (!sinkRunning()) {
                     markFailed("Realtime PCM sink exited while decoder output was pending");
                     break;
                 }
@@ -833,19 +921,19 @@ private:
 
         if (!stop_requested_) {
             if (!hasWrittenOutput()) {
-                closeInputProcess(sink_process_);
-                stopPipeProcess(decoder_process_);
-                stopInputProcess(sink_process_);
+                releaseProcesses();
                 markFailed("Realtime PCM decoder ended before output was confirmed");
                 return;
             }
-            closeInputProcess(sink_process_);
-            for (int attempts = 0; attempts < 120 && inputProcessRunning(sink_process_); ++attempts) {
+            {
+                const std::lock_guard processes{process_mutex_};
+                closeInputProcess(sink_process_);
+            }
+            for (int attempts = 0; attempts < 120 && !stop_requested_ && sinkRunning(); ++attempts) {
                 std::this_thread::sleep_for(std::chrono::milliseconds{25});
             }
         }
-        stopPipeProcess(decoder_process_);
-        stopInputProcess(sink_process_);
+        releaseProcesses();
         if (!stop_requested_) {
             std::lock_guard lock(state_mutex_);
             finished_ = !failed_;
@@ -864,7 +952,13 @@ private:
         std::memcpy(pcm_samples_.data(), carry.data(), full_bytes);
         const std::size_t frame_count = pcm_samples_.size() / static_cast<std::size_t>(kChannels);
         dsp_.processInterleaved(pcm_samples_.data(), frame_count, kChannels, kSampleRate);
-        publishVisualization(pcm_samples_);
+        if (visualizationNeeded(preferences_)) {
+            publishVisualization(pcm_samples_);
+        } else {
+            visualization_window_.clear();
+            const std::lock_guard lock{frame_mutex_};
+            frame_ = {};
+        }
 
         clip_stats_counter_ += frame_count;
         if (clip_stats_counter_ >= static_cast<std::size_t>(kSampleRate) * 5) {
@@ -883,7 +977,7 @@ private:
         }
 
         if (!writeAll(reinterpret_cast<const char*>(pcm_samples_.data()), static_cast<int>(pcm_samples_.size() * sizeof(float)))) {
-            markFailed();
+            if (!stop_requested_) markFailed();
             return;
         }
         rememberOutputWrite(frame_count);
@@ -1016,14 +1110,17 @@ private:
         paused_ = false;
     }
 
-    static constexpr int kSampleRate{48000};
-    static constexpr int kChannels{2};
-    static constexpr std::size_t kFrameBytes{sizeof(float) * static_cast<std::size_t>(kChannels)};
+    static constexpr int kSampleRate{audio::kPcmSampleRate};
+    static constexpr int kChannels{audio::kPcmChannels};
+    static constexpr std::size_t kFrameBytes{audio::kPcmFrameBytes};
     static constexpr std::size_t kVisualizationWindowSize{4096};
 
     audio::dsp::RealtimeDspEngine dsp_{};
+    std::shared_ptr<app::RuntimePreferences> preferences_;
     RunningPipeProcess decoder_process_{};
     RunningInputProcess sink_process_{};
+    // Controls signal/read-state races with worker-owned waitpid/close calls.
+    mutable std::mutex process_mutex_{};
     std::thread worker_{};
     std::atomic_bool stop_requested_{false};
     std::atomic_bool worker_done_{false};
@@ -1049,17 +1146,26 @@ private:
 
 class ExternalAudioPlaybackBackend final : public app::AudioPlaybackBackend {
 public:
-    ExternalAudioPlaybackBackend()
-        : executable_(resolveAudioExecutable())
+    explicit ExternalAudioPlaybackBackend(std::shared_ptr<app::RuntimePreferences> preferences = {})
+        : preferences_(std::move(preferences))
+        , executable_(resolveAudioExecutable())
         , analyzer_executable_(resolveAnalyzerExecutable())
 #if defined(__linux__)
         , pcm_sink_executable_(resolvePcmOutputSink(executable_))
+        , native_mp3_decoder_(resolveNativeMp3Decoder())
 #endif
-    {}
+    {
+#if defined(__linux__)
+        retired_pcm_pipelines_.reserve(3);
+#endif
+    }
 
     ~ExternalAudioPlaybackBackend() override
     {
         stop();
+#if defined(__linux__)
+        drainRetiredPcmPipelines();
+#endif
     }
 
     [[nodiscard]] bool available() const override
@@ -1155,6 +1261,7 @@ public:
         const std::string& ok_prefix,
         const std::string& fail_prefix)
     {
+        const auto log_input = networkInput(playback_input) ? core::playbackInputDisplayUri(playback_input) : playback_input;
         audio::dsp::DspChainProfile active_profile{};
         {
             std::lock_guard lock(dsp_mutex_);
@@ -1162,13 +1269,17 @@ public:
         }
 #if defined(__linux__)
         if (!pcm_sink_executable_.path.empty() && !analyzer_executable_.path.empty()) {
-            auto next_pipeline = std::make_unique<RealtimePcmPlaybackPipeline>();
+            // A preceding explicit stop can leave all three pipelines retiring.
+            // Make room before spawning another decoder/sink pair.
+            reclaimRetiredPcmPipelines();
+            auto next_pipeline = std::make_unique<RealtimePcmPlaybackPipeline>(preferences_);
             const bool ok = next_pipeline->startWithoutStoppingCurrent(
                 analyzer_executable_,
                 pcm_sink_executable_,
                 analyzer_input,
                 start_seconds,
-                active_profile);
+                  active_profile,
+                  native_mp3_decoder_);
             if (!ok) {
                 next_pipeline->stop();
                 reclaimRetiredPcmPipelines();
@@ -1180,7 +1291,7 @@ public:
             logRuntime(
                 ok ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn,
                 "audio",
-                std::string(ok ? ok_prefix : fail_prefix) + playback_input + " via realtime PCM DSP -> " + pcm_sink_executable_.path.string());
+                std::string(ok ? ok_prefix : fail_prefix) + log_input + " via realtime PCM DSP -> " + pcm_sink_executable_.path.string());
             return ok;
         }
 #endif
@@ -1220,9 +1331,9 @@ public:
         analyzer_started_ = false;
         pending_analyzer_input_ = ok ? analyzer_input : std::string{};
         pending_analyzer_start_seconds_ = start_seconds;
-        playback_started_confirmed_ = ok && analyzer_executable_.path.empty() && !network_playback_;
+        playback_started_confirmed_ = ok && (analyzer_executable_.path.empty() || !visualizationNeeded(preferences_)) && !network_playback_;
         process_started_ = ok ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        if (ok && !network_playback_) {
+        if (ok && !network_playback_ && visualizationNeeded(preferences_)) {
             analyzer_.start(analyzer_executable_, analyzer_input, start_seconds);
             analyzer_started_ = !analyzer_executable_.path.empty();
         } else {
@@ -1231,7 +1342,7 @@ public:
         logRuntime(
             ok ? RuntimeLogLevel::Info : RuntimeLogLevel::Warn,
             "audio",
-            std::string(ok ? ok_prefix : fail_prefix) + playback_input + " via " + executable_.path.string());
+            std::string(ok ? ok_prefix : fail_prefix) + log_input + " via " + executable_.path.string());
         return ok;
     }
 
@@ -1276,14 +1387,15 @@ public:
     void stop() override
     {
 #if defined(__linux__)
-        if (using_pcm_pipeline_) {
-            if (pcm_pipeline_) {
-                pcm_pipeline_->stop();
-                pcm_pipeline_.reset();
-            }
-            using_pcm_pipeline_ = false;
+        if (pcm_pipeline_) {
+            pcm_pipeline_->requestStop();
+            retired_pcm_pipelines_.push_back(std::move(pcm_pipeline_));
         }
-        drainRetiredPcmPipelines();
+        using_pcm_pipeline_ = false;
+        // The existing worker closes/reaps its children independently. Stop
+        // must not join that cleanup while holding the runtime/UI state lock.
+        // At most three pipelines remain, the same total budget as playback.
+        reclaimRetiredPcmPipelines(false);
 #endif
         if (process_.active) {
             logRuntime(RuntimeLogLevel::Debug, "audio", "Stopping playback process");
@@ -1331,6 +1443,12 @@ public:
             analyzer_.stop();
             return app::AudioPlaybackState::Finished;
         }
+        if (!visualizationNeeded(preferences_)) {
+            if (analyzer_started_) { analyzer_.stop(); analyzer_started_ = false; }
+            if (!network_playback_) playback_started_confirmed_ = true;
+        } else if (playback_started_confirmed_ && !paused_ && process_.active) {
+            startAnalyzerIfNeeded();
+        }
         if (paused_ && process_.active) {
             return app::AudioPlaybackState::Paused;
         }
@@ -1347,7 +1465,7 @@ public:
                     return app::AudioPlaybackState::Starting;
                 }
                 startAnalyzerIfNeeded();
-                if (analyzer_executable_.path.empty()
+                if (!visualizationNeeded(preferences_) || analyzer_executable_.path.empty()
                     || analyzer_.currentFrame().available
                     || elapsed >= kNetworkPlaybackUiStartDelay + kNetworkAnalyzerWarmupLimit) {
                     playback_started_confirmed_ = true;
@@ -1396,26 +1514,29 @@ private:
         pcm_pipeline_->requestStop();
         retired_pcm_pipelines_.push_back(std::move(pcm_pipeline_));
         using_pcm_pipeline_ = false;
+        reclaimRetiredPcmPipelines();
     }
 
-    void reclaimRetiredPcmPipelines()
+    void reclaimRetiredPcmPipelines(bool wait_for_capacity = true)
     {
         if (retired_pcm_pipelines_.empty()) {
             return;
         }
-        std::vector<std::unique_ptr<RealtimePcmPlaybackPipeline>> still_retiring{};
-        still_retiring.reserve(retired_pcm_pipelines_.size());
-        for (auto& pipeline : retired_pcm_pipelines_) {
-            if (!pipeline) {
-                continue;
-            }
+        // Bound decoder/sink memory during rapid repeated track changes.
+        // Ordinary restarts signal both children immediately and reclaim them
+        // in parallel; backpressure applies only when two retirements overlap.
+        while (wait_for_capacity && retired_pcm_pipelines_.size() > 2) {
+            retired_pcm_pipelines_.front()->waitForStop();
+            retired_pcm_pipelines_.erase(retired_pcm_pipelines_.begin());
+        }
+        std::erase_if(retired_pcm_pipelines_, [](auto& pipeline) {
+            if (!pipeline) return true;
             if (pipeline->stopped()) {
                 pipeline->waitForStop();
-            } else {
-                still_retiring.push_back(std::move(pipeline));
+                return true;
             }
-        }
-        retired_pcm_pipelines_ = std::move(still_retiring);
+            return false;
+        });
     }
 
     void drainRetiredPcmPipelines()
@@ -1432,17 +1553,21 @@ private:
 
     void startAnalyzerIfNeeded()
     {
-        if (analyzer_started_ || analyzer_executable_.path.empty() || pending_analyzer_input_.empty()) {
+        if (analyzer_started_ || !visualizationNeeded(preferences_) || analyzer_executable_.path.empty() || pending_analyzer_input_.empty()) {
             return;
         }
-        analyzer_.start(analyzer_executable_, pending_analyzer_input_, pending_analyzer_start_seconds_);
+        const double elapsed = playback_started_confirmed_ && process_started_ != std::chrono::steady_clock::time_point{}
+            ? std::chrono::duration<double>(std::chrono::steady_clock::now() - process_started_).count() : 0.0;
+        analyzer_.start(analyzer_executable_, pending_analyzer_input_, pending_analyzer_start_seconds_ + elapsed);
         analyzer_started_ = true;
     }
 
+    std::shared_ptr<app::RuntimePreferences> preferences_;
     AudioExecutable executable_{};
     AudioExecutable analyzer_executable_{};
 #if defined(__linux__)
     PcmOutputSink pcm_sink_executable_{};
+    fs::path native_mp3_decoder_{};
     std::unique_ptr<RealtimePcmPlaybackPipeline> pcm_pipeline_{};
     std::vector<std::unique_ptr<RealtimePcmPlaybackPipeline>> retired_pcm_pipelines_{};
 #endif
@@ -1462,9 +1587,9 @@ private:
 
 } // namespace
 
-std::shared_ptr<app::AudioPlaybackBackend> createHostAudioPlaybackBackend()
+std::shared_ptr<app::AudioPlaybackBackend> createHostAudioPlaybackBackend(std::shared_ptr<app::RuntimePreferences> preferences)
 {
-    return std::make_shared<ExternalAudioPlaybackBackend>();
+    return std::make_shared<ExternalAudioPlaybackBackend>(std::move(preferences));
 }
 
 } // namespace lofibox::platform::host

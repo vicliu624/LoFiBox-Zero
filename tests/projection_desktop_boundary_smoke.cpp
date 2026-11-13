@@ -17,13 +17,14 @@ int main()
         true,
         15,
         "http://localhost:8765"});
-    if (settings_rows.size() != 8
+    if (settings_rows.size() != 14
         || settings_rows[0].second != "ONLINE"
-        || settings_rows[5].first != "WEBUI"
-        || settings_rows[5].second != "http://localhost:8765"
-        || settings_rows[6].first != "REMOTE SETUP"
-        || settings_rows[6].second != "15 TYPES"
-        || settings_rows[7].first != "ABOUT") {
+        || settings_rows[9].first != "WEBUI"
+        || settings_rows[9].second != "ON"
+        || settings_rows[10].second != "http://localhost:8765"
+        || settings_rows[12].first != "REMOTE SETUP"
+        || settings_rows[12].second != "15 TYPES"
+        || settings_rows.back().first != "ABOUT") {
         std::cerr << "Expected Settings projection rows to expose the started WebUI address before Remote Setup.\n";
         return 1;
     }

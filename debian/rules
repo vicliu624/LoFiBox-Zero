@@ -2,12 +2,18 @@
 
 include /usr/share/dpkg/architecture.mk
 
+ifneq (,$(filter pkg.lofibox.cardputer,$(DEB_BUILD_PROFILES)))
+PRODUCT_CMAKE_ARGS = -DLOFIBOX_PRODUCT_PROFILE=cardputer
+else
+PRODUCT_CMAKE_ARGS = -DLOFIBOX_PRODUCT_PROFILE=debian
+endif
+
 ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
 export CC=$(DEB_HOST_GNU_TYPE)-gcc
 export CXX=$(DEB_HOST_GNU_TYPE)-g++
-export PKG_CONFIG=/usr/bin/pkgconf
+export PKG_CONFIG=/usr/bin/pkg-config
 export PKG_CONFIG_LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig:/usr/share/pkgconfig
-CROSS_CMAKE_ARGS = -DPKG_CONFIG_EXECUTABLE=/usr/bin/pkgconf -DPKGCONFIG_EXECUTABLE=/usr/bin/pkgconf
+CROSS_CMAKE_ARGS = -DPKG_CONFIG_EXECUTABLE=/usr/bin/pkg-config -DPKGCONFIG_EXECUTABLE=/usr/bin/pkg-config
 endif
 
 ifneq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
@@ -17,8 +23,13 @@ endif
 override_dh_strip:
 	dh_strip --no-automatic-dbgsym
 
+override_dh_dwz:
+ifeq (,$(filter pkg.lofibox.cardputer,$(DEB_BUILD_PROFILES)))
+	dh_dwz
+endif
+
 %:
 	dh $@ --buildsystem=cmake
 
 override_dh_auto_configure:
-	dh_auto_configure -- $(CROSS_CMAKE_ARGS) $(NOCHECK_CMAKE_ARGS) $(LOFIBOX_EXTRA_CMAKE_ARGS)
+	dh_auto_configure -- $(CROSS_CMAKE_ARGS) $(NOCHECK_CMAKE_ARGS) $(LOFIBOX_EXTRA_CMAKE_ARGS) $(PRODUCT_CMAKE_ARGS)

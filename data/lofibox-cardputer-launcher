@@ -1,0 +1,4 @@
+#!/bin/sh
+# SPDX-License-Identifier: CC0-1.0
+set -eu
+exec "${LOFIBOX_PRIVATE_LIBDIR:-/usr/lib/lofibox-cardputer-zero}/lofibox-applaunch" "$@"

@@ -17,7 +17,8 @@ using LibraryScanProgressCallback = std::function<void(const LibraryScanProgress
     const std::vector<std::filesystem::path>& requested_roots,
     const MetadataProvider& metadata_provider,
     LibraryScanProgressCallback progress = {},
-    const LibraryModel* previous_model = nullptr);
+    const LibraryModel* previous_model = nullptr,
+    const std::vector<std::filesystem::path>& additional_files = {});
 void rebuildLibraryIndexes(LibraryModel& model);
 
 } // namespace lofibox::app

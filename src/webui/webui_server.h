@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "webui/webui_config.h"
 #include "ui/ui_theme.h"
@@ -21,8 +22,8 @@ class WebUiHttpRouter;
 class WebUiRuntimeAdapter;
 
 // POSIX-socket HTTP + WebSocket server.
-// Runs the accept loop on a background thread.  Each connection is handled
-// synchronously (one at a time) to keep the implementation simple.
+// Runs a background accept loop with at most eight managed connection workers.
+// HTTP and WebSocket workers are stopped and joined before server destruction.
 //
 // Lifecycle:
 //   WebUiServer server{config, adapter};
@@ -72,6 +73,8 @@ private:
     int listen_fd_{-1};
     std::thread thread_{};
     std::atomic<bool> running_{false};
+    struct Worker;
+    std::vector<std::unique_ptr<Worker>> workers_{};
 };
 
 } // namespace lofibox::webui

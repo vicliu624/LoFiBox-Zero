@@ -26,6 +26,11 @@ void LibraryMutationService::startLoading() const noexcept
     controller_.startLoading();
 }
 
+int LibraryMutationService::registerLocalFile(const std::filesystem::path& path) const
+{
+    return controller_.registerLocalFile(path);
+}
+
 void LibraryMutationService::markConfiguredLibraryStale() const noexcept
 {
     controller_.markStale();

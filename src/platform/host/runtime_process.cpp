@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "platform/host/runtime_host_internal.h"
+#include "core/operation_cancellation.h"
 
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <cstdlib>
@@ -26,6 +28,7 @@
 #include <fcntl.h>
 #include <csignal>
 #include <spawn.h>
+#include <poll.h>
 #include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -136,6 +139,7 @@ std::wstring buildWindowsCommandLine(const fs::path& executable, const std::vect
 
 std::optional<std::string> captureProcessOutput(const fs::path& executable, const std::vector<std::string>& args)
 {
+    if (core::operationCancelled()) return std::nullopt;
     SECURITY_ATTRIBUTES security{};
     security.nLength = sizeof(security);
     security.bInheritHandle = TRUE;
@@ -176,8 +180,24 @@ std::optional<std::string> captureProcessOutput(const fs::path& executable, cons
     std::string output{};
     std::array<char, 4096> buffer{};
     DWORD read_bytes = 0;
-    while (ReadFile(read_handle, buffer.data(), static_cast<DWORD>(buffer.size()), &read_bytes, nullptr) && read_bytes > 0) {
-        output.append(buffer.data(), buffer.data() + read_bytes);
+    while (true) {
+        if (core::operationCancelled()) {
+            TerminateProcess(process.hProcess, 1);
+            WaitForSingleObject(process.hProcess, 1000);
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+            CloseHandle(read_handle);
+            return std::nullopt;
+        }
+        DWORD available = 0;
+        if (!PeekNamedPipe(read_handle, nullptr, 0, nullptr, &available, nullptr)) break;
+        if (available > 0) {
+            const auto wanted = std::min<DWORD>(available, static_cast<DWORD>(buffer.size()));
+            if (!ReadFile(read_handle, buffer.data(), wanted, &read_bytes, nullptr) || read_bytes == 0) break;
+            output.append(buffer.data(), read_bytes);
+        } else if (WaitForSingleObject(process.hProcess, 20) != WAIT_TIMEOUT) {
+            break;
+        }
     }
 
     WaitForSingleObject(process.hProcess, 10000);
@@ -457,8 +477,9 @@ std::optional<fs::path> resolveExecutablePath(const char* env_name, const char* 
 
 std::optional<std::string> captureProcessOutput(const fs::path& executable, const std::vector<std::string>& args)
 {
+    if (core::operationCancelled()) return std::nullopt;
     int pipe_fds[2]{-1, -1};
-    if (pipe(pipe_fds) != 0) {
+    if (pipe2(pipe_fds, O_CLOEXEC) != 0) {
         return std::nullopt;
     }
 
@@ -490,6 +511,9 @@ std::optional<std::string> captureProcessOutput(const fs::path& executable, cons
     if (action_error == 0) {
         action_error = posix_spawn_file_actions_addclose(&actions, pipe_fds[1]);
     }
+    if (action_error == 0) {
+        action_error = posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1);
+    }
     if (action_error != 0) {
         posix_spawn_file_actions_destroy(&actions);
         close(pipe_fds[0]);
@@ -498,7 +522,18 @@ std::optional<std::string> captureProcessOutput(const fs::path& executable, cons
     }
 
     pid_t child = -1;
-    const int spawned = posix_spawn(&child, executable.string().c_str(), &actions, nullptr, argv.data(), ::environ);
+    posix_spawnattr_t attributes{};
+    if (posix_spawnattr_init(&attributes) != 0) {
+        posix_spawn_file_actions_destroy(&actions);
+        close(pipe_fds[0]); close(pipe_fds[1]);
+        return std::nullopt;
+    }
+    // Give this helper its own group so cancelling a script also reaps its
+    // descendants without signalling any unrelated player/audio process.
+    posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
+    posix_spawnattr_setpgroup(&attributes, 0);
+    const int spawned = posix_spawn(&child, executable.string().c_str(), &actions, &attributes, argv.data(), ::environ);
+    posix_spawnattr_destroy(&attributes);
     posix_spawn_file_actions_destroy(&actions);
     if (spawned != 0) {
         close(pipe_fds[0]);
@@ -509,14 +544,33 @@ std::optional<std::string> captureProcessOutput(const fs::path& executable, cons
     close(pipe_fds[1]);
     std::string output{};
     std::array<char, 4096> buffer{};
-    ssize_t read_bytes = 0;
-    while ((read_bytes = read(pipe_fds[0], buffer.data(), buffer.size())) > 0) {
-        output.append(buffer.data(), static_cast<std::size_t>(read_bytes));
+    bool cancelled = false;
+    while (true) {
+        if (core::operationCancelled()) { cancelled = true; break; }
+        if (core::current_operation_token.stop_possible() || core::OperationCancellationGuard::active()) {
+            pollfd pending{pipe_fds[0], POLLIN, 0};
+            const int ready = ::poll(&pending, 1, 20);
+            if (ready < 0 && errno == EINTR) continue;
+            if (ready < 0) break;
+            if (ready == 0) continue;
+        }
+        const auto bytes = read(pipe_fds[0], buffer.data(), buffer.size());
+        if (bytes < 0 && errno == EINTR) continue;
+        if (bytes <= 0) break;
+        output.append(buffer.data(), static_cast<std::size_t>(bytes));
     }
     close(pipe_fds[0]);
-
     int status = 0;
-    waitpid(child, &status, 0);
+    if (cancelled) ::kill(-child, SIGKILL);
+    while (true) {
+        const auto waited = waitpid(child, &status,
+            (core::current_operation_token.stop_possible() || core::OperationCancellationGuard::active()) ? WNOHANG : 0);
+        if (waited == child) break;
+        if (waited < 0 && errno != EINTR) return std::nullopt;
+        if (core::operationCancelled()) { cancelled = true; ::kill(-child, SIGKILL); }
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+    if (cancelled) return std::nullopt;
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         return std::nullopt;
     }
@@ -543,6 +597,9 @@ bool runProcess(const fs::path& executable, const std::vector<std::string>& args
     int action_error = posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
     if (action_error == 0) {
         action_error = posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    }
+    if (action_error == 0) {
+        action_error = posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1);
     }
     if (action_error != 0) {
         posix_spawn_file_actions_destroy(&actions);
@@ -614,6 +671,9 @@ bool spawnAudioProcess(RunningProcess& process, const fs::path& executable, cons
     if (child == 0) {
         bindChildToParentDeath();
         setsid();
+        // The launcher itself can pass non-CLOEXEC framebuffer/socket FDs.
+        // Playback children need only their standard input/output/error.
+        closefrom(STDERR_FILENO + 1);
         std::vector<std::string> owned_args{};
         owned_args.reserve(args.size() + 1);
         owned_args.push_back(executable.filename().string());
@@ -691,7 +751,7 @@ bool audioProcessFinished(RunningProcess& process)
 bool spawnPipeProcess(RunningPipeProcess& process, const fs::path& executable, const std::vector<std::string>& args)
 {
     int pipe_fds[2]{-1, -1};
-    if (pipe(pipe_fds) != 0) {
+    if (pipe2(pipe_fds, O_CLOEXEC) != 0) {
         return false;
     }
 
@@ -709,10 +769,14 @@ bool spawnPipeProcess(RunningPipeProcess& process, const fs::path& executable, c
 
     posix_spawn_file_actions_t actions{};
     posix_spawnattr_t attributes{};
-    if (posix_spawn_file_actions_init(&actions) != 0 || posix_spawnattr_init(&attributes) != 0) {
+    if (posix_spawn_file_actions_init(&actions) != 0) {
         close(pipe_fds[0]);
         close(pipe_fds[1]);
         return false;
+    }
+    if (posix_spawnattr_init(&attributes) != 0) {
+        posix_spawn_file_actions_destroy(&actions);
+        close(pipe_fds[0]);close(pipe_fds[1]);return false;
     }
 
     short spawn_flags = 0;
@@ -724,6 +788,11 @@ bool spawnPipeProcess(RunningPipeProcess& process, const fs::path& executable, c
     (void)posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[0]);
     (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[1]);
+
+    if (posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1) != 0) {
+        posix_spawn_file_actions_destroy(&actions);posix_spawnattr_destroy(&attributes);
+        close(pipe_fds[0]);close(pipe_fds[1]);return false;
+    }
 
     pid_t child = -1;
     const int spawned = posix_spawn(&child, executable.string().c_str(), &actions, &attributes, argv.data(), ::environ);
@@ -814,7 +883,7 @@ bool pipeProcessRunning(RunningPipeProcess& process)
 bool spawnInputProcess(RunningInputProcess& process, const fs::path& executable, const std::vector<std::string>& args)
 {
     int pipe_fds[2]{-1, -1};
-    if (pipe(pipe_fds) != 0) {
+    if (pipe2(pipe_fds, O_CLOEXEC) != 0) {
         return false;
     }
 
@@ -832,10 +901,14 @@ bool spawnInputProcess(RunningInputProcess& process, const fs::path& executable,
 
     posix_spawn_file_actions_t actions{};
     posix_spawnattr_t attributes{};
-    if (posix_spawn_file_actions_init(&actions) != 0 || posix_spawnattr_init(&attributes) != 0) {
+    if (posix_spawn_file_actions_init(&actions) != 0) {
         close(pipe_fds[0]);
         close(pipe_fds[1]);
         return false;
+    }
+    if (posix_spawnattr_init(&attributes) != 0) {
+        posix_spawn_file_actions_destroy(&actions);
+        close(pipe_fds[0]);close(pipe_fds[1]);return false;
     }
 
     short spawn_flags = 0;
@@ -848,6 +921,11 @@ bool spawnInputProcess(RunningInputProcess& process, const fs::path& executable,
     (void)posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[0]);
     (void)posix_spawn_file_actions_addclose(&actions, pipe_fds[1]);
+
+    if (posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1) != 0) {
+        posix_spawn_file_actions_destroy(&actions);posix_spawnattr_destroy(&attributes);
+        close(pipe_fds[0]);close(pipe_fds[1]);return false;
+    }
 
     pid_t child = -1;
     const int spawned = posix_spawn(&child, executable.string().c_str(), &actions, &attributes, argv.data(), ::environ);

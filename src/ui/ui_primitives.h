@@ -13,6 +13,15 @@
 
 namespace lofibox::ui {
 
+enum class ActionIcon {
+    Left, Right, Back, Open, Player, Search, PageUp, PageDown,
+    PreviousTrack, Play, Pause, NextTrack, Lyrics, Queue, Sort, Repeat,
+    Equalizer, Minus, Plus, Library, Settings, Help, Keyboard, Save,
+};
+
+// Crisp 18x18 controls, drawn in the theme's own palette without font glyphs.
+void drawActionIcon(core::Canvas& canvas, ActionIcon icon, int x, int y, core::Color color);
+
 [[nodiscard]] std::string upperText(std::string_view text);
 [[nodiscard]] std::string fitText(std::string_view text, std::size_t max_chars);
 [[nodiscard]] std::string fitUpper(std::string_view text, std::size_t max_chars);

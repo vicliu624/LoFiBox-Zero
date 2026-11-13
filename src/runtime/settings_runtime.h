@@ -13,7 +13,11 @@ class SettingsRuntime {
 public:
     explicit SettingsRuntime(SettingsRuntimeState& state) noexcept;
 
-    void applyLive(std::string output_mode, std::string network_policy, std::string sleep_timer);
+    bool applyLive(std::string output_mode, std::string network_policy, std::string sleep_timer,
+                   std::string screen_timeout = {},
+                   std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
+    [[nodiscard]] bool sleepTimerExpired(std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now()) const noexcept;
+    [[nodiscard]] std::chrono::seconds screenTimeout() const noexcept;
     void requestShutdown() noexcept;
     void requestReload() noexcept;
     [[nodiscard]] bool shutdownRequested() const noexcept;

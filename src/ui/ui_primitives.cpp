@@ -188,6 +188,86 @@ void drawFadedTextWindow(
     }
 }
 
+void drawActionIcon(core::Canvas& canvas, ActionIcon icon, int x, int y, core::Color color)
+{
+    const auto line = [&](int a, int b, int c, int d) { drawLine(canvas, x+a, y+b, x+c, y+d, color, 2); };
+    const auto rect = [&](int a, int b, int w, int h) { canvas.fillRect(x+a, y+b, w, h, color); };
+    const auto ring = [&](int cx, int cy, int radius, int thickness = 2) {
+        for (int row = -radius; row <= radius; ++row) {
+            for (int col = -radius; col <= radius; ++col) {
+                const int distance = col*col + row*row;
+                if (distance <= radius*radius && distance > (radius-thickness)*(radius-thickness))
+                    canvas.setPixel(x+cx+col, y+cy+row, color);
+            }
+        }
+    };
+    const auto play = [&](int offset) {
+        for (int row = -6; row <= 6; ++row)
+            rect(offset, 8+row, 1 + ((6-std::abs(row))*8)/6, 1);
+    };
+    switch (icon) {
+    case ActionIcon::Left: line(11, 3, 5, 9); line(5, 9, 11, 15); break;
+    case ActionIcon::Right: line(6, 3, 12, 9); line(12, 9, 6, 15); break;
+    case ActionIcon::Back:
+        line(7, 3, 2, 8); line(2, 8, 7, 13); line(3, 8, 11, 8);
+        line(11, 8, 14, 11); line(14, 11, 14, 15); break;
+    case ActionIcon::Open:
+        line(15, 2, 15, 9); line(15, 9, 3, 9);
+        line(3, 9, 7, 5); line(3, 9, 7, 13); break;
+    case ActionIcon::Player:
+        ring(8, 8, 7); rect(7, 5, 2, 7); rect(9, 6, 2, 5); rect(11, 7, 2, 3); break;
+    case ActionIcon::Search: ring(7, 7, 6); line(11, 11, 16, 16); break;
+    case ActionIcon::PageUp:
+        line(3, 7, 8, 2); line(8, 2, 13, 7); line(3, 14, 8, 9); line(8, 9, 13, 14); break;
+    case ActionIcon::PageDown:
+        line(3, 3, 8, 8); line(8, 8, 13, 3); line(3, 10, 8, 15); line(8, 15, 13, 10); break;
+    case ActionIcon::PreviousTrack:
+        rect(2, 2, 2, 13);
+        for (int row = -6; row <= 6; ++row) rect(6+std::abs(row), 8+row, 8-std::abs(row), 1);
+        break;
+    case ActionIcon::Play: play(5); break;
+    case ActionIcon::Pause: rect(4, 2, 3, 13); rect(11, 2, 3, 13); break;
+    case ActionIcon::NextTrack: play(2); rect(14, 2, 2, 13); break;
+    case ActionIcon::Lyrics:
+        canvas.strokeRect(x+3, y+1, 12, 16, color, 2);
+        rect(6, 5, 6, 2); rect(6, 9, 6, 2); rect(6, 13, 4, 2); break;
+    case ActionIcon::Queue:
+        rect(1, 2, 10, 2); rect(1, 7, 10, 2); rect(1, 12, 6, 2);
+        line(13, 10, 13, 16); line(13, 16, 17, 13); line(17, 13, 13, 10); break;
+    case ActionIcon::Sort:
+        line(4, 2, 4, 15); line(1, 5, 4, 2); line(4, 2, 7, 5);
+        rect(10, 3, 7, 2); rect(10, 8, 5, 2); rect(10, 13, 3, 2); break;
+    case ActionIcon::Repeat:
+        line(3, 5, 14, 5); line(14, 5, 11, 2); line(14, 5, 11, 8);
+        line(14, 12, 3, 12); line(3, 12, 6, 9); line(3, 12, 6, 15); break;
+    case ActionIcon::Equalizer:
+    case ActionIcon::Settings:
+        for (int col = 3; col <= 15; col += 6) {
+            rect(col, 2, 2, 14);
+            const int knob = col == 9 ? 11 : 5;
+            rect(col-2, knob, 6, 3);
+        }
+        break;
+    case ActionIcon::Minus: rect(3, 8, 12, 2); break;
+    case ActionIcon::Plus: rect(3, 8, 12, 2); rect(8, 3, 2, 12); break;
+    case ActionIcon::Library:
+        canvas.strokeRect(x+2, y+1, 11, 14, color, 2);
+        line(6, 16, 16, 16); line(16, 5, 16, 16); rect(5, 5, 5, 2); rect(5, 9, 5, 2); break;
+    case ActionIcon::Help:
+        ring(8, 8, 8, 1);
+        rect(6, 4, 4, 1); rect(5, 5, 1, 2); rect(10, 5, 1, 3);
+        rect(8, 8, 2, 1); rect(7, 9, 1, 2); rect(7, 13, 1, 1); break;
+    case ActionIcon::Keyboard:
+        canvas.strokeRect(x, y+3, 18, 12, color, 1);
+        for (int row : {6, 9}) for (int col : {3, 6, 9, 12, 15}) rect(col, row, 1, 1);
+        rect(5, 12, 8, 1); break;
+    case ActionIcon::Save:
+        canvas.strokeRect(x+2, y+1, 14, 16, color, 2);
+        canvas.strokeRect(x+5, y+1, 7, 6, color, 2);
+        canvas.strokeRect(x+5, y+10, 8, 7, color, 2); break;
+    }
+}
+
 void drawTopBar(
     core::Canvas& canvas,
     const UiTheme& theme,
@@ -203,7 +283,8 @@ void drawTopBar(
     canvas.fillRect(0, bar_h - 1, core::kDisplayWidth, 1, theme.palette.divider);
 
     const int text_y = centeredTextY(0, bar_h, 1);
-    drawText(canvas, left_hint.empty() ? std::string_view{"F1:HELP"} : left_hint, 6, text_y, theme.palette.text_secondary, 1);
+    if (left_hint.empty()) drawActionIcon(canvas, ActionIcon::Help, 7, 1, theme.palette.text_secondary);
+    else drawText(canvas, left_hint, 6, text_y, theme.palette.text_secondary, 1);
 
     drawText(canvas, title, centeredX(upperText(title), 1), text_y, theme.palette.text_primary, 1);
 

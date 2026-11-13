@@ -2,7 +2,6 @@
 
 #include "plugins/plugin_runtime.h"
 
-#include <cassert>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -75,7 +74,10 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "error": {"code": -32601, "message": "unknown method"}, "id": request_id})
 )PY";
 
-    assert(writeText(root / "provider.py", provider));
+    if (!writeText(root / "provider.py", provider)) {
+        std::cerr << "Failed to write plugin runtime test provider.\n";
+        return 1;
+    }
 
     lofibox::plugins::PluginRuntimeConfig config{};
     config.plugin_dir = root;
@@ -92,13 +94,16 @@ for line in sys.stdin:
     }
 
     const auto echo = runtime.call("echo", R"({"value":"ok"})");
-    assert(echo);
-    assert(echo->find(R"("value":"ok")") != std::string::npos);
-    assert(runtime.isHealthy());
+    if (!echo || echo->find(R"("value":"ok")") == std::string::npos || !runtime.isHealthy()) {
+        std::cerr << "Plugin echo failed or runtime became unhealthy.\n";
+        return 1;
+    }
 
     const auto ping = runtime.call("ping", "{}");
-    assert(ping);
-    assert(ping->find(R"("ok":true)") != std::string::npos);
+    if (!ping || ping->find(R"("ok":true)") == std::string::npos) {
+        std::cerr << "Plugin ping failed.\n";
+        return 1;
+    }
 
     runtime.stop();
     fs::remove_all(root, ec);

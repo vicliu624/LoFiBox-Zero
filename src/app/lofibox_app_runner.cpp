@@ -7,6 +7,7 @@
 
 #include "app/lofibox_app.h"
 #include "core/display_profile.h"
+#include "core/frame_deadline.h"
 
 namespace lofibox::app {
 
@@ -26,9 +27,13 @@ void runLoFiBoxApp(
     constexpr auto kFrameTime = std::chrono::milliseconds(33);
     auto next_frame = clock::now();
     const auto started_at = next_frame;
+    auto next_render = started_at;
+    bool was_render_enabled = false;
+    bool was_saver = app.batterySaverEnabled();
 
     while (presenter.pump()) {
-        for (const auto& event : presenter.drainInput()) {
+        const auto events = presenter.drainInput();
+        for (const auto& event : events) {
             app.handleInput(event);
         }
 
@@ -40,15 +45,23 @@ void runLoFiBoxApp(
         }
 
         app.update();
-        app.render(canvas);
-        presenter.present(canvas);
-
-        next_frame += kFrameTime;
-        std::this_thread::sleep_until(next_frame);
-
-        if (clock::now() > next_frame + std::chrono::milliseconds(250)) {
-            next_frame = clock::now();
+        if (app.runtimeShutdownRequested()) break;
+        presenter.setIdleTimeout(app.screenTimeout());
+        const bool render_enabled = presenter.renderEnabled();
+        const bool saver = app.batterySaverEnabled();
+        // A static saver page needs only progress/status refreshes. Input,
+        // wake and mode changes draw immediately at the normal input cadence.
+        if (render_enabled && (!saver || !was_render_enabled || saver != was_saver
+            || !events.empty() || clock::now() >= next_render)) {
+            app.render(canvas);
+            presenter.present(canvas);
+            next_render = clock::now() + std::chrono::milliseconds{500};
         }
+        was_render_enabled = render_enabled;
+        was_saver = saver;
+
+        next_frame = core::nextFrameDeadline(next_frame, clock::now(), kFrameTime);
+        std::this_thread::sleep_until(next_frame);
     }
 }
 

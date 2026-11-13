@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 ARG BASE_IMAGE=debian:trixie-slim
 FROM ${BASE_IMAGE}
 
@@ -17,6 +18,8 @@ RUN apt-get -o Acquire::Retries=5 update \
     desktop-file-utils \
     libegl-dev \
     libfreetype6-dev \
+    libmpg123-dev \
+    libsoxr-dev \
     libwayland-dev \
     libx11-dev \
     libxkbcommon-dev \

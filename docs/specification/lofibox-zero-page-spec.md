@@ -229,6 +229,7 @@ Each current implementation page has its own dedicated specification file:
 - `Playlist Detail`: `docs/specification/current-ui-pages/playlist-detail.md`
 - `Search`: `docs/specification/current-ui-pages/search.md`
 - `Now Playing`: `docs/specification/current-ui-pages/now-playing.md`
+- `Queue / Up Next`: `docs/specification/current-ui-pages/queue.md`
 - `Equalizer`: `docs/specification/current-ui-pages/equalizer.md`
 - `Settings`: `docs/specification/current-ui-pages/settings.md`
 - `Remote Setup`: `docs/specification/current-ui-pages/remote-setup.md`

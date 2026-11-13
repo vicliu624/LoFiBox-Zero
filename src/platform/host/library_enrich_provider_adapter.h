@@ -14,15 +14,18 @@
 #include <cstdlib>
 #include <filesystem>
 #include <optional>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
 
 #include "app/library_enrich_provider.h"
+#include "app/runtime_services.h"
 #include "cache/cache_manager.h"
 #include "platform/host/runtime_enrichment_client_helpers.h"
 #include "platform/host/runtime_host_internal.h"
+#include "core/operation_cancellation.h"
 
 namespace lofibox::platform::host {
 namespace rt = ::lofibox::platform::host::runtime_detail;
@@ -42,61 +45,54 @@ std::string wikipediaUrlForTitle(std::string_view title)
     url.reserve(kWikipediaApiBase.size() + 32 + title.size());
     url += kWikipediaApiBase;
     url += "&titles=";
-    // replace spaces with underscores for Wikipedia page titles
-    for (char ch : title) {
-        url += (ch == ' ') ? '_' : ch;
-    }
+    std::string normalized{title};
+    std::replace(normalized.begin(), normalized.end(), ' ', '_');
+    url += rt::urlEncode(normalized);
     return url;
 }
 
 // Extract the first page extract from a Wikipedia JSON response.
-// Very simple parser: finds "extract":" and reads until the next unescaped ".
+// Locate the string field and reuse the host JSON decoder for escaped Unicode.
 std::optional<std::string> parseWikipediaExtract(std::string_view json)
 {
-    constexpr std::string_view marker = "\"extract\":\"";
+    constexpr std::string_view marker = "\"extract\"";
     auto pos = json.find(marker);
     if (pos == std::string_view::npos) return std::nullopt;
 
     pos += marker.size();
-    std::string result;
-    result.reserve(512);
-    while (pos < json.size()) {
-        char ch = json[pos];
-        if (ch == '\\' && pos + 1 < json.size()) {
-            char next = json[++pos];
-            switch (next) {
-            case 'n':  result += '\n'; break;
-            case 't':  result += '\t'; break;
-            case '"':  result += '"';  break;
-            case '\\': result += '\\'; break;
-            default:   result += next; break;
-            }
-        } else if (ch == '"') {
-            break;
-        } else {
-            result += ch;
-        }
-        ++pos;
-    }
-    if (result.empty()) return std::nullopt;
+    const auto skipSpace = [&] {
+        while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t' || json[pos] == '\r' || json[pos] == '\n')) ++pos;
+    };
+    skipSpace();
+    if (pos == json.size() || json[pos++] != ':') return std::nullopt;
+    skipSpace();
+    auto result = rt::parseJsonStringAt(json, pos);
+    if (!result || result->empty()) return std::nullopt;
     return result;
 }
 
 // Rate-limit helper — wait at least 200ms between Wikipedia requests.
 std::chrono::steady_clock::time_point g_last_wikipedia_request{};
+std::mutex g_wikipedia_request_mutex{};
 
 void respectWikipediaRateLimit()
 {
     using clock = std::chrono::steady_clock;
     constexpr auto kMinInterval = std::chrono::milliseconds(200);
-    const auto now = clock::now();
-    if (g_last_wikipedia_request != clock::time_point{}) {
-        const auto elapsed = now - g_last_wikipedia_request;
-        if (elapsed < kMinInterval) {
-            std::this_thread::sleep_for(kMinInterval - elapsed);
-        }
+    clock::time_point scheduled;
+    {
+        const std::lock_guard lock{g_wikipedia_request_mutex};
+        scheduled = std::max(clock::now(), g_last_wikipedia_request + kMinInterval);
+        g_last_wikipedia_request = scheduled;
     }
-    g_last_wikipedia_request = clock::now();
+    if (!core::current_operation_token.stop_possible()) {
+        std::this_thread::sleep_until(scheduled);
+        return;
+    }
+    while (clock::now() < scheduled) {
+        if (core::operationCancelled()) return;
+        std::this_thread::sleep_until(std::min(scheduled, clock::now() + std::chrono::milliseconds{20}));
+    }
 }
 
 } // namespace
@@ -104,8 +100,10 @@ void respectWikipediaRateLimit()
 class LibraryEnrichProviderAdapter final : public app::LibraryEnrichProvider {
 public:
     LibraryEnrichProviderAdapter(
-            std::shared_ptr<lofibox::cache::CacheManager> cache) noexcept
-        : cache_(std::move(cache))
+            std::shared_ptr<lofibox::cache::CacheManager> cache,
+            std::shared_ptr<app::ConnectivityProvider> connectivity = {},
+            std::shared_ptr<app::RuntimePreferences> preferences = {}) noexcept
+        : cache_(std::move(cache)), connectivity_(std::move(connectivity)), preferences_(std::move(preferences))
     {
 #if defined(_WIN32)
         curl_path_ = rt::resolveExecutablePath(L"CURL_PATH", L"curl.exe");
@@ -128,6 +126,8 @@ public:
             return info;
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !onlineAllowed(); }};
+        if (core::operationCancelled()) return std::nullopt;
         // Wikipedia lookup
         respectWikipediaRateLimit();
         const auto url = wikipediaUrlForTitle(artist_name);
@@ -164,6 +164,8 @@ public:
             return info;
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !onlineAllowed(); }};
+        if (core::operationCancelled()) return std::nullopt;
         // Wikipedia page title: "Album Name (Artist Name album)"
         std::string title;
         title.reserve(album_name.size() + artist_name.size() + 16);
@@ -190,7 +192,14 @@ public:
     }
 
 private:
+    bool onlineAllowed() const
+    {
+        return (!connectivity_ || connectivity_->connected())
+            && (!preferences_ || !preferences_->effective(app::RuntimeFeature::BatterySaver));
+    }
     std::shared_ptr<lofibox::cache::CacheManager> cache_;
+    std::shared_ptr<app::ConnectivityProvider> connectivity_;
+    std::shared_ptr<app::RuntimePreferences> preferences_;
     std::optional<std::filesystem::path> curl_path_{};
 };
 

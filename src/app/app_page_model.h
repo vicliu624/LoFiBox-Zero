@@ -9,10 +9,12 @@
 
 #include "app/app_page.h"
 #include "app/app_state.h"
+#include "app/runtime_preferences.h"
+#include "core/display_profile.h"
 
 namespace lofibox::app {
 
-inline constexpr int kPageModelMaxVisibleRows = 6;
+inline constexpr int kPageModelMaxVisibleRows = core::kListVisibleRows;
 
 struct AppPageModelInput {
     AppPage page{AppPage::Boot};
@@ -24,6 +26,9 @@ struct AppPageModelInput {
     std::string webui_url{};
     std::optional<std::vector<std::pair<std::string, std::string>>> source_manager_rows{};
     std::optional<std::vector<std::pair<std::string, std::string>>> page_rows{};
+    std::uint32_t preference_flags{RuntimePreferences::kDefaults};
+    bool device_lights{false};
+    bool preferences_error{false};
 };
 
 struct AppPageModel {
@@ -31,6 +36,14 @@ struct AppPageModel {
     std::vector<std::pair<std::string, std::string>> rows{};
     bool browse_list{false};
     int max_visible_rows{kPageModelMaxVisibleRows};
+    // A page may project only the visible portion of a large shared list.
+    // Negative total_rows retains the ordinary complete-vector contract.
+    int total_rows{-1};
+    int row_offset{0};
+    [[nodiscard]] int rowCount() const noexcept
+    {
+        return total_rows >= 0 ? total_rows : static_cast<int>(rows.size());
+    }
 };
 
 [[nodiscard]] AppPageModel buildAppPageModel(const AppPageModelInput& input);

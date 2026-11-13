@@ -7,11 +7,16 @@
 #include <cstddef>
 #include <exception>
 #include <utility>
+#include <unordered_map>
+#include <unordered_set>
+#include <limits>
 
 #include "app/library_navigation_service.h"
 #include "app/remote_profile_store.h"
 #include "application/library_open_action_service.h"
 #include "application/library_query_service.h"
+#include "app/library_scanner.h"
+#include "core/playback_input.h"
 
 namespace lofibox::app {
 namespace {
@@ -126,8 +131,84 @@ LibraryScanProgress LibraryController::scanProgress() const
 
 void LibraryController::refreshLibrary(const std::vector<std::filesystem::path>& media_roots, const MetadataProvider& metadata_provider)
 {
-    repository_.rescan(media_roots, metadata_provider);
+    auto next = repository_.rebuildModel(media_roots, metadata_provider, {}, explicitTracks());
+    preserveExplicitTracks(next);
+    repository_.applyRescanModel(std::move(next));
     setSongsContextAll();
+}
+
+int LibraryController::registerLocalFile(const std::filesystem::path& path)
+{
+    const auto input = core::normalizePlaybackInput(core::pathUtf8(path));
+    if (!input || input->remote) return 0;
+    const auto canonical = std::filesystem::u8path(input->value);
+    auto& model = repository_.mutableModel();
+    int next_id = 1;
+    for (const auto& track : model.tracks) {
+        if (!track.remote && track.path == canonical) {
+            if (std::none_of(explicit_tracks_.begin(), explicit_tracks_.end(), [&](const auto& item) { return item.first == track.id && item.second == canonical; })) explicit_tracks_.emplace_back(track.id, canonical);
+            return track.id;
+        }
+        if (track.id == std::numeric_limits<int>::max()) return 0;
+        next_id = std::max(next_id, track.id + 1);
+    }
+    TrackRecord track{};
+    track.id = next_id;
+    track.path = canonical;
+    track.title = core::pathUtf8(canonical.stem());
+    track.duration_seconds = 0; // No invented duration before the decoder/tag read.
+    track.pending_local_title = true;
+    model.tracks.push_back(std::move(track));
+    explicit_tracks_.emplace_back(next_id, canonical);
+    repository_.rebuildDerivedIndexes();
+    return next_id;
+}
+
+std::vector<TrackRecord> LibraryController::explicitTracks() const
+{
+    std::vector<TrackRecord> tracks;
+    tracks.reserve(explicit_tracks_.size());
+    for (const auto& [id, path] : explicit_tracks_) {
+        std::error_code ec;
+        if (const auto* track = repository_.findTrack(id); track && track->path == path && std::filesystem::is_regular_file(path, ec) && !ec) tracks.push_back(*track);
+    }
+    return tracks;
+}
+
+void LibraryController::preserveExplicitTracks(LibraryModel& next)
+{
+    if (explicit_tracks_.empty()) return;
+    const auto opened = explicitTracks();
+    std::erase_if(explicit_tracks_, [&](const auto& item) {
+        return std::none_of(opened.begin(), opened.end(), [&](const auto& track) { return item.first == track.id && item.second == track.path; });
+    });
+    std::unordered_set<int> reserved;
+    int next_id = 1;
+    for (const auto& track : next.tracks) next_id = std::max(next_id, track.id + 1);
+    for (const auto& track : opened) {
+        reserved.insert(track.id);
+        next_id = std::max(next_id, track.id + 1);
+    }
+    // A file can be opened while a scan is in flight. Retain that file's live
+    // identity and counters; remap any unrelated new scan record using its ID.
+    for (auto& track : next.tracks) {
+        const auto match = std::find_if(opened.begin(), opened.end(), [&](const auto& item) { return !track.remote && item.path == track.path; });
+        if (match != opened.end()) {
+            track.id = match->id;
+            track.play_count = std::max(track.play_count, match->play_count);
+            track.last_played = std::max(track.last_played, match->last_played);
+            if (track.pending_local_title && !match->pending_local_title) {
+                track.title = match->title;
+                track.pending_local_title = false;
+            }
+        } else if (reserved.contains(track.id)) {
+            track.id = next_id++;
+        }
+    }
+    for (const auto& track : opened) {
+        if (std::none_of(next.tracks.begin(), next.tracks.end(), [&](const auto& item) { return !item.remote && item.path == track.path; })) next.tracks.push_back(track);
+    }
+    rebuildLibraryIndexes(next);
 }
 
 void LibraryController::beginAsyncRefreshLibrary(
@@ -163,15 +244,16 @@ void LibraryController::beginAsyncRefreshLibrary(
     scan_running_.store(true);
 
     auto roots = media_roots;
+    auto opened = explicitTracks();
     try {
-        scan_thread_ = std::thread([this, roots = std::move(roots), provider = std::move(metadata_provider)]() {
+        scan_thread_ = std::thread([this, roots = std::move(roots), provider = std::move(metadata_provider), opened = std::move(opened)]() {
             try {
                 auto model = repository_.rebuildModel(
                     roots,
                     *provider,
                     [this](const LibraryScanProgress& progress) {
                         publishScanProgress(progress);
-                    });
+                    }, opened);
                 {
                     std::lock_guard lock{async_mutex_};
                     pending_scan_model_ = std::move(model);
@@ -231,6 +313,7 @@ bool LibraryController::pollAsyncRefreshLibrary()
     }
 
     if (model) {
+        preserveExplicitTracks(*model);
         repository_.applyRescanModel(std::move(*model));
         setSongsContextAll();
         LibraryScanProgress progress = scanProgress();
@@ -377,6 +460,14 @@ std::vector<int> LibraryController::trackIdsForCurrentSongs() const
 
 std::vector<int> LibraryController::playlistTrackIds() const
 {
+    if (list_context_.playlist.kind == PlaylistKind::OnTheGo) return list_context_.on_the_go_ids;
+    std::unordered_map<int, const TrackRecord*> tracks;
+    tracks.reserve(repository_.model().tracks.size());
+    for (const auto& track : repository_.model().tracks) tracks.emplace(track.id, &track);
+    const auto lookup = [&tracks](int id) -> const TrackRecord* {
+        const auto it = tracks.find(id);
+        return it == tracks.end() ? nullptr : it->second;
+    };
     std::vector<int> ids{};
     switch (list_context_.playlist.kind) {
     case PlaylistKind::OnTheGo:
@@ -384,9 +475,9 @@ std::vector<int> LibraryController::playlistTrackIds() const
         break;
     case PlaylistKind::RecentlyAdded:
         ids = allSongIdsSorted();
-        std::sort(ids.begin(), ids.end(), [this](int lhs, int rhs) {
-            const auto* left = findTrack(lhs);
-            const auto* right = findTrack(rhs);
+        std::sort(ids.begin(), ids.end(), [&lookup](int lhs, int rhs) {
+            const auto* left = lookup(lhs);
+            const auto* right = lookup(rhs);
             if (!left || !right) {
                 return lhs < rhs;
             }
@@ -395,9 +486,9 @@ std::vector<int> LibraryController::playlistTrackIds() const
         break;
     case PlaylistKind::MostPlayed:
         ids = allSongIdsSorted();
-        std::sort(ids.begin(), ids.end(), [this](int lhs, int rhs) {
-            const auto* left = findTrack(lhs);
-            const auto* right = findTrack(rhs);
+        std::sort(ids.begin(), ids.end(), [&lookup](int lhs, int rhs) {
+            const auto* left = lookup(lhs);
+            const auto* right = lookup(rhs);
             if (!left || !right) {
                 return lhs < rhs;
             }
@@ -409,9 +500,9 @@ std::vector<int> LibraryController::playlistTrackIds() const
         break;
     case PlaylistKind::RecentlyPlayed:
         ids = allSongIdsSorted();
-        std::sort(ids.begin(), ids.end(), [this](int lhs, int rhs) {
-            const auto* left = findTrack(lhs);
-            const auto* right = findTrack(rhs);
+        std::sort(ids.begin(), ids.end(), [&lookup](int lhs, int rhs) {
+            const auto* left = lookup(lhs);
+            const auto* right = lookup(rhs);
             if (!left || !right) {
                 return lhs < rhs;
             }
@@ -420,8 +511,8 @@ std::vector<int> LibraryController::playlistTrackIds() const
             }
             return left->title < right->title;
         });
-        ids.erase(std::remove_if(ids.begin(), ids.end(), [this](int id) {
-            const auto* track = findTrack(id);
+        ids.erase(std::remove_if(ids.begin(), ids.end(), [&lookup](int id) {
+            const auto* track = lookup(id);
             return !track || track->last_played == 0;
         }), ids.end());
         break;
@@ -504,7 +595,9 @@ std::optional<std::string> LibraryController::titleOverrideForPage(AppPage page)
 
 std::optional<std::vector<std::pair<std::string, std::string>>> LibraryController::rowsForPage(AppPage page) const
 {
-    return LibraryNavigationService::rowsForPage(page, repository_.model(), list_context_, visibleAlbums(), playlistTrackIds());
+    return LibraryNavigationService::rowsForPage(page, repository_.model(), list_context_,
+        page == AppPage::Albums ? visibleAlbums() : std::vector<AlbumRecord>{},
+        page == AppPage::PlaylistDetail ? playlistTrackIds() : std::vector<int>{});
 }
 
 LibraryOpenResult LibraryController::openSelectedListItem(AppPage page, int selected)

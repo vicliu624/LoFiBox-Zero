@@ -6,6 +6,104 @@ Normative archive rules live in `docs/specification/debian-official-archive-spec
 The temporary pre-archive GitHub Pages APT repository is governed by
 `docs/specification/github-pages-apt-repository-spec.md`.
 
+## Product Artifacts
+
+Two release artifacts share the same application core:
+
+| Artifact | CMake profile | Debian package | Display |
+| --- | --- | --- | --- |
+| Cardputer Zero | `cardputer` | `lofibox-cardputer-zero` | framebuffer + evdev |
+| Debian desktop | `debian` | `lofibox` | native Wayland |
+
+The profiles force their display target and disable X11 and the other display
+backend. TUI and WebUI remain available in both. The `developer` CMake profile
+retains individually selectable adapters for development.
+
+```sh
+cmake --preset cardputer-release
+cmake --build --preset cardputer-release-build
+
+cmake --preset debian-wayland-release
+cmake --build --preset debian-wayland-release-build
+```
+
+Build packages in separate clean source/build directories with Debian build
+dependencies installed. The package build profile chooses both package identity
+and CMake product profile:
+
+```sh
+# Debian desktop: lofibox_<version>_<arch>.deb
+DEB_BUILD_OPTIONS=parallel=2 dpkg-buildpackage -us -uc -b
+
+# Cardputer: lofibox-cardputer-zero_<version>_<arch>.deb
+DEB_BUILD_OPTIONS=parallel=1 dpkg-buildpackage -us -uc -b -Ppkg.lofibox.cardputer
+```
+
+For cross compilation add `-aarm64` and install matching target build libraries.
+Match the target distribution and architecture; an amd64 or Ubuntu validation
+package is not a Cardputer deployment package. The two binary packages conflict
+because they are alternative builds of the same application and share per-user
+state and a runtime socket; install the package for the intended machine. This avoids apt silently selecting a display
+backend through inherited session variables.
+
+Cardputer's `lofibox-cardputer-zero` command goes through its APPLaunch wrapper, including
+framebuffer/keyboard detection and appliance WebUI defaults. Debian's `lofibox`
+command directly execs `lofibox-wayland` (CLI help/version also work without an
+active Wayland session). Package smoke tests enforce this separation.
+
+The Cardputer Store requires namespaced installation paths. Its CLI and TUI are
+`/usr/bin/lofibox-cardputer-zero` and `/usr/bin/lofibox-cardputer-zero-tui`,
+private binaries/helpers live in `/usr/lib/lofibox-cardputer-zero`, and assets
+and plugins in `/usr/share/lofibox-cardputer-zero`. APPLaunch's desktop file and
+PNG are named `lofibox-cardputer-zero`; its desktop entry uses the absolute PNG
+path supported by APPLaunch and standard desktop validation. The generic
+desktop/AppStream/MIME integrations are installed only by the Debian build.
+
+Never reuse a debhelper completion stamp after changing source. Before a local
+continuation build, clear staging and completion stamps with `dh_clean`; then
+rebuild and compare the actual package payload with the intended source.
+Package-level checks must verify the `.desktop` Exec target exists and is
+executable, the icon resolves, private helper/asset paths match the namespace,
+and the package contains the current application code. A successful compiler
+run elsewhere does not verify the contents of an already-created `.deb`.
+
+## Optional Real-Browser Regression
+
+The default test suite does not require a browser. For the embedded WebUI and
+native Wayland integration test on a Linux host, install test tools separately:
+Chromium, Weston (headless backend), ffmpeg and Python's `websocket-client`.
+Chromium, Weston and `websocket-client` are test tools; FFmpeg is also a playback
+runtime dependency of both product packages.
+
+Both Linux product packages build a private `/usr/lib/lofibox/lofibox-mp3-decoder`
+with `libmpg123-dev` and `libsoxr-dev`; debhelper records the `libmpg123-0`
+and `libsoxr0` runtime dependencies. Native MP3 decoding retains the source
+rate internally and resamples to the shared 48 kHz stereo float32 PCM contract
+before the product DSP and sink consume it.
+The helper handles local 44.1 kHz stereo MP3 with HQ resampling to the product
+rate and without ReplayGain adjustment. A bounded check of Xing/Info byte extent and trailing ID3v1/APEv2
+tags keeps concatenated or unverified streams on the existing FFmpeg path.
+Other formats, channel counts, sample rates and network streams also use
+FFmpeg. Fallback replaces the helper process so PID, pipe and cleanup ownership
+remain with the existing audio pipeline. Developer builds missing libmpg123 or
+libsoxr continue to use FFmpeg; product builds require both unless the helper option is
+explicitly disabled. Cross builds must set `PKG_CONFIG_LIBDIR` for the target
+architecture, as `debian/rules` does.
+
+```sh
+cmake -S . -B build-browser -DCMAKE_BUILD_TYPE=Release \
+  -DLOFIBOX_PRODUCT_PROFILE=debian -DBUILD_TESTING=ON -DLOFIBOX_BROWSER_TESTS=ON
+cmake --build build-browser --target lofibox_zero_wayland
+ctest --test-dir build-browser -R lofibox_webui_browser_smoke --output-on-failure
+```
+
+The test creates temporary HOME/XDG/media data and an isolated headless Chromium
+profile, runs Weston without the user's desktop session, and records screenshots,
+logs and `report.json` under `build-browser/browser-results`. Failed checks fail
+CTest. The paced audio sink and fixture enrichment helper keep the run offline;
+real hardware sound, remote services and device performance require separate
+acceptance. The isolated headless test uses Chromium's `--no-sandbox` option.
+
 ## Standard Build
 
 ```sh
@@ -180,7 +278,8 @@ Packaging work should support:
 
 ## Install Paths
 
-The package should install into standard paths:
+The Debian desktop package installs into these standard paths (the Cardputer
+namespace is described above):
 
 - `/usr/bin/lofibox`
 - `/usr/bin/lofibox-tui`

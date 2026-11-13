@@ -150,7 +150,7 @@ AppDebugSnapshot AppRuntimeContext::snapshot() const
         currentPage(),
         library_state == LibraryIndexState::Ready || library_state == LibraryIndexState::Degraded,
         services.libraryQueries().model().tracks.size(),
-        pageModel().rows.size(),
+        static_cast<std::size_t>(pageModel().rowCount()),
         state_.navigation.list_selection.selected,
         state_.navigation.list_selection.scroll,
         playback.current_track_id.has_value(),
@@ -449,6 +449,13 @@ const TrackRecord* AppRuntimeContext::findTrack(int id) const noexcept
 void AppRuntimeContext::pushPage(AppPage page)
 {
     commandPushPage(*this, page);
+    if (page == AppPage::Queue) {
+        const auto queue = appServices().playbackStatus().queueSnapshot();
+        state_.navigation.list_selection.selected = std::max(0, queue.active_index);
+        const auto& spacing = theme_.spacing;
+        state_.navigation.clampListSelection(static_cast<int>(queue.active_ids.size()),
+            core::visibleListRows(spacing.list_top, spacing.list_row_height, spacing.max_visible_rows));
+    }
 }
 
 void AppRuntimeContext::popPage()
@@ -532,7 +539,7 @@ void AppRuntimeContext::openLibraryPage()
 
 void AppRuntimeContext::openQueuePage()
 {
-    commandPushPage(*this, AppPage::Queue);
+    pushPage(AppPage::Queue);
 }
 
 void AppRuntimeContext::openSettingsPage()
@@ -551,9 +558,33 @@ const ui::UiTheme& AppRuntimeContext::theme() const noexcept
     return theme_;
 }
 
+bool AppRuntimeContext::spectrumEnabled() const noexcept
+{
+    return appServices().runtimeServices().ui.preferences->effective(RuntimeFeature::Spectrum);
+}
+
 AppPageModel AppRuntimeContext::pageModel() const
 {
     const auto page = currentPage();
+    if (page == AppPage::Queue) {
+        const auto library_lock = appServices().libraryQueries().lockState();
+        const auto queue = appServices().playbackStatus().queueSnapshot();
+        AppPageModel model{};
+        model.title = queue.shuffle_enabled ? "QUEUE - SHUFFLE" : queue.repeat_one ? "QUEUE - REPEAT ONE"
+            : queue.repeat_all ? "QUEUE - REPEAT ALL" : "QUEUE";
+        model.browse_list = true;
+        const auto& spacing = theme_.spacing;
+        model.max_visible_rows = core::visibleListRows(spacing.list_top, spacing.list_row_height, spacing.max_visible_rows);
+        model.total_rows = static_cast<int>(queue.active_ids.size());
+        const auto selection = state_.navigation.list_selection;
+        const int selected = std::clamp(selection.selected, 0, std::max(0, model.total_rows-1));
+        int first = std::clamp(selection.scroll, 0, std::max(0, model.total_rows-model.max_visible_rows));
+        if (selected < first) first = selected;
+        if (selected >= first + model.max_visible_rows) first = selected-model.max_visible_rows+1;
+        model.row_offset = first;
+        model.rows = queueRows(queue.active_ids, queue.active_index, model.row_offset, model.max_visible_rows);
+        return model;
+    }
     auto page_rows = currentPageRows();
     const auto services = appServices();
     auto library_rows = services.libraryQueries().rowsForPage(page);
@@ -572,16 +603,29 @@ AppPageModel AppRuntimeContext::pageModel() const
             title_override = sourceProfileService().profileLabel(*profile);
         }
     }
-    return buildAppPageModel(AppPageModelInput{
+    auto settings = state_.settings;
+    if (page == AppPage::Settings) {
+        const auto live = runtime_client_.query(::lofibox::runtime::RuntimeQuery{
+            ::lofibox::runtime::RuntimeQueryKind::SettingsSnapshot}).settings;
+        settings.sleep_timer = live.sleep_timer;
+        settings.screen_timeout = live.screen_timeout_supported ? live.screen_timeout : "SYSTEM";
+    }
+    auto model = buildAppPageModel(AppPageModelInput{
         page,
         title_override,
         library_rows,
-        state_.settings,
+        settings,
         state_.network.connected,
         state_.metadata_service.display_name,
         services.runtimeServices().ui.webui_url,
         buildSourceManagerRows(state_.remote_profiles, remote::RemoteSourceRegistry{}.manifests()),
-        page_rows.empty() ? std::optional<std::vector<std::pair<std::string, std::string>>>{} : std::make_optional(std::move(page_rows))});
+        page_rows.empty() ? std::optional<std::vector<std::pair<std::string, std::string>>>{} : std::make_optional(std::move(page_rows)),
+        services.runtimeServices().ui.preferences->configured(),
+        services.runtimeServices().ui.framebuffer_backlight,
+        services.runtimeServices().ui.preferences->saveFailed()});
+    const auto& spacing = theme_.spacing;
+    model.max_visible_rows = core::visibleListRows(spacing.list_top, spacing.list_row_height, spacing.max_visible_rows);
+    return model;
 }
 
 void AppRuntimeContext::moveMainMenuSelection(int delta)
@@ -657,6 +701,11 @@ void AppRuntimeContext::cycleRepeatMode()
 
 void AppRuntimeContext::togglePlayPause()
 {
+    const auto status = appServices().playbackStatus().session().status;
+    if (status != PlaybackStatus::Playing && status != PlaybackStatus::Paused) {
+        playFromMenu();
+        return;
+    }
     (void)submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
         ::lofibox::runtime::RuntimeCommandKind::PlaybackToggle,
         {},
@@ -705,8 +754,6 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::currentPageR
         return serverDiagnosticsRows();
     case AppPage::StreamDetail:
         return streamDetailRows();
-    case AppPage::Queue:
-        return queueRows();
     case AppPage::Search:
         return searchRows();
     case AppPage::RemoteSetup:
@@ -847,23 +894,21 @@ std::vector<std::pair<std::string, std::string>> AppRuntimeContext::streamDetail
     };
 }
 
-std::vector<std::pair<std::string, std::string>> AppRuntimeContext::queueRows() const
+std::vector<std::pair<std::string, std::string>> AppRuntimeContext::queueRows(
+    const std::vector<int>& ids, int active_index, int first, int count) const
 {
-    const auto runtime_snapshot = runtime_client_.snapshot();
-    const auto& playback = runtime_snapshot.playback;
-    const auto& queue = runtime_snapshot.queue;
     std::vector<std::pair<std::string, std::string>> rows{};
-    if (playback.current_track_id) {
-        if (const auto* track = appServices().libraryQueries().findTrack(*playback.current_track_id)) {
-            rows.emplace_back(track->title, track->remote && !track->source_label.empty() ? track->source_label : "LOCAL");
-        }
-    } else if (!playback.title.empty()) {
-        rows.emplace_back(playback.title, playback.source_label.empty() ? "STREAM" : playback.source_label);
+    const auto library = appServices().libraryQueries();
+    const int end = std::min(static_cast<int>(ids.size()), first + count);
+    rows.reserve(static_cast<std::size_t>(std::max(0, end-first)));
+    for (int index = first; index < end; ++index) {
+        const int id = ids[static_cast<std::size_t>(index)];
+        const auto* track = library.findTrack(id);
+        const auto title = track ? track->title : "Track " + std::to_string(id);
+        std::string detail = track ? (track->artist.empty() ? track->source_label : track->artist) : "UNAVAILABLE";
+        if (index == active_index) detail = "NOW - " + detail;
+        rows.emplace_back(title.empty() ? "UNKNOWN" : title, std::move(detail));
     }
-    if (rows.empty()) {
-        rows.emplace_back("QUEUE EMPTY", "IDLE");
-    }
-    rows.emplace_back("MODE", queue.shuffle_enabled ? "SHUFFLE" : (queue.repeat_one ? "REPEAT ONE" : (queue.repeat_all ? "REPEAT ALL" : "ORDER")));
     return rows;
 }
 

@@ -17,6 +17,7 @@ UserAction mapInput(const InputEvent& event)
     case InputKey::Enter:
         return UserAction::Confirm;
     case InputKey::Backspace:
+    case InputKey::Escape:
         return UserAction::Back;
     case InputKey::Delete:
     case InputKey::F1:

@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <string_view>
+#include "core/session_timer.h"
 
 namespace lofibox::app {
 namespace {
@@ -30,7 +31,7 @@ bool selectedSettingsRowIs(AppCommandTarget& target, int selected, std::string_v
 void clampListSelection(AppCommandTarget& target)
 {
     const auto model = target.pageModel();
-    target.navigationState().clampListSelection(static_cast<int>(model.rows.size()), model.max_visible_rows);
+    target.navigationState().clampListSelection(model.rowCount(), model.max_visible_rows);
 }
 
 } // namespace
@@ -187,13 +188,13 @@ void commandCycleSongSortModeAndClamp(AppCommandTarget& target)
 void commandMoveSelection(AppCommandTarget& target, int delta)
 {
     const auto model = target.pageModel();
-    target.navigationState().moveSelection(delta, static_cast<int>(model.rows.size()), model.max_visible_rows);
+    target.navigationState().moveSelection(delta, model.rowCount(), model.max_visible_rows);
 }
 
 void commandMoveSelectionPage(AppCommandTarget& target, int delta_pages)
 {
     const auto model = target.pageModel();
-    const int count = static_cast<int>(model.rows.size());
+    const int count = model.rowCount();
     auto& navigation = target.navigationState();
     if (count <= 0) {
         navigation.list_selection = {};
@@ -211,6 +212,14 @@ void commandConfirmListPage(AppCommandTarget& target)
 {
     const int selected = target.navigationState().list_selection.selected;
     const auto page = target.currentPage();
+    if (page == AppPage::Queue) {
+        const auto result = target.submitRuntimeCommand({
+            ::lofibox::runtime::RuntimeCommandKind::QueueJump,
+            ::lofibox::runtime::RuntimeCommandPayload::queueIndex(selected),
+            ::lofibox::runtime::CommandOrigin::Gui});
+        if (result.applied) commandPushPage(target, AppPage::NowPlaying);
+        return;
+    }
     const auto library_result = target.appServices().libraryOpenActions().openSelectedListItem(page, selected);
     switch (library_result.kind) {
     case LibraryOpenResult::Kind::PushPage:
@@ -229,6 +238,29 @@ void commandConfirmListPage(AppCommandTarget& target)
         return;
     }
 
+    if (page == AppPage::Settings) {
+        const auto model = target.pageModel();
+        if (selected >= 0 && selected < static_cast<int>(model.rows.size())) {
+            const auto& [name, value] = model.rows[static_cast<std::size_t>(selected)];
+            if (const auto feature = preferenceForRow(name)) {
+                if (name != "WEBUI" || value != "UNAVAILABLE")
+                    (void)target.appServices().runtimeServices().ui.preferences->toggle(*feature);
+                return;
+            }
+            if (name == "SLEEP TIMER" || name == "SCREEN OFF") {
+                const auto next = name == "SLEEP TIMER"
+                    ? core::nextTimerChoice(value, core::kSleepTimerChoices)
+                    : core::nextTimerChoice(value, core::kScreenTimeoutChoices);
+                (void)target.submitRuntimeCommand(::lofibox::runtime::RuntimeCommand{
+                    ::lofibox::runtime::RuntimeCommandKind::SettingsApplyLive,
+                    ::lofibox::runtime::RuntimeCommandPayload::settingsApplyLive({}, {},
+                        name == "SLEEP TIMER" ? std::string{next} : std::string{},
+                        name == "SCREEN OFF" ? std::string{next} : std::string{}),
+                    ::lofibox::runtime::CommandOrigin::Gui});
+                return;
+            }
+        }
+    }
     if (page == AppPage::Settings && selectedSettingsRowIs(target, selected, "REMOTE SETUP")) {
         (void)target.handleSettingsRemoteConfirm(selected);
         return;

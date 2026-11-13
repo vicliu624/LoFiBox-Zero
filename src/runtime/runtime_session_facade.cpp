@@ -9,6 +9,9 @@
 #include <optional>
 #include <vector>
 
+#include "core/playback_input.h"
+#include "remote/common/stream_source_model.h"
+
 namespace lofibox::runtime {
 namespace {
 
@@ -31,7 +34,7 @@ RemoteSessionSnapshot remoteSessionSnapshotFor(
     snapshot.bitrate_kbps = stream.diagnostics.bitrate_kbps;
     snapshot.codec = stream.diagnostics.codec;
     snapshot.live = stream.diagnostics.live;
-    snapshot.seekable = stream.seekable && stream.diagnostics.seekable;
+    snapshot.seekable = stream.seekable && stream.diagnostics.seekable && !stream.diagnostics.live;
     if (!stream.diagnostics.source_name.empty()) {
         snapshot.source_label = stream.diagnostics.source_name;
     }
@@ -129,6 +132,7 @@ RuntimeSessionFacade::RuntimeSessionFacade(application::AppServiceRegistry servi
       eq_(services_, eq),
       settings_(settings)
 {
+    settings.screen_timeout_supported = services_.runtimeServices().ui.framebuffer_backlight;
 }
 
 PlaybackRuntime& RuntimeSessionFacade::playback() noexcept
@@ -204,7 +208,7 @@ bool RuntimeSessionFacade::resumePlayback()
     const auto& session = services_.playbackStatus().session();
     if (session.status == app::PlaybackStatus::Paused && session.current_track_id) {
         if (const auto* track = services_.libraryQueries().findTrack(*session.current_track_id);
-            track != nullptr && inactivePausedTrackAtKnownEnd(session, *track)) {
+              track != nullptr && !track->remote && inactivePausedTrackAtKnownEnd(session, *track)) {
             return startTrack(*session.current_track_id);
         }
     }
@@ -222,6 +226,36 @@ bool RuntimeSessionFacade::togglePlayPause()
         return resumePlayback();
     }
     return false;
+}
+
+bool RuntimeSessionFacade::openInput(const std::string& input)
+{
+    const auto normalized = core::normalizePlaybackInput(input);
+    if (!normalized) return false;
+    if (!normalized->remote) {
+        const int id = services_.libraryMutations().registerLocalFile(std::filesystem::u8path(normalized->value));
+        if (id <= 0) return false;
+        // An external open must select its input even when the GUI currently
+        // shows a different album/genre with a nonempty song context.
+        services_.libraryMutations().setSongsContextAll();
+        return startTrack(id);
+    }
+    const auto visible = core::playbackInputDisplayUri(normalized->value);
+    const auto entry = remote::StreamSourceClassifier::classify(visible);
+    app::ResolvedRemoteStream stream{};
+    stream.url = normalized->value;
+    stream.diagnostics.source_name = "DIRECT STREAM";
+    stream.diagnostics.resolved_url_redacted = visible;
+    stream.diagnostics.protocol = entry.protocol;
+    stream.diagnostics.connection_status = "CONNECTING";
+    app::RemoteTrack track{};
+    const auto slash = visible.rfind('/');
+    track.title = slash != std::string::npos && slash + 1 < visible.size() ? visible.substr(slash + 1) : "DIRECT STREAM";
+    track.duration_seconds = 0;
+    const auto snapshot = remoteSessionSnapshotFor({}, stream, track, "DIRECT STREAM");
+    const bool started = playback_.startRemoteStream(RemotePlayResolvedStreamPayload{stream, track, "DIRECT STREAM", snapshot});
+    if (started) remote_.setSnapshot(snapshot);
+    return started;
 }
 
 bool RuntimeSessionFacade::startTrack(int track_id)
@@ -409,8 +443,20 @@ bool RuntimeSessionFacade::refreshLibrary()
 
 void RuntimeSessionFacade::tick(double delta_seconds)
 {
+    if (settings_.sleepTimerExpired()) {
+        if (!settings_.shutdownRequested()) {
+            playback_.stop();
+            settings_.requestShutdown();
+        }
+        return;
+    }
     playback_.update(delta_seconds);
-    creator_.update(services_, delta_seconds);
+    const auto preferences = services_.runtimeServices().ui.preferences;
+    const bool analyze = !preferences || preferences->effective(app::RuntimeFeature::WebUi)
+        || preferences->effective(app::RuntimeFeature::ExternalControl);
+    if (analyze) creator_.update(services_, delta_seconds);
+    else if (!creator_suspended_) creator_.reset();
+    creator_suspended_ = !analyze;
 }
 
 RuntimeSnapshot RuntimeSessionFacade::snapshot(std::uint64_t version) const

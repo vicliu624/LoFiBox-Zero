@@ -34,6 +34,7 @@ public:
     [[nodiscard]] CacheCommandService cacheCommands() const noexcept;
     [[nodiscard]] RuntimeDiagnosticService diagnostics() const noexcept;
     [[nodiscard]] app::LibraryController& libraryController() noexcept { return controllers_.library; }
+    [[nodiscard]] std::recursive_mutex& stateMutex() const noexcept { return controllers_.library.stateMutex(); }
     [[nodiscard]] const app::RuntimeServices& runtimeServices() const noexcept { return runtime_services_; }
 
 private:

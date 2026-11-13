@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "platform/host/runtime_host_internal.h"
+#include "core/operation_cancellation.h"
 
 #include <algorithm>
 #include <array>
@@ -420,17 +421,26 @@ std::optional<std::string> parseJsonStringAt(std::string_view json, std::size_t 
         case '/':
             result.push_back('/');
             break;
-        case 'u':
+        case 'u': {
             if (cursor + 4 > json.size()) {
                 return std::nullopt;
             }
-            if (const auto codepoint = parseHexCodepoint(json.substr(cursor, 4))) {
-                appendUtf8(result, *codepoint);
-                cursor += 4;
-            } else {
-                result.push_back('u');
+            const auto first = parseHexCodepoint(json.substr(cursor, 4));
+            if (!first) return std::nullopt;
+            cursor += 4;
+            std::uint32_t codepoint = *first;
+            if (codepoint >= 0xD800U && codepoint <= 0xDBFFU) {
+                if (cursor + 6 > json.size() || json.substr(cursor, 2) != "\\u") return std::nullopt;
+                const auto second = parseHexCodepoint(json.substr(cursor + 2, 4));
+                if (!second || *second < 0xDC00U || *second > 0xDFFFU) return std::nullopt;
+                codepoint = 0x10000U + ((codepoint - 0xD800U) << 10U) + (*second - 0xDC00U);
+                cursor += 6;
+            } else if (codepoint >= 0xDC00U && codepoint <= 0xDFFFU) {
+                return std::nullopt;
             }
+            appendUtf8(result, codepoint);
             break;
+        }
         default:
             result.push_back(escaped);
             break;
@@ -726,12 +736,19 @@ std::size_t findJsonBlock(std::string_view json, std::string_view marker)
 
 void respectMusicBrainzRateLimit(SharedRuntimeCache& cache)
 {
+    const std::lock_guard lock{cache.musicbrainz_mutex};
     const auto now = std::chrono::steady_clock::now();
     if (cache.last_musicbrainz_request != std::chrono::steady_clock::time_point{}) {
         const auto elapsed = now - cache.last_musicbrainz_request;
         const auto min_gap = std::chrono::seconds(1);
         if (elapsed < min_gap) {
-            std::this_thread::sleep_for(min_gap - elapsed);
+            const auto deadline = cache.last_musicbrainz_request + min_gap;
+            while (std::chrono::steady_clock::now() < deadline) {
+                if (core::operationCancelled()) return;
+                const auto remaining = deadline - std::chrono::steady_clock::now();
+                std::this_thread::sleep_for(std::min(remaining,
+                    std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::milliseconds{20})));
+            }
         }
     }
     cache.last_musicbrainz_request = std::chrono::steady_clock::now();

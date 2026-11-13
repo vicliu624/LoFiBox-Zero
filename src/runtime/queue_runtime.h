@@ -14,6 +14,7 @@ public:
     [[nodiscard]] bool step(int delta) const;
     [[nodiscard]] bool jump(int queue_index) const;
     void clear() const noexcept;
+    void prepareForTrack(int track_id) const;
     void cycleMainMenuPlaybackMode() const;
     void toggleShuffle() const;
     void setShuffleEnabled(bool enabled) const noexcept;

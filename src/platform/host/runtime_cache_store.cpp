@@ -15,6 +15,85 @@ namespace fs = std::filesystem;
 namespace lofibox::platform::host::runtime_detail {
 namespace {
 constexpr int kMetadataCacheVersion = 5;
+
+template <typename T>
+void mergeField(T& current, const T& before, const T& after)
+{
+    if (after != before) current = after;
+}
+
+void mergeMetadata(app::TrackMetadata& current, const app::TrackMetadata& before, const app::TrackMetadata& after)
+{
+    mergeField(current.title, before.title, after.title);
+    mergeField(current.artist, before.artist, after.artist);
+    mergeField(current.album, before.album, after.album);
+    mergeField(current.genre, before.genre, after.genre);
+    mergeField(current.composer, before.composer, after.composer);
+    mergeField(current.duration_seconds, before.duration_seconds, after.duration_seconds);
+}
+
+void mergeEntry(CacheEntry& current, const CacheEntry& before, const CacheEntry& after)
+{
+    mergeMetadata(current.metadata, before.metadata, after.metadata);
+    mergeField(current.lyrics.plain, before.lyrics.plain, after.lyrics.plain);
+    mergeField(current.lyrics.synced, before.lyrics.synced, after.lyrics.synced);
+    mergeField(current.lyrics.source, before.lyrics.source, after.lyrics.source);
+    mergeMetadata(current.identity.metadata, before.identity.metadata, after.identity.metadata);
+    mergeField(current.identity.recording_mbid, before.identity.recording_mbid, after.identity.recording_mbid);
+    mergeField(current.identity.release_mbid, before.identity.release_mbid, after.identity.release_mbid);
+    mergeField(current.identity.release_group_mbid, before.identity.release_group_mbid, after.identity.release_group_mbid);
+    mergeField(current.identity.fingerprint, before.identity.fingerprint, after.identity.fingerprint);
+    mergeField(current.identity.source, before.identity.source, after.identity.source);
+    mergeField(current.identity.confidence, before.identity.confidence, after.identity.confidence);
+    mergeField(current.identity.found, before.identity.found, after.identity.found);
+    mergeField(current.identity.audio_fingerprint_verified, before.identity.audio_fingerprint_verified, after.identity.audio_fingerprint_verified);
+    mergeField(current.release_mbid, before.release_mbid, after.release_mbid);
+    mergeField(current.release_group_mbid, before.release_group_mbid, after.release_group_mbid);
+    mergeField(current.online_metadata_attempted, before.online_metadata_attempted, after.online_metadata_attempted);
+    mergeField(current.online_artwork_attempted, before.online_artwork_attempted, after.online_artwork_attempted);
+    mergeField(current.online_lyrics_attempted, before.online_lyrics_attempted, after.online_lyrics_attempted);
+    mergeField(current.track_identity_attempted, before.track_identity_attempted, after.track_identity_attempted);
+    mergeField(current.track_identity_version, before.track_identity_version, after.track_identity_version);
+    mergeField(current.lyrics_lookup_version, before.lyrics_lookup_version, after.lyrics_lookup_version);
+}
+}
+
+CacheEntrySession::CacheEntrySession(const SharedRuntimeCache& cache, std::string_view key)
+    : cache_(cache), key_(key)
+{
+    {
+        const std::lock_guard lock{cache_.entries_mutex_};
+        if (const auto it = cache_.entries_.find(key_); it != cache_.entries_.end()) {
+            base_ = entry = it->second;
+            return;
+        }
+    }
+    // File I/O is outside the entries lock, including the first disk read.
+    auto loaded = loadMetadataCache(cache_, key_);
+    const std::lock_guard lock{cache_.entries_mutex_};
+    const auto [it, inserted] = cache_.entries_.try_emplace(key_, std::move(loaded));
+    base_ = entry = it->second;
+}
+
+CacheEntrySession::~CacheEntrySession()
+{
+    commit();
+}
+
+void CacheEntrySession::commit()
+{
+    const std::lock_guard lock{cache_.entries_mutex_};
+    auto& current = cache_.entries_.at(key_);
+    mergeEntry(current, base_, entry);
+    base_ = entry = current;
+}
+
+void CacheEntrySession::persist()
+{
+    // Serialize disk snapshots, but let memory-only readers/merges proceed.
+    const std::lock_guard lock{cache_.file_mutex};
+    commit();
+    storeMetadataCache(cache_, key_, entry);
 }
 
 fs::path cacheRoot()
@@ -69,6 +148,7 @@ fs::path lyricsCachePath(const SharedRuntimeCache& cache, std::string_view key)
 
 void storeMetadataCache(const SharedRuntimeCache& cache, std::string_view key, const CacheEntry& entry)
 {
+    const std::lock_guard lock{cache.file_mutex};
     std::ofstream output(metadataCachePath(cache, key), std::ios::binary | std::ios::trunc);
     if (!output.is_open()) {
         return;
@@ -121,6 +201,7 @@ void storeMetadataCache(const SharedRuntimeCache& cache, std::string_view key, c
 
 CacheEntry loadMetadataCache(const SharedRuntimeCache& cache, std::string_view key)
 {
+    const std::lock_guard lock{cache.file_mutex};
     CacheEntry entry{};
     std::ifstream input(metadataCachePath(cache, key), std::ios::binary);
     if (!input.is_open()) {
@@ -232,6 +313,7 @@ CacheEntry loadMetadataCache(const SharedRuntimeCache& cache, std::string_view k
 
 void storeLyricsCache(const SharedRuntimeCache& cache, std::string_view key, const app::TrackLyrics& lyrics)
 {
+    const std::lock_guard lock{cache.file_mutex};
     std::ofstream output(lyricsCachePath(cache, key), std::ios::binary | std::ios::trunc);
     if (!output.is_open()) {
         return;
@@ -270,6 +352,7 @@ void storeLyricsCache(const SharedRuntimeCache& cache, std::string_view key, con
 
 app::TrackLyrics loadLyricsCache(const SharedRuntimeCache& cache, std::string_view key)
 {
+    const std::lock_guard lock{cache.file_mutex};
     app::TrackLyrics lyrics{};
     std::ifstream input(lyricsCachePath(cache, key), std::ios::binary);
     if (!input.is_open()) {

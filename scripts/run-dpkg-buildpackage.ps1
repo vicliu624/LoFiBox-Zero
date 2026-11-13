@@ -40,6 +40,7 @@ tar \
   --exclude='./debian/debhelper-build-stamp' \
   --exclude='./debian/files' \
   --exclude='./debian/lofibox' \
+  --exclude='./debian/lofibox-cardputer-zero' \
   --exclude='./*.deb' \
   --exclude='./*.buildinfo' \
   --exclude='./*.changes' \
@@ -61,10 +62,13 @@ if [ -f debian/tests/smoke ]; then
   chmod 0755 debian/tests/smoke
 fi
 
-dpkg-checkbuilddeps debian/control
+# dpkg-buildpackage checks dependencies with the selected -P build profile.
 dpkg-buildpackage $build_args
 
 cp "$workspace"/lofibox_* /workspace/
+if compgen -G "$workspace/lofibox-cardputer-zero_*.deb" >/dev/null; then
+  cp "$workspace"/lofibox-cardputer-zero_*.deb /workspace/
+fi
 if compgen -G "$workspace/lofibox-dbgsym_*" >/dev/null; then
   cp "$workspace"/lofibox-dbgsym_* /workspace/
 fi

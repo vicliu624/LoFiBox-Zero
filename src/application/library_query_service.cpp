@@ -19,23 +19,29 @@ std::string sortKey(std::string value)
     return value;
 }
 
-bool trackLess(const app::TrackRecord& left, const app::TrackRecord& right, int lhs, int rhs, app::SongSortMode sort_mode)
+struct SortEntry {
+    const app::TrackRecord* track{};
+    std::string title{};
+    std::string artist{};
+};
+
+bool trackLess(const SortEntry& left, const SortEntry& right, app::SongSortMode sort_mode)
 {
     switch (sort_mode) {
     case app::SongSortMode::TitleAscending:
-        return sortKey(left.title) == sortKey(right.title) ? lhs < rhs : sortKey(left.title) < sortKey(right.title);
+        return left.title == right.title ? left.track->id < right.track->id : left.title < right.title;
     case app::SongSortMode::TitleDescending:
-        return sortKey(left.title) == sortKey(right.title) ? lhs < rhs : sortKey(left.title) > sortKey(right.title);
+        return left.title == right.title ? left.track->id < right.track->id : left.title > right.title;
     case app::SongSortMode::ArtistAscending:
-        return sortKey(left.artist) == sortKey(right.artist) ? sortKey(left.title) < sortKey(right.title) : sortKey(left.artist) < sortKey(right.artist);
+        return left.artist == right.artist ? left.title < right.title : left.artist < right.artist;
     case app::SongSortMode::ArtistDescending:
-        return sortKey(left.artist) == sortKey(right.artist) ? sortKey(left.title) < sortKey(right.title) : sortKey(left.artist) > sortKey(right.artist);
+        return left.artist == right.artist ? left.title < right.title : left.artist > right.artist;
     case app::SongSortMode::AddedAscending:
-        return left.added_time == right.added_time ? sortKey(left.title) < sortKey(right.title) : left.added_time < right.added_time;
+        return left.track->added_time == right.track->added_time ? left.title < right.title : left.track->added_time < right.track->added_time;
     case app::SongSortMode::AddedDescending:
-        return left.added_time == right.added_time ? sortKey(left.title) < sortKey(right.title) : left.added_time > right.added_time;
+        return left.track->added_time == right.track->added_time ? left.title < right.title : left.track->added_time > right.track->added_time;
     }
-    return lhs < rhs;
+    return left.track->id < right.track->id;
 }
 
 } // namespace
@@ -43,6 +49,11 @@ bool trackLess(const app::TrackRecord& left, const app::TrackRecord& right, int 
 LibraryQueryService::LibraryQueryService(const app::LibraryController& controller) noexcept
     : controller_(controller)
 {
+}
+
+std::unique_lock<std::recursive_mutex> LibraryQueryService::lockState() const
+{
+    return std::unique_lock{controller_.stateMutex()};
 }
 
 app::LibraryIndexState LibraryQueryService::state() const noexcept
@@ -127,19 +138,18 @@ app::TrackRecord* LibraryQueryService::findMutableTrack(app::LibraryModel& libra
 
 std::vector<int> LibraryQueryService::sortedTrackIds(const app::LibraryModel& library, app::SongSortMode sort_mode)
 {
-    std::vector<int> ids{};
-    ids.reserve(library.tracks.size());
+    std::vector<SortEntry> entries;
+    entries.reserve(library.tracks.size());
+    const bool by_artist = sort_mode == app::SongSortMode::ArtistAscending || sort_mode == app::SongSortMode::ArtistDescending;
     for (const auto& track : library.tracks) {
-        ids.push_back(track.id);
+        entries.push_back({&track, sortKey(track.title), by_artist ? sortKey(track.artist) : std::string{}});
     }
-    std::sort(ids.begin(), ids.end(), [&](int lhs, int rhs) {
-        const auto* left = findTrack(library, lhs);
-        const auto* right = findTrack(library, rhs);
-        if (!left || !right) {
-            return lhs < rhs;
-        }
-        return trackLess(*left, *right, lhs, rhs, sort_mode);
+    std::sort(entries.begin(), entries.end(), [sort_mode](const SortEntry& left, const SortEntry& right) {
+        return trackLess(left, right, sort_mode);
     });
+    std::vector<int> ids;
+    ids.reserve(entries.size());
+    for (const auto& entry : entries) ids.push_back(entry.track->id);
     return ids;
 }
 

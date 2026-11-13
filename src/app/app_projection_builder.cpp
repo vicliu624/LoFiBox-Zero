@@ -2,8 +2,10 @@
 
 #include "app/app_projection_builder.h"
 
+#include <algorithm>
 #include <chrono>
 #include <string>
+#include <utility>
 
 #include "app/app_renderer.h"
 
@@ -112,6 +114,7 @@ std::string emptyLabelForPage(AppPage page)
     case AppPage::Compilations: return std::string(kNoCompilations);
     case AppPage::PlaylistDetail: return std::string(kEmpty);
     case AppPage::RemoteBrowse: return "NO ITEMS";
+    case AppPage::Queue: return "QUEUE EMPTY";
     default: return std::string(kEmpty);
     }
 }
@@ -148,7 +151,7 @@ ui::pages::NowPlayingView buildNowPlayingProjection(const AppRenderTarget& targe
         playback.repeat_one,
         playback.current_artwork ? &*playback.current_artwork : nullptr,
         target.eqRuntimeSnapshot().effect_name,
-        toUiSpectrumFrame(playback.visualization_frame)};
+        target.spectrumEnabled() ? toUiSpectrumFrame(playback.visualization_frame) : ui::SpectrumFrame{}};
 }
 
 ui::pages::LyricsPageView buildLyricsProjection(const AppRenderTarget& target)
@@ -165,23 +168,34 @@ ui::pages::LyricsPageView buildLyricsProjection(const AppRenderTarget& target)
         toUiPlaybackStatus(playback.status),
         playback.lyrics_lookup_pending,
         toUiLyricsContent(playback.current_lyrics),
-        toUiSpectrumFrame(playback.visualization_frame)};
+        target.spectrumEnabled() ? toUiSpectrumFrame(playback.visualization_frame) : ui::SpectrumFrame{}};
 }
 
 ui::pages::ListPageView buildListProjection(const AppRenderTarget& target)
 {
     const auto model = target.pageModel();
-    const auto& rows = model.rows;
     const auto page = target.currentPage();
+    auto rows = model.rows;
+    // Keyboard instructions are represented by the shared icon bar. Keep
+    // page data intact for terminal clients that still need textual hints.
+    if (page == AppPage::RemoteFieldEditor || page == AppPage::StreamDetail) {
+        std::erase_if(rows, [page](const auto& row) {
+            return row.first == "ENTER" || (page == AppPage::RemoteFieldEditor && row.first == "BACK");
+        });
+    }
+    const bool empty = rows.empty();
+    const int selected = std::clamp(target.listSelection().selected, 0, std::max(0, model.rowCount()-1));
     return ui_pages::ListPageView{
         model.title,
         !model.browse_list,
-        model.browse_list ? "F1:HELP" : "",
-        rows,
-        rows.empty() ? emptyLabelForPage(page) : std::string{},
-        target.listSelection().selected,
-        target.listSelection().scroll,
-        false};
+        {},
+        std::move(rows),
+        empty ? emptyLabelForPage(page) : std::string{},
+        selected,
+        model.total_rows >= 0 ? model.row_offset : target.listSelection().scroll,
+        false,
+        model.total_rows,
+        model.row_offset};
 }
 
 ui::pages::AboutPageView buildAboutProjection(const AppRenderTarget& target)

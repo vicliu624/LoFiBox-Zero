@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "platform/host/runtime_provider_factories.h"
+#include "core/operation_cancellation.h"
 
 #include <cctype>
 #include <filesystem>
@@ -469,21 +470,8 @@ private:
             return lyrics;
         }
 
-        auto& entry = cache_->entries[key];
-        std::error_code ec{};
-        if (!entry.online_metadata_attempted
-            && !entry.online_lyrics_attempted
-            && !entry.track_identity_attempted
-            && entry.lyrics_lookup_version == 0
-            && fs::exists(metadataCachePath(*cache_, key), ec)
-            && !ec) {
-            entry = loadMetadataCache(*cache_, key);
-            logRuntime(
-                RuntimeLogLevel::Debug,
-                "lyrics",
-                std::string(remote_lookup ? "Remote lyrics cache loaded for " : "Lyrics cache loaded for ")
-                    + pathUtf8String(path));
-        }
+        CacheEntrySession session{*cache_, key};
+        auto& entry = session.entry;
 
         bool embedded_lyrics_rejected = false;
         const auto embedded_lyrics = remote_lookup ? app::TrackLyrics{} : embedded_reader_.read(path);
@@ -512,6 +500,7 @@ private:
             return entry.lyrics;
         }
 
+        const core::OperationCancellationGuard online_guard{[this] { return !connectivity_ || !connectivity_->connected(); }};
         app::TrackMetadata lyrics_metadata = metadata;
         app::TrackIdentity identity = accepted_identity.found ? accepted_identity : entry.identity;
         if (identity.found) {
@@ -539,9 +528,13 @@ private:
             }
         }
 
-        entry.lyrics = online_lyrics_resolver_.fetch(path, lyrics_metadata);
+        auto resolved_lyrics = online_lyrics_resolver_.fetch(path, lyrics_metadata);
+        if (core::operationCancelled()) return entry.lyrics;
+        entry.lyrics = std::move(resolved_lyrics);
 
-        lyrics_cache_.storeLookupAttempt(*cache_, key, entry);
+        entry.online_lyrics_attempted = true;
+        entry.lyrics_lookup_version = kLyricsLookupVersion;
+        session.persist();
         if (entry.lyrics.plain || entry.lyrics.synced) {
             lyrics_cache_.storeHit(*cache_, key, entry);
             logRuntime(RuntimeLogLevel::Info, "lyrics", "Online lyrics hit for " + pathUtf8String(path));

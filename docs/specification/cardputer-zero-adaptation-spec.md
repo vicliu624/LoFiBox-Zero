@@ -41,8 +41,9 @@ The `Cardputer Zero` profile is a Linux target profile with:
 - no desktop chrome treated as product UI
 - page-level discoverability through profile-appropriate help, such as `F1:HELP`
 
-The profile may use framebuffer, VNC, PocketFrame, or another Linux presentation adapter during development or validation.
-Those adapters are not product truth.
+The Cardputer Zero product artifact uses Linux framebuffer and evdev.
+The Debian desktop artifact uses native Wayland. These are separate build and package profiles.
+VNC and PocketFrame may remain development tools, but must not change the Cardputer artifact backend.
 
 ## 4. Screen Contract
 
@@ -102,14 +103,19 @@ The APPLaunch desktop entry must start the LoFiBox APPLaunch wrapper, not the ge
 - `Exec`: `/usr/lib/lofibox/lofibox-applaunch`
 - `Icon`: `share/images/lofibox.png`
 
-The wrapper must then `exec` the best installed runtime for the active display session:
+The wrapper must always `exec` the framebuffer device runtime:
 
 - wrapper path: `/usr/lib/lofibox/lofibox-applaunch`
 - device target path: `/usr/lib/lofibox/lofibox_zero_device`
-- native Wayland target: `/usr/bin/lofibox-wayland`
-- X11 target: `/usr/bin/lofibox-x11`
 
-In `auto` mode, the wrapper must prefer the native Wayland target when `WAYLAND_DISPLAY` is present, then the X11 target when `DISPLAY` is present, and only then fall back to the framebuffer device target. Explicit `LOFIBOX_DISPLAY_BACKEND` values must override that auto-detection.
+Inherited `WAYLAND_DISPLAY`, `DISPLAY`, and `LOFIBOX_DISPLAY_BACKEND` must not redirect
+this appliance entry point to a desktop runtime. The Cardputer wrapper sets
+`LOFIBOX_DISPLAY_BACKEND=fbdev`; its APPLaunch entry must not declare
+`X-Zero-Display=wayland`.
+
+The separate Debian package installs `/usr/bin/lofibox-wayland`, and its `lofibox`
+command directly launches that native Wayland runtime. It does not install the
+framebuffer runtime or APPLaunch integration.
 
 Cardputer Zero APPLaunch starts LoFiBox as an appliance app. In that launch profile, the wrapper must enable the LoFiBox WebUI by default while preserving explicit user overrides:
 
@@ -127,10 +133,11 @@ It must use these precedence rules for framebuffer selection:
 
 1. Existing `LOFIBOX_FBDEV`
 2. `APPLAUNCH_LINUX_FBDEV_DEVICE` inherited from APPLaunch
-3. A local `/proc/fb` scan for an entry containing `fb_st7789v`
+3. A local `/proc/fb` scan for an entry containing `fb_st7789v` or `panel-mipi-dbi`
 4. `/dev/fb1` as the last Cardputer Zero fallback
 
 This rule exists because the ST7789V framebuffer number is an observed Linux device fact, not a stable product constant.
+The DRM `panel-mipi-dbi` driver may expose the same physical screen as `panel-mipi-dbid` on `/dev/fb0`.
 The implementation must not assume that the small screen is always `/dev/fb0` or always `/dev/fb1` when a stronger runtime signal is available.
 
 The wrapper must use these precedence rules for keyboard input selection:
@@ -141,6 +148,34 @@ The wrapper must use these precedence rules for keyboard input selection:
 
 `APPLAUNCH_LINUX_KEYBOARD_MAP` must not be treated as a LoFiBox input contract unless LoFiBox gains an explicit adapter for APPLaunch/LVGL keymap files.
 The current LoFiBox device input path consumes Linux evdev key events and its own xkb/custom-key translation, not APPLaunch's LVGL keymap file.
+
+Keyboard behavior follows the [CardputerZero keyboard specification](https://cardputer.cc/docs/zh-CN/CP0_keys.md):
+
+- A short ESC press resolves on release and navigates back; holding ESC for two
+  seconds exits the framebuffer app without also sending a short back action.
+- Kernel `KEY_HELP`, `KEY_PLAYPAUSE`, `KEY_PREVIOUSSONG`, and `KEY_NEXTSONG` events
+  implement Fn+H/Q/W/E. The application does not simulate firmware modifier state.
+- `KEY_BRIGHTNESSDOWN` and `KEY_BRIGHTNESSUP` implement Fn+U/Fn+I in the
+  framebuffer adapter, using the existing backlight sysfs permission. Startup
+  and keyboard input restore a zero brightness to the last observed nonzero
+  level (initially half of maximum). Brightness adjustments stay above zero.
+  The adapter must close its temporary descriptors and avoid per-frame sysfs
+  polling. `LOFIBOX_BACKLIGHT_DIR` can override or disable this adapter; native
+  Wayland does not touch the Cardputer backlight.
+- F/Z/X/C act as directional aliases only outside text-entry pages. Digits 4-8
+  select five contextual actions matching the bottom-of-screen hints. Main menu,
+  browsing, playback, lyrics, EQ and settings use their own action sets; the
+  shared `page_screen_keys.h` definition drives routing, pointer actions and help.
+  Hint centers are x=49/105/161/217/273 with downward markers toward keys 4-8.
+  Lists reserve five visible rows above the bar; navigation uses the same count.
+  Queue uses 4=back, 5=page up, 6=play selected item, 7=page down and 8=playback
+  mode, with matching icons. Its GUI prepares only the visible row window while
+  retaining absolute queue indices and the complete row count.
+- Search and remote-profile editors preserve those literal characters; ESC can
+  leave an editor without saving, and Backspace continues to edit text.
+- Transport/help auto-repeat is suppressed. Navigation, typing and volume repeats
+  remain available. System volume/mute uses one bounded, cancelling worker in
+  the framebuffer composition root, keeping helper IPC off the GUI thread.
 
 Mouse or pointer environment variables such as `LV_LINUX_MOUSE_DEVICE` are not part of the current LoFiBox Cardputer Zero contract.
 They must not be surfaced as supported LoFiBox behavior until a LoFiBox pointer input adapter exists.
@@ -170,7 +205,28 @@ The standard Linux desktop icon and the APPLaunch icon are separate presentation
 The standard Linux desktop entry must remain independent from the APPLaunch entry.
 Changes to the APPLaunch integration must not change the normal Linux desktop launch path unless a separate Linux desktop specification requires it.
 
-## 9. Validation Rule
+## 9. Keyboard Rhythm Indicators
+
+The built-in Shift/Fn/Sym indicators are three white LEDs, not RGB pixels.
+The Cardputer platform adapter follows the rightmost Now Playing spectrum
+column, using the same last band and shared display-height conversion.
+All three LEDs turn on after a four-pixel rise from a trough and off after a
+four-pixel fall from a crest. A height below ten pixels is dark. Smaller
+reversals retain the state; a held crest may remain lit. Other bands, elapsed
+time and presumed musical beats do not drive the pattern. Pause, unavailable
+frames and stalled worker ticks reset the state. Keyboard indications take
+priority, and music indications clear on pause, stop and normal exit.
+
+The APPLaunch wrapper defaults to `LOFIBOX_RHYTHM_LIGHTS=1`; users may disable
+the spectrum-following lights with `0`. Smooth breathing is not implemented.
+This is a Cardputer adapter capability; the Wayland runtime
+must not probe or write the Cardputer controller. Reuse the existing spectrum,
+keep I2C on a bounded-rate background worker, and publish only the latest frame.
+Validate the internal keyboard and device-tree LED mapping first. Only the
+three LED-mode registers may be written; backlight, global PWM frequency,
+GPIO directions, reset and power outputs must remain outside this feature.
+
+## 10. Validation Rule
 
 Profile-specific changes should be validated against a real profile runtime or a faithful Linux validation harness.
 
@@ -181,7 +237,7 @@ The Cardputer Zero APPLaunch integration must have a regression check that cover
 
 - the APPLaunch desktop `Exec` path
 - the APPLaunch icon path and small-screen icon dimensions
-- the native Wayland display declaration
+- absence of the Wayland display declaration and desktop-runtime dispatch
 - the Cardputer APPLaunch WebUI defaults
 - the wrapper's framebuffer precedence
 - the wrapper's keyboard-device precedence
@@ -189,7 +245,7 @@ The Cardputer Zero APPLaunch integration must have a regression check that cover
 
 Build or packaging verification should confirm that `/usr/lib/lofibox/lofibox_zero_device` and `/usr/lib/lofibox/lofibox-applaunch` are installed with executable permissions.
 
-## 10. AI Constraints
+## 11. AI Constraints
 
 - Do not remove Cardputer Zero constraints merely because LoFiBox is a Linux desktop player.
 - Do not reclassify Cardputer Zero constraints as product-wide desktop constraints.

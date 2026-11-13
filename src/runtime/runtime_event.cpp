@@ -163,7 +163,9 @@ bool settingsChanged(const SettingsRuntimeSnapshot& before, const SettingsRuntim
 {
     return before.output_mode != after.output_mode
         || before.network_policy != after.network_policy
-        || before.sleep_timer != after.sleep_timer;
+        || before.sleep_timer != after.sleep_timer
+        || before.screen_timeout != after.screen_timeout
+        || before.screen_timeout_supported != after.screen_timeout_supported;
 }
 
 bool lyricsChanged(const LyricsRuntimeSnapshot& before, const LyricsRuntimeSnapshot& after)

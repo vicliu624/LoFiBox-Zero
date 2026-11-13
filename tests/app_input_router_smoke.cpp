@@ -50,6 +50,7 @@ public:
     void confirmListPage() override { ++confirm_list_calls; }
     void appendSearchText(std::string_view text) override { search_text += text; }
     void appendRemoteProfileEditText(std::string_view text) override { remote_edit_text += text; }
+    void commitRemoteProfileEdit() override { ++remote_commits; }
 
     lofibox::app::AppPage page{lofibox::app::AppPage::MainMenu};
     bool help_open{false};
@@ -87,6 +88,7 @@ public:
     int confirm_list_calls{0};
     std::string search_text{};
     std::string remote_edit_text{};
+    int remote_commits{0};
 };
 
 [[nodiscard]] lofibox::app::InputEvent key(lofibox::app::InputKey input_key)
@@ -193,7 +195,7 @@ int main()
     lofibox::app::routeInput(target, character('X'));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Down));
     lofibox::app::routeInput(target, key(lofibox::app::InputKey::Enter));
-    if (target.pause_calls != pause_calls_before + 1 || target.cycle_sort_calls != sort_calls_before + 1 || target.page_delta != 1 || target.list_delta != list_delta_before_x + 1 || target.confirm_list_calls != 1) {
+    if (target.pause_calls != pause_calls_before + 1 || target.cycle_sort_calls != sort_calls_before + 1 || target.page_delta != 1 || target.list_delta != list_delta_before_x + 2 || target.confirm_list_calls != 1) {
         std::cerr << "Expected browse list transport shortcuts to stay global while list and page navigation still route.\n";
         return 1;
     }
@@ -214,6 +216,11 @@ int main()
         std::cerr << "Expected top-bar pointer tap to toggle page help.\n";
         return 1;
     }
+    lofibox::app::routeInput(target, tap(8, 8));
+    if (target.help_open) {
+        std::cerr << "Expected top-bar help button to close the modal too.\n";
+        return 1;
+    }
 
     const int menu_delta_before_tap = target.main_menu_delta;
     const int menu_confirms_before_tap = target.confirm_main_menu_calls;
@@ -230,27 +237,179 @@ int main()
     target.now_playing_confirm_blocked = false;
     const int steps_before_tap = target.step_track_calls;
     const int play_toggles_before_tap = target.toggle_play_pause_calls;
-    const int shuffle_before_tap = target.toggle_shuffle_calls;
-    const int repeat_before_tap = target.cycle_repeat_calls;
-    lofibox::app::routeInput(target, tap(120, 130));
-    lofibox::app::routeInput(target, tap(168, 130));
-    lofibox::app::routeInput(target, tap(210, 130));
-    lofibox::app::routeInput(target, tap(250, 130));
-    lofibox::app::routeInput(target, tap(300, 130));
+    lofibox::app::routeInput(target, tap(49, 153));
+    lofibox::app::routeInput(target, tap(105, 153));
+    lofibox::app::routeInput(target, tap(161, 153));
     if (target.step_track_calls != steps_before_tap + 2 || target.last_step_delta != 1 ||
-        target.toggle_play_pause_calls != play_toggles_before_tap + 1 ||
-        target.toggle_shuffle_calls != shuffle_before_tap + 1 ||
-        target.cycle_repeat_calls != repeat_before_tap + 1) {
+        target.toggle_play_pause_calls != play_toggles_before_tap + 1) {
         std::cerr << "Expected now-playing pointer taps to route to transport controls.\n";
         return 1;
     }
 
     target.now_playing_confirm_blocked = true;
-    lofibox::app::routeInput(target, tap(168, 130));
+    lofibox::app::routeInput(target, tap(105, 153));
     if (target.toggle_play_pause_calls != play_toggles_before_tap + 1) {
         std::cerr << "Expected blocked now-playing state to reject pointer play/pause.\n";
         return 1;
     }
 
+    // The compact keyboard aliases must stay literal in both text editors.
+    for (const auto page : {lofibox::app::AppPage::Search, lofibox::app::AppPage::RemoteFieldEditor}) {
+        FakeTarget editor{};
+        editor.page = page;
+        const std::string text = "FzXc45678 R";
+        for (const char ch : text) lofibox::app::routeInput(editor, character(ch));
+        if ((page == lofibox::app::AppPage::Search ? editor.search_text : editor.remote_edit_text) != text
+            || editor.step_track_calls || editor.toggle_play_pause_calls || editor.open_queue_calls || editor.list_delta) {
+            std::cerr << "Compact shortcuts must not steal letters, spaces or digits from text input.\n";
+            return 1;
+        }
+        lofibox::app::routeInput(editor, key(lofibox::app::InputKey::Escape));
+        if (editor.pop_page_calls != 1 || editor.remote_commits != 0) {
+            std::cerr << "Escape must leave an editor without committing it.\n";
+            return 1;
+        }
+    }
+
+    FakeTarget navigation{};
+    navigation.page = lofibox::app::AppPage::Songs;
+    navigation.browse_list_page = true;
+    lofibox::app::routeInput(navigation, character('f'));
+    if (navigation.list_delta != -1) return 1;
+    auto held_down = character('X'); held_down.repeated = true;
+    lofibox::app::routeInput(navigation, held_down);
+    if (navigation.list_delta != 0) return 1;
+    navigation.page = lofibox::app::AppPage::Equalizer;
+    lofibox::app::routeInput(navigation, character('z'));
+    if (navigation.eq_selection_delta != -1) return 1;
+    lofibox::app::routeInput(navigation, character('C'));
+    if (navigation.eq_selection_delta != 0) return 1;
+
+    for (int value = static_cast<int>(lofibox::app::AppPage::MainMenu);
+         value <= static_cast<int>(lofibox::app::AppPage::About); ++value) {
+        const auto page = static_cast<lofibox::app::AppPage>(value);
+        FakeTarget media{};
+        media.page = page;
+        media.help_open = true;
+        lofibox::app::routeInput(media, key(lofibox::app::InputKey::MediaPlayPause));
+        lofibox::app::routeInput(media, key(lofibox::app::InputKey::MediaPrevious));
+        if (media.last_step_delta != -1) return 1;
+        lofibox::app::routeInput(media, key(lofibox::app::InputKey::MediaNext));
+        auto held_media = key(lofibox::app::InputKey::MediaPlayPause); held_media.repeated = true;
+        lofibox::app::routeInput(media, held_media);
+        if (media.toggle_play_pause_calls != 1 || media.step_track_calls != 2 || media.last_step_delta != 1 || !media.help_open) {
+            std::cerr << "Dedicated media keys must work through help/editors and ignore auto-repeat.\n";
+            return 1;
+        }
+        for (char ch = '4'; ch <= '8'; ++ch) {
+            FakeTarget held{};
+            held.page = page;
+            auto repeat = character(ch); repeat.repeated = true;
+            lofibox::app::routeInput(held, repeat);
+            if (held.page != page || held.main_menu_delta || held.confirm_main_menu_calls || held.list_delta
+                || held.page_delta || held.toggle_play_pause_calls || held.step_track_calls
+                || held.cycle_sort_calls || held.cycle_menu_mode_calls || held.eq_band_delta || held.eq_selection_delta
+                || held.eq_preset_delta || held.toggle_help_calls) {
+                std::cerr << "Held screen keys must not repeat actions or change pages.\n";
+                return 1;
+            }
+        }
+    }
+
+    // These are contextual operations: menu navigation, browsing and DSP must
+    // never accidentally change the playing track.
+    using Page = lofibox::app::AppPage;
+    FakeTarget menu{};
+    lofibox::app::routeInput(menu, character('4'));
+    if (menu.main_menu_delta != -1) return 1;
+    lofibox::app::routeInput(menu, character('5'));
+    lofibox::app::routeInput(menu, character('6'));
+    if (menu.main_menu_delta || menu.confirm_main_menu_calls != 1 || menu.step_track_calls || menu.toggle_play_pause_calls) return 1;
+    lofibox::app::routeInput(menu, character('7'));
+    if (menu.page != Page::NowPlaying) return 1;
+    menu.page = Page::MainMenu;
+    lofibox::app::routeInput(menu, character('8'));
+    if (menu.page != Page::Search) return 1;
+
+    for (const auto page : {Page::MusicIndex, Page::Artists, Page::Albums, Page::Genres, Page::Composers,
+                           Page::Compilations, Page::Songs, Page::Playlists, Page::PlaylistDetail,
+                           Page::RemoteBrowse, Page::Settings, Page::RemoteSetup, Page::SourceManager,
+                           Page::RemoteProfileSettings}) {
+        FakeTarget browse{};
+        browse.page = page;
+        lofibox::app::routeInput(browse, character('5'));
+        if (browse.page_delta != -1) return 1;
+        lofibox::app::routeInput(browse, character('6'));
+        if (browse.confirm_list_calls != 1) return 1;
+        lofibox::app::routeInput(browse, character('7'));
+        if (browse.page_delta || browse.step_track_calls || browse.toggle_play_pause_calls) return 1;
+        lofibox::app::routeInput(browse, character('8'));
+        if (page == Page::Songs || page == Page::PlaylistDetail) {
+            if (browse.cycle_sort_calls != 1) return 1;
+        } else if (page == Page::Settings || page == Page::RemoteSetup || page == Page::SourceManager || page == Page::RemoteProfileSettings) {
+            if (!browse.help_open) return 1;
+            lofibox::app::routeInput(browse, key(lofibox::app::InputKey::Escape));
+        } else if (browse.page != Page::Search) return 1;
+        browse.page = page;
+        lofibox::app::routeInput(browse, character('4'));
+        if (browse.pop_page_calls != 1) return 1;
+    }
+
+    FakeTarget eq{}; eq.page = Page::Equalizer;
+    lofibox::app::routeInput(eq, character('4'));
+    if (eq.eq_selection_delta != -1) return 1;
+    lofibox::app::routeInput(eq, character('5'));
+    if (eq.eq_band_delta != -1) return 1;
+    lofibox::app::routeInput(eq, character('6'));
+    if (eq.eq_preset_delta != 1) return 1;
+    lofibox::app::routeInput(eq, character('7'));
+    lofibox::app::routeInput(eq, character('8'));
+    if (eq.eq_band_delta || eq.eq_selection_delta || eq.toggle_play_pause_calls || eq.step_track_calls) return 1;
+
+    for (const auto page : {Page::NowPlaying, Page::Lyrics}) {
+        FakeTarget player{}; player.page = page;
+        lofibox::app::routeInput(player, character('4'));
+        if (player.last_step_delta != -1) return 1;
+        lofibox::app::routeInput(player, character('5'));
+        lofibox::app::routeInput(player, character('6'));
+        if (player.toggle_play_pause_calls != 1 || player.step_track_calls != 2 || player.last_step_delta != 1) return 1;
+        lofibox::app::routeInput(player, character('7'));
+        if (player.page != (page == Page::NowPlaying ? Page::Lyrics : Page::NowPlaying)) return 1;
+        player.page = page;
+        lofibox::app::routeInput(player, character('8'));
+        if (page == Page::NowPlaying ? player.page != Page::Queue : player.cycle_menu_mode_calls != 1) return 1;
+    }
+
+    for (bool pointer : {false,true}) {
+        FakeTarget queue{}; queue.page = Page::Queue;
+        const auto press = [&](char digit) {
+            lofibox::app::routeInput(queue, pointer ? tap(49 + (digit-'4')*56, 155) : character(digit));
+        };
+        press('4');
+        if (queue.pop_page_calls != 1) return 1;
+        queue.page = Page::Queue;
+        press('5'); press('6');
+        if (queue.page_delta != -1 || queue.confirm_list_calls != 1) return 1;
+        press('7'); press('8');
+        if (queue.page_delta || queue.cycle_menu_mode_calls != 1 || queue.step_track_calls || queue.toggle_play_pause_calls) {
+            std::cerr << "Queue screen keys must browse and play the selected queue row.\n";
+            return 1;
+        }
+    }
+
+    FakeTarget modal{}; modal.page = Page::Songs; modal.help_open = true;
+    for (char ch = '4'; ch <= '8'; ++ch) lofibox::app::routeInput(modal, character(ch));
+    lofibox::app::routeInput(modal, tap(161, 153));
+    if (!modal.help_open || modal.pop_page_calls || modal.confirm_list_calls || modal.cycle_sort_calls || modal.page_delta) return 1;
+    FakeTarget search_icons{}; search_icons.page = Page::Search;
+    lofibox::app::routeInput(search_icons, tap(161, 155));
+    if (search_icons.confirm_list_calls != 1) return 1;
+    lofibox::app::routeInput(search_icons, tap(273, 155));
+    if (search_icons.pop_page_calls != 1) return 1;
+    FakeTarget editor_icons{}; editor_icons.page = Page::RemoteFieldEditor;
+    lofibox::app::routeInput(editor_icons, tap(161, 155));
+    if (editor_icons.remote_commits != 1) return 1;
+    lofibox::app::routeInput(editor_icons, tap(273, 155));
+    if (editor_icons.pop_page_calls != 1) return 1;
     return 0;
 }

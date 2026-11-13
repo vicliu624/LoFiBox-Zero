@@ -1,26 +1,38 @@
 #!/bin/sh
 set -eu
 
-test -x /usr/bin/lofibox
-test -x /usr/bin/lofibox-wayland
-test -x /usr/bin/lofibox-x11
-test -x /usr/bin/lofibox-tui
-test -f /usr/share/applications/io.github.vicliu624.lofibox.desktop
-test -f /usr/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
-test -f /usr/share/icons/hicolor/scalable/apps/io.github.vicliu624.lofibox.svg
-test -f /usr/lib/lofibox/tag_writer.py
-test -f /usr/lib/lofibox/remote_media_tool.py
+if [ "$(dpkg-query -W -f='${db:Status-Status}' lofibox-cardputer-zero 2>/dev/null || true)" = installed ]; then
+    command=/usr/bin/lofibox-cardputer-zero
+    private_dir=/usr/lib/lofibox-cardputer-zero
+    test -x "$private_dir/lofibox_zero_device"
+    test -x "$private_dir/lofibox-applaunch"
+    test -f /usr/share/APPLaunch/applications/lofibox-cardputer-zero.desktop
+    test -f /usr/share/APPLaunch/share/images/lofibox-cardputer-zero.png
+    test ! -e /usr/bin/lofibox-wayland
+    desktop-file-validate /usr/share/APPLaunch/applications/lofibox-cardputer-zero.desktop
+else
+    command=/usr/bin/lofibox
+    private_dir=/usr/lib/lofibox
+    test -x /usr/bin/lofibox-wayland
+    test ! -e "$private_dir/lofibox_zero_device"
+    desktop-file-validate /usr/share/applications/io.github.vicliu624.lofibox.desktop
+    appstreamcli validate --no-net /usr/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
+fi
+test -x "$command"
+test -x "$command-tui"
+test -f "$private_dir/tag_writer.py"
+test -f "$private_dir/remote_media_tool.py"
+test -x "$private_dir/lofibox-mp3-decoder"
+if "$private_dir/lofibox-mp3-decoder" >/dev/null 2>&1; then
+    exit 1
+else
+    test "$?" -eq 2
+fi
 python3 - <<'PY'
 import mutagen
 PY
 
-lofibox --help >/dev/null
-lofibox --version >/dev/null
-lofibox-wayland --help >/dev/null
-lofibox-wayland --version >/dev/null
-lofibox-x11 --help >/dev/null
-lofibox-x11 --version >/dev/null
-lofibox-tui --help >/dev/null
-
-desktop-file-validate /usr/share/applications/io.github.vicliu624.lofibox.desktop
-appstreamcli validate --no-net /usr/share/metainfo/io.github.vicliu624.lofibox.metainfo.xml
+"$command" --help >/dev/null
+"$command" --version >/dev/null
+test ! -e /usr/bin/lofibox-x11
+"$command-tui" --help >/dev/null

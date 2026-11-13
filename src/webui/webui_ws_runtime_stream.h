@@ -5,6 +5,8 @@
 #include <atomic>
 #include <string>
 #include <string_view>
+#include <cstdint>
+#include <vector>
 
 namespace lofibox::webui {
 
@@ -42,7 +44,9 @@ private:
     std::atomic<bool> running_{false};
 
     // Send a WebSocket text frame.
-    bool sendFrame(std::string_view payload);
+    bool sendFrame(std::string_view payload, std::uint8_t opcode = 0x1);
+    bool processClientInput();
+    std::vector<std::uint8_t> incoming_{};
 
     // Send a WebSocket close frame and shutdown.
     void sendClose();

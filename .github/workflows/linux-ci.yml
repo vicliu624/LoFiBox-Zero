@@ -44,6 +44,9 @@ jobs:
             lintian \
             ninja-build \
             libfreetype6-dev \
+            libmpg123-dev \
+            libsoxr-dev \
+            ffmpeg \
             libwayland-bin \
             libwayland-dev \
             wayland-protocols \
@@ -75,7 +78,7 @@ jobs:
           -DBUILD_TESTING=OFF
 
       - name: Build Linux Install Skeleton Binaries
-        run: cmake --build build/install-skeleton --target lofibox_zero_tui_bin
+        run: cmake --build build/install-skeleton --target lofibox_zero_tui_bin lofibox_mp3_decoder
 
       - name: Validate Desktop Metadata
         run: |
@@ -96,16 +99,25 @@ jobs:
           test -f .tmp/install-root/share/doc/lofibox/architecture.md
 
       - name: Configure Linux Device Target
-        run: cmake --preset linux-device-debug
+        run: cmake --preset cardputer-release -DBUILD_TESTING=ON
 
       - name: Build Linux Device Target
-        run: cmake --build --preset linux-device-debug-build
+        run: >
+          cmake --build build/cardputer --parallel 2 --target lofibox_zero_device
+          lofibox_framebuffer_blitter_smoke lofibox_frame_deadline_smoke
+          lofibox_framebuffer_backlight_smoke lofibox_linux_evdev_keyboard_smoke
+          lofibox_cardputer_applaunch_metadata_smoke
+
+      - name: Test Cardputer Presentation
+        run: >
+          ctest --test-dir build/cardputer --output-on-failure
+          -R 'lofibox_(framebuffer_blitter|framebuffer_backlight|frame_deadline|linux_evdev_keyboard|cardputer_applaunch_metadata)_smoke'
 
       - name: Configure Linux Wayland Target
-        run: cmake --preset linux-wayland-debug
+        run: cmake --preset debian-wayland-release
 
       - name: Build Linux Wayland Target
-        run: cmake --build --preset linux-wayland-debug-build
+        run: cmake --build --preset debian-wayland-release-build --parallel 2
 
       - name: Build Debian Package
         run: |
@@ -125,6 +137,10 @@ jobs:
           test -f "$DEB_PACKAGE"
           dpkg-deb -c "$DEB_PACKAGE" | tee /tmp/lofibox-package-contents.txt
           grep -F "./usr/bin/lofibox-wayland" /tmp/lofibox-package-contents.txt
+          if grep -E 'lofibox_zero_device|APPLaunch|/lofibox-x11' /tmp/lofibox-package-contents.txt; then
+            echo "ERROR: Debian artifact must contain only the Wayland display backend."
+            exit 1
+          fi
           dpkg-deb -f "$DEB_PACKAGE" Depends
           dpkg-deb -f "$DEB_PACKAGE" Depends | tee /tmp/lofibox-depends.txt
           if grep -E 'libc6 \(>= 2\.(3[8-9]|[4-9][0-9])' /tmp/lofibox-depends.txt; then
@@ -141,3 +157,23 @@ jobs:
         run: |
           test -f "$DEB_CHANGES"
           sudo autopkgtest "$DEB_CHANGES" -- null
+
+      - name: Build Cardputer Framebuffer Package
+        env:
+          DEB_BUILD_OPTIONS: parallel=2
+        run: dpkg-buildpackage -us -uc -b -Ppkg.lofibox.cardputer
+
+      - name: Verify And Test Cardputer Package
+        run: |
+          deb_version="$(dpkg-parsechangelog -S Version)"
+          deb_arch="$(dpkg --print-architecture)"
+          cardputer_package="../lofibox-cardputer-zero_${deb_version}_${deb_arch}.deb"
+          dpkg-deb -c "$cardputer_package" > /tmp/lofibox-cardputer-contents.txt
+          grep -F './usr/lib/lofibox-cardputer-zero/lofibox_zero_device' /tmp/lofibox-cardputer-contents.txt
+          grep -F './usr/lib/lofibox-cardputer-zero/lofibox-applaunch' /tmp/lofibox-cardputer-contents.txt
+          if grep -E '/lofibox-wayland|/lofibox-x11' /tmp/lofibox-cardputer-contents.txt; then
+            echo "ERROR: Cardputer artifact must contain only the framebuffer display backend."
+            exit 1
+          fi
+          sudo apt-get install -y "$cardputer_package"
+          debian/tests/smoke

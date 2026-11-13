@@ -98,6 +98,8 @@ struct SettingsRuntimeSnapshot {
     std::string output_mode{"DEFAULT"};
     std::string network_policy{"DEFAULT"};
     std::string sleep_timer{"OFF"};
+    std::string screen_timeout{"OFF"};
+    bool screen_timeout_supported{false};
     std::uint64_t version{0};
 };
 

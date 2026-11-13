@@ -44,9 +44,8 @@ void renderLyricsPage(core::Canvas& canvas, const LyricsPageView& view, const Ui
         }
         ::lofibox::ui::drawText(canvas, primary, ::lofibox::ui::centeredX(primary, 1), 96, view.lookup_pending ? theme.palette.text_primary : theme.palette.text_secondary, 1);
         ::lofibox::ui::drawText(canvas, secondary, ::lofibox::ui::centeredX(secondary, 1), 114, theme.palette.text_muted, 1);
-        ::lofibox::ui::drawText(canvas, "L: BACK TO PLAYER", ::lofibox::ui::centeredX("L: BACK TO PLAYER", 1), 136, theme.palette.text_muted, 1);
     } else {
-        constexpr int visible_lines = 7;
+        constexpr int visible_lines = 5;
         constexpr int row_h = 14;
         constexpr std::size_t active_line_chars = 44;
         constexpr std::size_t inactive_line_chars = 40;
@@ -78,7 +77,7 @@ void renderLyricsPage(core::Canvas& canvas, const LyricsPageView& view, const Ui
         canvas,
         theme,
         55,
-        154,
+        136,
         210,
         std::max(0, std::min(210, static_cast<int>((view.elapsed_seconds / std::max(1, view.duration_seconds)) * 210.0))));
 }

@@ -37,6 +37,10 @@ PlaybackStatusSnapshot PlaybackStatusQueryService::snapshot() const
             result.source_label = track->remote && !track->source_label.empty() ? track->source_label : "LOCAL";
             result.source_type = track->remote ? "REMOTE" : "LOCAL";
             result.duration_seconds = track->duration_seconds;
+            if (track->remote) {
+                result.live = session_value.current_stream_live;
+                result.seekable = session_value.current_stream_seekable;
+            }
         }
     } else if (!session_value.current_stream_title.empty()) {
         result.title = session_value.current_stream_title;
@@ -46,7 +50,7 @@ PlaybackStatusSnapshot PlaybackStatusQueryService::snapshot() const
         result.source_type = "STREAM";
         result.duration_seconds = session_value.current_stream_duration_seconds;
         result.live = session_value.current_stream_live;
-        result.seekable = !session_value.current_stream_live;
+        result.seekable = session_value.current_stream_seekable;
     }
     return result;
 }

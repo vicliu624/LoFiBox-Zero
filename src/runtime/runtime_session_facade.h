@@ -22,6 +22,8 @@ class RuntimeSessionFacade {
 public:
     RuntimeSessionFacade(application::AppServiceRegistry services, EqRuntimeState& eq, SettingsRuntimeState& settings) noexcept;
 
+    [[nodiscard]] std::recursive_mutex& stateMutex() const noexcept { return services_.stateMutex(); }
+
     [[nodiscard]] PlaybackRuntime& playback() noexcept;
     [[nodiscard]] const PlaybackRuntime& playback() const noexcept;
     [[nodiscard]] QueueRuntime& queue() noexcept;
@@ -36,6 +38,7 @@ public:
     [[nodiscard]] bool resumePlayback();
     [[nodiscard]] bool togglePlayPause();
     [[nodiscard]] bool startTrack(int track_id);
+    [[nodiscard]] bool openInput(const std::string& input);
     [[nodiscard]] bool startTrackWithContext(int track_id, const PlaybackStartTrackPayload& context);
     [[nodiscard]] bool startRemoteItem(const std::string& profile_id, const std::string& item_id);
     [[nodiscard]] bool stepQueue(int delta);
@@ -52,6 +55,7 @@ private:
     RemoteSessionRuntime remote_;
     SettingsRuntime settings_;
     CreatorAnalysisRuntime creator_;
+    bool creator_suspended_{false};
     RuntimeSnapshotAssembler snapshots_{};
 };
 

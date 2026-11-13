@@ -21,7 +21,8 @@ struct EnumName {
     std::string_view name;
 };
 
-constexpr std::array<EnumName<RuntimeCommandKind>, 31> kCommandNames{{
+constexpr std::array<EnumName<RuntimeCommandKind>, 32> kCommandNames{{
+    {RuntimeCommandKind::PlaybackOpenInput, "PlaybackOpenInput"},
     {RuntimeCommandKind::PlaybackPlay, "PlaybackPlay"},
     {RuntimeCommandKind::PlaybackPause, "PlaybackPause"},
     {RuntimeCommandKind::PlaybackResume, "PlaybackResume"},
@@ -245,15 +246,32 @@ std::optional<T> numberField(std::string_view json, std::string_view key)
         return std::nullopt;
     }
     std::size_t end = *start;
-    while (end < json.size() && (std::isdigit(static_cast<unsigned char>(json[end])) || json[end] == '-' || json[end] == '+' || json[end] == '.')) {
-        ++end;
+    const auto digit = [&](std::size_t index) {
+        return index < json.size() && std::isdigit(static_cast<unsigned char>(json[index]));
+    };
+    if (end < json.size() && json[end] == '-') ++end;
+    if (!digit(end)) return std::nullopt;
+    if (json[end] == '0') ++end;
+    else while (digit(end)) ++end;
+    if (end < json.size() && json[end] == '.') {
+        if (!digit(++end)) return std::nullopt;
+        while (digit(end)) ++end;
     }
+    if (end < json.size() && (json[end] == 'e' || json[end] == 'E')) {
+        ++end;
+        if (end < json.size() && (json[end] == '+' || json[end] == '-')) ++end;
+        if (!digit(end)) return std::nullopt;
+        while (digit(end)) ++end;
+    }
+    auto delimiter = end;
+    while (delimiter < json.size() && std::isspace(static_cast<unsigned char>(json[delimiter]))) ++delimiter;
+    if (delimiter == json.size() || (json[delimiter] != ',' && json[delimiter] != '}' && json[delimiter] != ']')) return std::nullopt;
     T value{};
     const auto text = json.substr(*start, end - *start);
     const auto* begin = text.data();
     const auto* finish = text.data() + text.size();
     const auto parsed = std::from_chars(begin, finish, value);
-    if (parsed.ec != std::errc{}) {
+    if (parsed.ec != std::errc{} || parsed.ptr != finish) {
         return std::nullopt;
     }
     return value;
@@ -384,6 +402,9 @@ void appendPayload(std::ostringstream& out, const RuntimeCommandPayload& payload
         using Payload = std::decay_t<decltype(data)>;
         if constexpr (std::is_same_v<Payload, EmptyPayload>) {
             appendStringField(out, "payload", "Empty");
+        } else if constexpr (std::is_same_v<Payload, PlaybackOpenInputPayload>) {
+            appendStringField(out, "payload", "PlaybackOpenInput");
+            appendStringField(out, "input", data.input);
         } else if constexpr (std::is_same_v<Payload, PlaybackStartTrackPayload>) {
             appendStringField(out, "payload", "PlaybackStartTrack");
             out << ",\"track_id\":" << data.track_id;
@@ -427,6 +448,7 @@ void appendPayload(std::ostringstream& out, const RuntimeCommandPayload& payload
             appendStringField(out, "output_mode", data.output_mode);
             appendStringField(out, "network_policy", data.network_policy);
             appendStringField(out, "sleep_timer", data.sleep_timer);
+            appendStringField(out, "screen_timeout", data.screen_timeout);
         } else if constexpr (std::is_same_v<Payload, RemotePlayResolvedStreamPayload>) {
             appendStringField(out, "payload", "RemotePlayResolvedStream");
             appendStringField(out, "source", data.source);
@@ -441,6 +463,9 @@ void appendPayload(std::ostringstream& out, const RuntimeCommandPayload& payload
 RuntimeCommandPayload parsePayload(std::string_view json)
 {
     const auto payload = stringField(json, "payload").value_or("Empty");
+    if (payload == "PlaybackOpenInput") {
+        return RuntimeCommandPayload::openInput(stringField(json, "input").value_or(std::string{}));
+    }
     if (payload == "PlaybackStartTrack") {
         return RuntimeCommandPayload::startTrack(
             numberField<int>(json, "track_id").value_or(0),
@@ -486,7 +511,8 @@ RuntimeCommandPayload parsePayload(std::string_view json)
         return RuntimeCommandPayload::settingsApplyLive(
             stringField(json, "output_mode").value_or(std::string{}),
             stringField(json, "network_policy").value_or(std::string{}),
-            stringField(json, "sleep_timer").value_or(std::string{}));
+            stringField(json, "sleep_timer").value_or(std::string{}),
+            stringField(json, "screen_timeout").value_or(std::string{}));
     }
     return RuntimeCommandPayload::empty();
 }
@@ -578,6 +604,8 @@ void appendSnapshot(std::ostringstream& out, const RuntimeSnapshot& snapshot)
     appendStringField(out, "settings_output_mode", snapshot.settings.output_mode);
     appendStringField(out, "settings_network_policy", snapshot.settings.network_policy);
     appendStringField(out, "settings_sleep_timer", snapshot.settings.sleep_timer);
+    appendStringField(out, "settings_screen_timeout", snapshot.settings.screen_timeout);
+    appendBoolField(out, "settings_screen_timeout_supported", snapshot.settings.screen_timeout_supported);
     appendBoolField(out, "visualization_available", snapshot.visualization.available);
     appendFloatArray(out, "visualization_bands", snapshot.visualization.bands);
     appendFloatArray(out, "visualization_peaks", snapshot.visualization.peaks);
@@ -736,6 +764,8 @@ RuntimeSnapshot parseSnapshot(std::string_view json)
     snapshot.settings.output_mode = stringField(json, "settings_output_mode").value_or("DEFAULT");
     snapshot.settings.network_policy = stringField(json, "settings_network_policy").value_or("DEFAULT");
     snapshot.settings.sleep_timer = stringField(json, "settings_sleep_timer").value_or("OFF");
+    snapshot.settings.screen_timeout = stringField(json, "settings_screen_timeout").value_or("OFF");
+    snapshot.settings.screen_timeout_supported = boolField(json, "settings_screen_timeout_supported").value_or(false);
     snapshot.visualization.available = boolField(json, "visualization_available").value_or(false);
     const auto visualization_bands = numberArrayField(json, "visualization_bands");
     for (std::size_t index = 0; index < snapshot.visualization.bands.size() && index < visualization_bands.size(); ++index) {
@@ -941,6 +971,10 @@ std::optional<RuntimeCommandRequest> parseRuntimeCommandRequest(std::string_view
     const auto kind_name = stringField(json, "kind");
     const auto kind = kind_name ? runtimeCommandKindFromName(*kind_name) : std::nullopt;
     if (!kind) {
+        return std::nullopt;
+    }
+    if (*kind == RuntimeCommandKind::PlaybackSeek
+        && (stringField(json, "payload").value_or("") != "PlaybackSeek" || !numberField<double>(json, "seconds"))) {
         return std::nullopt;
     }
     const auto origin_name = stringField(json, "origin");

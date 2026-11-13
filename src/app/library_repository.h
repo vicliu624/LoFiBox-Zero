@@ -33,7 +33,8 @@ public:
     [[nodiscard]] LibraryModel rebuildModel(
         const std::vector<std::filesystem::path>& media_roots,
         const MetadataProvider& metadata_provider,
-        LibraryScanProgressCallback progress = {}) const;
+        LibraryScanProgressCallback progress = {},
+        const std::vector<TrackRecord>& explicit_tracks = {}) const;
     void applyRescanModel(LibraryModel next);
     void rebuildDerivedIndexes();
 

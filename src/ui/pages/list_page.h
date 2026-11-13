@@ -20,6 +20,8 @@ struct ListPageView {
     int selected{0};
     int scroll{0};
     bool help_open{false};
+    int total_rows{-1};
+    int row_offset{0};
 };
 
 void renderListPage(core::Canvas& canvas, const ListPageView& view, const UiTheme& theme);

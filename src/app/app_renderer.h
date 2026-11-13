@@ -42,6 +42,7 @@ public:
     [[nodiscard]] virtual bool helpOpen() const noexcept = 0;
     [[nodiscard]] virtual AppPage helpPage() const noexcept = 0;
     [[nodiscard]] virtual const ui::UiTheme& theme() const noexcept = 0;
+    [[nodiscard]] virtual bool spectrumEnabled() const noexcept { return true; }
 };
 
 void renderApp(core::Canvas& canvas, const AppRenderTarget& target);

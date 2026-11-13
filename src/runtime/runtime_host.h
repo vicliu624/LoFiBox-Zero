@@ -45,6 +45,7 @@ public:
     [[nodiscard]] std::string externalTransportError() const;
 
     [[nodiscard]] bool shutdownRequested() const noexcept;
+    [[nodiscard]] std::chrono::seconds screenTimeout() const noexcept;
     [[nodiscard]] bool reloadRequested() const noexcept;
 
 private:
@@ -55,6 +56,7 @@ private:
     RuntimeCommandServer server_;
     InProcessRuntimeCommandClient client_;
     std::unique_ptr<UnixSocketRuntimeCommandServer> external_server_{};
+    mutable std::recursive_mutex external_mutex_{};
 };
 
 } // namespace lofibox::runtime

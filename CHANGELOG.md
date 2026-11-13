@@ -7,10 +7,58 @@ All notable changes to LoFiBox Zero will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-11-13
+
+### Added
+
+- Persistent Settings controls for WebUI, the shared CLI/TUI runtime server,
+  GUI spectrum, music LEDs and LED animation. Disabling LED animation uses
+  steady playing indicators while keyboard modifiers retain priority.
+- Long battery mode pauses optional interfaces, visualization, music LEDs,
+  Creator analysis and online scraping, and reduces static page redraws while
+  keeping the normal input and playback cadence. Individual choices are restored
+  when the mode is disabled.
+- A 10-second framebuffer idle-screen choice in both GUI and WebUI settings.
+
+### Changed
+
+- Optimize clipped canvas fills and copies without changing rendered pixels.
+- Keep connectivity checks off the GUI thread, cancel and reap unavailable
+  online enrichment helpers, retain local/cache facts, and resume enrichment
+  for the current track when connectivity returns.
+- Release optional interface listeners and client workers when disabled, and
+  stop audio visualization computation when no enabled consumer needs it.
+
+### Validation
+
+- Keep separate Cardputer Zero ARM64 framebuffer and Debian amd64 Wayland
+  packages. Validate installation, normal APPLaunch startup, playback, optional
+  controls, timer/wake behavior, descriptor recovery and headphone switching.
+- On the sampled Cardputer, normal dynamic playback used about 32.8% of one
+  core versus 36.8% previously; battery mode used about 9.1%, and battery mode
+  with the display blank used about 7.7%. Results depend on track and background
+  work; these are not battery-life guarantees.
+
+### Fixed
+
+- Keep local embedded-lyrics helper reads available while offline or in battery
+  mode; cancel only the online portion of enrichment operations.
+
 ## [0.3.8] - 2026-09-03
 
 ### Changed
 
+- Add a separate Cardputer Zero ARM64 framebuffer package with namespaced
+  executables, assets and APPLaunch integration; retain the Debian Wayland
+  package as a separate artifact.
+- Map contextual icon actions to the Cardputer's 4–8 keys across pages, with
+  translucent background spectrum and keyboard lights following its rightmost
+  column.
+- Decode local MP3 through the native 48 kHz PCM path, and bound playback,
+  library/enrichment work and descriptor ownership for the small device.
+- Add independent session timers for stopping playback and exiting LoFiBox,
+  and for idle screen blanking while music continues. Consume wake keys and
+  repeats, suspend hidden rendering, and restore the launcher backlight on exit.
 - Retired the TDVP-only `lofibox-widget` layer-shell route, including its
   protocol, target, desktop entry, launcher branch, scheduler, and tests.
   `lofibox-wayland` is now the only native Wayland desktop target and is a
