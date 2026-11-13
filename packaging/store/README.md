@@ -15,9 +15,10 @@ must be populated with actual 320×170 device captures:
   background spectrum and the contextual icon action bar.
 - `screenshots/library.png`: a library containing only the original demo tracks.
 - `screenshots/timers.png`: the real sleep and idle-screen timer settings.
+- `screenshots/power.png`: the long battery setting on the real device.
 
 These are actual Cardputer Zero framebuffer captures from the installed
-`0.3.8-4` package, using a separate XDG profile and only the two original demo
+`0.3.9-1` package, using a separate XDG profile and only the two original demo
 tracks. Do not substitute host browser screenshots or older device captures
 when updating this listing. Regenerate captures after a materially changed
 candidate is installed and verified.

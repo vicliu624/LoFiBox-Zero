@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the display blank used about 7.7%. Results depend on track and background
   work; these are not battery-life guarantees.
 
+### Fixed
+
+- Keep local embedded-lyrics helper reads available while offline or in battery
+  mode; cancel only the online portion of enrichment operations.
+
 ## [0.3.8] - 2026-09-03
 
 ### Changed

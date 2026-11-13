@@ -16,10 +16,12 @@ struct Connectivity : lofibox::app::ConnectivityProvider {
 };
 struct Metadata : lofibox::app::MetadataProvider {
     mutable std::atomic<int> started{}, cancelled{}, local{};
+    std::function<bool()> unavailable;
     bool available() const override { return true; }
     std::string displayName() const override { return "TEST"; }
     lofibox::app::TrackMetadata read(const std::filesystem::path&, lofibox::app::MetadataReadMode mode) const override {
         if (mode == lofibox::app::MetadataReadMode::LocalOnly) { ++local; return {}; }
+        const lofibox::core::OperationCancellationGuard online_guard{unavailable};
         if (!lofibox::core::operationCancelled()) {
             ++started;
             (void)lofibox::platform::host::runtime_detail::captureProcessOutput("/bin/sh", {"-c", "sleep 10"});
@@ -37,6 +39,9 @@ int main() {
     using namespace lofibox;
     auto services = app::withNullRuntimeServices();
     auto network = std::make_shared<Connectivity>(); auto metadata = std::make_shared<Metadata>();
+    metadata->unavailable = [network, preferences=services.ui.preferences] {
+        return !network->online || preferences->effective(app::RuntimeFeature::BatterySaver);
+    };
     services.connectivity.provider = network; services.metadata.metadata_provider = metadata;
     app::LibraryController library; app::TrackRecord track{42, "offline.mp3", "Local title", "Local artist", "Local album"};
     library.mutableModel().tracks.push_back(track);

@@ -295,3 +295,35 @@ Final private candidate artifacts (not replacements for the published 0.3.8-4):
 
 Private raw samples, screenshots and control results are under
 `.tmp/candidate-0.3.8-5`. The existing Store PR/release assets are unchanged.
+
+## 0.3.9 release follow-up
+
+Fresh-profile acceptance caught a pre-release offline-lyrics bug that the
+existing cached library did not reveal. A coordinator-wide offline guard also
+cancelled the host provider's local Mutagen/ffprobe lyrics reader. The guard
+was removed from that composite phase; provider guards remain around network
+work after local/cache reads. A new test reproduces the failure using the real
+host lyrics provider and a controlled local-helper fixture, then passes with
+both network-offline and battery-mode policies. The blocking-network-worker
+test still verifies prompt cancellation at the provider's network boundary.
+Release-profile suites now pass 122 framebuffer and 119 Wayland tests.
+
+The release artifacts are rebuilt as 0.3.9-1 and are distinct from the private
+0.3.8-5 candidates above. Corresponding source and Store publication require
+the final versioned package/fresh-profile checks and a passing source CI run.
+
+The corrected final 0.3.9-1 package was installed on the board and opened from
+the APPLaunch icon using a second, completely new XDG profile with only the two
+original demo MP3s. The library indexed both files, playback was active and
+embedded synchronized lyrics loaded with online tools disabled. GUI spectrum,
+library, 15M/10S timer and battery-setting screenshots were captured directly
+from that session. Consumed Space wake and accelerated stop-and-exit/backlight
+restoration also passed. The exact installed desktop entry was restored byte
+for byte, and the normal configuration hashes and Grove power state matched.
+
+The frozen 0.3.9-1 package hashes are:
+
+- Cardputer ARM64 framebuffer:
+  `cd66e96a606a721acf677b16d3ad4667123f354ab0956a15c38e2efd20b00367`.
+- Debian amd64 Wayland:
+  `f701893596567596d4c2a057e2cf9f668be5d958cbd1dc1330bed2a41c7bb05a`.

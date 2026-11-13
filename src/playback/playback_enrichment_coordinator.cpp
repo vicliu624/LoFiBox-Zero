@@ -107,10 +107,6 @@ void PlaybackEnrichmentCoordinator::request(const TrackRecord& track)
         const auto local_seed = mergeLyricsSeed(seed_metadata, local.metadata);
         publish(std::move(local));
 
-        const core::OperationCancellationGuard online_guard{[&services_snapshot] {
-            return !onlineScrapingAllowed(services_snapshot);
-        }};
-
         PlaybackEnrichmentResult result{};
         result.track_id = track_id;
         result.path = path;
@@ -154,9 +150,6 @@ void PlaybackEnrichmentCoordinator::requestRemote(
     const std::uint64_t generation = ++generation_;
 
     enqueue([this, services_snapshot, profile, remote_track, track_id, stream_uri = std::move(stream_uri), lookup_path, seed_metadata, stable_cache_key, cache_remote_facts, generation](std::stop_token token) {
-        const core::OperationCancellationGuard online_guard{[&services_snapshot] {
-            return !onlineScrapingAllowed(services_snapshot);
-        }};
         PlaybackEnrichmentResult result{};
         result.track_id = track_id;
         result.path = lookup_path;
